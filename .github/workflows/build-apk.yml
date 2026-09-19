@@ -40,6 +40,7 @@ jobs:
           node --check www/shop-registry.js
           node --check www/shop-profile-sync.js
           node --check www/shop-registration.js
+          node --check www/shop-login-force.js
           node --check www/image-search-sync.js
           node --check www/admin-shop-sync.js
 
