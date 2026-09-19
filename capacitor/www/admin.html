@@ -41,7 +41,7 @@
           <div class="user-avatar" id="userAvatarLetter">A</div>
           <div class="user-info"><div class="user-name" id="userDisplayName">The Owner</div><div class="user-role">Manager</div></div>
         </div>
-        <a class="logout-btn" href="index.html" onclick="localStorage.removeItem('pos_logged_in'); sessionStorage.removeItem('pos_admin_logged_in');">Logout</a>
+        <a class="logout-btn" href="index.html" onclick="localStorage.removeItem('pos_logged_in'); sessionStorage.removeItem('pos_admin_logged_in'); if (window.OraforgeShops) window.OraforgeShops.clearActiveShop();">Logout</a>
       </div>
     </aside>
 

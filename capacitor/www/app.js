@@ -208,13 +208,17 @@ function updateHeaderAndNav() {
 
   // Hook up Logout button to return to login screen
   const logoutBtn = qs('.logout');
-  if (logoutBtn) {
     logoutBtn.onclick = (e) => {
       e.preventDefault();
       localStorage.removeItem('pos_logged_in');
+      sessionStorage.removeItem('pos_admin_logged_in');
+      if (window.OraforgeShops) window.OraforgeShops.clearActiveShop();
+      state.items = [];
+      state.categories = [];
+      state.order = null;
+      bootstrapped = false;
       showLoginScreen();
     };
-  }
 
   // Setup theme toggle button in header
   const themeToggle = qs('#themeToggleBtn');
@@ -303,8 +307,57 @@ const CLOUD_ONLY_PATHS = [
   '/api/product/save-image'
 ];
 
+const PROFILE_SAMPLE_SKU_PREFIXES = {
+  pharmacy: 'PHARM-',
+  hardware: 'HDW-',
+  boutique: 'BTQ-',
+  retail: 'RET-',
+  restaurant: 'REST-',
+  bar: ['BE-', 'CO-', 'SP-', 'WI-', 'SD-', 'SN-']
+};
+
+function sanitizeProfileItems(items, profileId) {
+  if (!Array.isArray(items) || !profileId) return items;
+  const foreignPrefixes = [];
+  for (const [p, prefixes] of Object.entries(PROFILE_SAMPLE_SKU_PREFIXES)) {
+    if (p !== profileId) {
+      if (Array.isArray(prefixes)) foreignPrefixes.push(...prefixes);
+      else foreignPrefixes.push(prefixes);
+    }
+  }
+  return items.filter(item => {
+    const sku = String(item.sku || '').toUpperCase();
+    return !foreignPrefixes.some(fp => sku.startsWith(fp));
+  });
+}
+
+function sanitizeProfileCategories(categories, profileId) {
+  if (!Array.isArray(categories) || !profileId) return categories;
+  const sampleData = (typeof LOCAL_PROFILES_DATA !== 'undefined') ? LOCAL_PROFILES_DATA.sample_data : null;
+  if (!sampleData || !sampleData[profileId]) return categories;
+
+  const validSampleCats = new Set((sampleData[profileId].categories || []).map(c => c.toLowerCase()));
+  const otherCats = new Set();
+  for (const [p, data] of Object.entries(sampleData)) {
+    if (p !== profileId && data.categories) {
+      data.categories.forEach(c => otherCats.add(c.toLowerCase()));
+    }
+  }
+
+  return categories.filter(c => {
+    const lower = String(c.name || '').toLowerCase();
+    if (otherCats.has(lower) && !validSampleCats.has(lower)) {
+      return false;
+    }
+    return true;
+  });
+}
+
 const LocalPOS = {
   shopKey(name, btype = null) {
+    if (window.OraforgeShops && window.OraforgeShops.activeShopId()) {
+      return `shop:${window.OraforgeShops.activeShopId()}:${name}`;
+    }
     const type = btype || localStorage.getItem('pos_active_business_type') || 'retail';
     return `shop:${type}:${name}`;
   },
@@ -430,8 +483,25 @@ const LocalPOS = {
     const prof = LOCAL_PROFILES_DATA.profiles[btype] || LOCAL_PROFILES_DATA.profiles.retail;
 
     if (cleanPath === '/api/bootstrap') {
-      const cats = await this.getShop('categories', [], btype);
-      const items = await this.getShop('items', [], btype);
+      let cats = await this.getShop('categories', [], btype);
+      let items = await this.getShop('items', [], btype);
+
+      const targetType = (window.OraforgeShops && window.OraforgeShops.activeShopId()
+        ? (window.OraforgeShops.activeMeta()?.business_type || btype)
+        : btype) || 'retail';
+
+      const cleanItems = sanitizeProfileItems(items, targetType);
+      const cleanCats = sanitizeProfileCategories(cats, targetType);
+
+      if (cleanItems.length !== items.length) {
+        items = cleanItems;
+        await this.setShop('items', items, btype);
+      }
+      if (cleanCats.length !== cats.length) {
+        cats = cleanCats;
+        await this.setShop('categories', cats, btype);
+      }
+
       const settings = await this.getShop('settings', {}, btype);
       const low = items.filter(i => Number(i.stock_qty || 0) <= Number(i.reorder_level || 5)).length;
       return {
@@ -2160,6 +2230,61 @@ function renderProductAdmin() {
   renderProductAdminGrid();
 }
 
+function formatVariantChips(raw, maxVisible = 4) {
+  if (!raw) return '';
+  let variants = [];
+  try {
+    if (typeof raw === 'string') {
+      const trimmed = raw.trim();
+      if (trimmed.startsWith('[') || trimmed.startsWith('{')) {
+        const parsed = JSON.parse(trimmed);
+        variants = Array.isArray(parsed) ? parsed : [parsed];
+      } else if (trimmed) {
+        variants = trimmed.split(',').map(s => ({ name: s.trim() })).filter(v => v.name);
+      }
+    } else if (Array.isArray(raw)) {
+      variants = raw;
+    } else if (typeof raw === 'object') {
+      variants = [raw];
+    }
+  } catch (_) {
+    if (typeof raw === 'string') {
+      variants = raw.split(',').map(s => ({ name: s.trim() }));
+    }
+  }
+
+  if (!variants || !variants.length) return '';
+
+  const esc = s => String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+  const chips = variants.slice(0, maxVisible).map(v => {
+    let label = '';
+    if (typeof v === 'string') {
+      label = v;
+    } else if (typeof v === 'object' && v !== null) {
+      label = v.name || [v.size, v.color || v.shade].filter(Boolean).join(' / ') || 'Variant';
+    }
+    label = esc(label);
+    const stock = (typeof v === 'object' && v !== null && v.stock !== undefined && v.stock !== '') 
+      ? `<span style="opacity:0.75; font-size:10px; margin-left:3px;">(${v.stock})</span>` 
+      : '';
+    return `<span class="cap-pill" style="font-size:10.5px; background:rgba(37,99,235,0.08); color:#1d4ed8; border:1px solid rgba(37,99,235,0.2); border-radius:12px; padding:2px 7px; font-weight:600; display:inline-flex; align-items:center; line-height:1.3;">${label}${stock}</span>`;
+  }).join('');
+
+  const remaining = variants.length - maxVisible;
+  const morePill = remaining > 0 
+    ? `<span class="cap-pill" style="font-size:10px; background:var(--line); color:var(--muted); border-radius:12px; padding:2px 6px; font-weight:700;">+${remaining} more</span>` 
+    : '';
+
+  return `
+    <div style="margin-top:4px; display:flex; flex-wrap:wrap; gap:4px; align-items:center;">
+      <span style="font-size:10px; font-weight:700; text-transform:uppercase; color:var(--muted); letter-spacing:0.5px;">Variants:</span>
+      ${chips}
+      ${morePill}
+    </div>
+  `;
+}
+
 function renderProductAdminGrid() {
   const grid = qs('#productAdminGrid');
   if (!grid) return;
@@ -2208,11 +2333,7 @@ function renderProductAdminGrid() {
           </div>
         ` : ''}
 
-        ${hasCap('variants') && item.variants_json ? `
-          <div style="margin-top:2px;">
-            <span class="cap-pill" style="font-size:11px; background:var(--line); color:var(--ink); font-weight:600;">Variants: ${item.variants_json}</span>
-          </div>
-        ` : ''}
+        ${(hasCap('variants') || item.variants_json) && item.variants_json ? formatVariantChips(item.variants_json) : ''}
         
         <div class="price-tier">
           <div class="price-row">
@@ -3305,7 +3426,14 @@ async function start() {
     showLoginScreen();
     return;
   }
-  const page = pageName() || 'pos';
+  const currentPath = (location.pathname || '').replace(/\/+$/, '') || '/pos';
+  const initialPageDef = SPA_PAGES[currentPath];
+  if (initialPageDef) {
+    const main = qs('main');
+    if (main) main.innerHTML = `<section class="${initialPageDef.shell}" data-page="${initialPageDef.page}"></section>`;
+    syncActiveTopNav(currentPath);
+  }
+  const page = initialPageDef ? initialPageDef.page : (pageName() || 'pos');
   await bootstrap();
   bootstrapped = true;
   if (page === 'pos')       posLayout();

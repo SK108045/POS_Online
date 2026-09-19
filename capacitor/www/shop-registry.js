@@ -95,7 +95,9 @@
   }
 
   function namespace(btype = null) {
-    return activeShopId() || btype || localStorage.getItem('pos_active_business_type') || 'retail';
+    const active = activeShopId();
+    if (active) return active;
+    return btype || localStorage.getItem('pos_active_business_type') || 'retail';
   }
 
   function key(name, btype = null) {

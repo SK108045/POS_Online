@@ -240,7 +240,6 @@
         selectedShopId = btn.dataset.shopId;
         selectedDemoType = '';
         const shop = shopsCache.find(s => s.id === selectedShopId);
-        await window.OraforgeShops.activate(shop);
         renderRegistered();
         updateHeader(shop);
         screen.querySelector('#loginErrorMsg').style.display = 'none';
@@ -329,7 +328,6 @@
       if (selectedShopId && !shopsCache.some(s => s.id === selectedShopId)) selectedShopId = '';
       if (!selectedShopId && shopsCache.length) {
         selectedShopId = shopsCache[0].id;
-        await window.OraforgeShops.activate(shopsCache[0]);
       }
       renderRegistered();
       renderDemo();

@@ -6,7 +6,9 @@
   "scripts": {
     "build": "echo 'Frontend ready in www/'",
     "cap": "cap",
-    "build:bridge": "esbuild src/sqlite-bridge.js --bundle --format=iife --platform=browser --outfile=www/sqlite-bridge.js"
+    "build:bridge": "esbuild src/sqlite-bridge.js --bundle --format=iife --platform=browser --outfile=www/sqlite-bridge.js",
+    "dev": "node dev-server.js",
+    "start": "node dev-server.js"
   },
   "dependencies": {
     "@capacitor/android": "6.2.0",

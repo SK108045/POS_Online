@@ -95,9 +95,42 @@
     };
   }
 
+  const PROFILE_SAMPLE_SKU_PREFIXES = {
+    pharmacy: 'PHARM-',
+    hardware: 'HDW-',
+    boutique: 'BTQ-',
+    retail: 'RET-',
+    restaurant: 'REST-',
+    bar: ['BE-', 'CO-', 'SP-', 'WI-', 'SD-', 'SN-']
+  };
+
+  function sanitizeAdminItems(items, profileId) {
+    if (!Array.isArray(items) || !profileId) return items;
+    const foreignPrefixes = [];
+    for (const [p, prefixes] of Object.entries(PROFILE_SAMPLE_SKU_PREFIXES)) {
+      if (p !== profileId) {
+        if (Array.isArray(prefixes)) foreignPrefixes.push(...prefixes);
+        else foreignPrefixes.push(prefixes);
+      }
+    }
+    return items.filter(item => {
+      const sku = String(item.sku || '').toUpperCase();
+      return !foreignPrefixes.some(fp => sku.startsWith(fp));
+    });
+  }
+
   async function menuPayload() {
     const categories = await LocalAdmin.get('categories', []);
-    const items = await LocalAdmin.get('items', []);
+    let items = await LocalAdmin.get('items', []);
+    const isRegisteredShop = window.OraforgeShops && window.OraforgeShops.activeShopId();
+    if (!isRegisteredShop) {
+      const btype = LocalAdmin.type();
+      const cleanItems = sanitizeAdminItems(items, btype);
+      if (cleanItems.length !== items.length) {
+        items = cleanItems;
+        await LocalAdmin.set('items', items);
+      }
+    }
     return {
       categories: Array.isArray(categories) ? categories : [],
       items: Array.isArray(items) ? items : [],
@@ -129,6 +162,13 @@
       unit: String(body.unit ?? product.unit ?? 'pcs'),
       image_url: chosenImage,
       reorder_level: Number(body.reorder_level ?? product.reorder_level ?? 5),
+      variants_json: body.variants_json !== undefined ? body.variants_json : (product.variants_json || ''),
+      decimal_qty_enabled: body.decimal_qty_enabled !== undefined ? (body.decimal_qty_enabled ? 1 : 0) : (product.decimal_qty_enabled ? 1 : 0),
+      wholesale_price_cents: body.wholesale_price !== undefined ? Math.round(Number(body.wholesale_price) * 100) : (product.wholesale_price_cents || 0),
+      batch_no: body.batch_no !== undefined ? String(body.batch_no) : (product.batch_no || ''),
+      expiry_date: body.expiry_date !== undefined ? String(body.expiry_date) : (product.expiry_date || ''),
+      manufacturer: body.manufacturer !== undefined ? String(body.manufacturer) : (product.manufacturer || ''),
+      strength: body.strength !== undefined ? String(body.strength) : (product.strength || ''),
     });
 
     await LocalAdmin.set('items', products);
