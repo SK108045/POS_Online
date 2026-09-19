@@ -43,6 +43,8 @@ jobs:
           node --check www/shop-login-force.js
           node --check www/image-search-sync.js
           node --check www/admin-shop-sync.js
+          node --check www/admin-local-fixes.js
+          node --check www/product-camera.js
 
       - name: Install Capacitor and SQLite dependencies
         working-directory: capacitor
