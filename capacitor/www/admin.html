@@ -4,21 +4,19 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Oraforge POS — Admin Portal</title>
-  <link rel="stylesheet" href="admin.css">
+  <link rel="stylesheet" href="admin.css?v=20260919-adminfix2">
   <script>
     (function() {
       var t = localStorage.getItem('pos_theme') || 'light';
       document.documentElement.setAttribute('data-theme', t);
-      // A registered shop must authenticate with its own owner credentials.
-      if (localStorage.getItem('pos_active_shop_id')) {
-        sessionStorage.removeItem('pos_admin_logged_in');
-      }
+      // Always authenticate on a fresh Admin page load. This also guarantees
+      // the local API compatibility layer is installed before Admin boot continues.
+      sessionStorage.removeItem('pos_admin_logged_in');
     })();
   </script>
 </head>
 <body>
   <div class="admin-shell">
-    <!-- SIDEBAR -->
     <aside class="sidebar">
       <div class="sidebar-brand">
         <div class="logo">
@@ -59,10 +57,12 @@
   <button class="sidebar-open-btn" id="sidebarOpenBtn" title="Open sidebar"><span></span><span></span><span></span></button>
   <div class="toast-container" id="toastContainer"></div>
 
-  <script src="sqlite-bridge.js"></script>
-  <script src="shop-registry.js" defer></script>
-  <script src="admin.js" defer></script>
-  <script src="admin-shop-sync.js" defer></script>
+  <script src="sqlite-bridge.js?v=20260919-adminfix2"></script>
+  <script src="shop-registry.js?v=20260919-adminfix2" defer></script>
+  <script src="admin.js?v=20260919-adminfix2" defer></script>
+  <script src="admin-shop-sync.js?v=20260919-adminfix2" defer></script>
+  <script src="admin-local-fixes.js?v=20260919-adminfix2" defer></script>
+  <script src="product-camera.js?v=20260919-adminfix2" defer></script>
   <script>
     document.addEventListener('DOMContentLoaded', () => {
       const shell = document.querySelector('.admin-shell');
