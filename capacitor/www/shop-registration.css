@@ -1,0 +1,375 @@
+.registered-login-screen,
+.registration-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 999999;
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding: max(16px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right)) max(20px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
+  box-sizing: border-box;
+}
+
+.registered-login-panel,
+.registration-panel {
+  width: min(520px, 100%);
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.registered-login-panel {
+  padding: 24px;
+  display: grid;
+  gap: 12px;
+}
+
+.login-theme-floating,
+.registration-theme-toggle {
+  position: fixed;
+  top: max(14px, env(safe-area-inset-top));
+  right: max(14px, env(safe-area-inset-right));
+  z-index: 1000000;
+}
+
+.registered-login-brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding-right: 40px;
+}
+
+.registered-login-brand h1,
+.registration-panel h1 {
+  margin: 0;
+  color: var(--ink);
+  font-size: 22px;
+  font-weight: 800;
+  line-height: 1.15;
+  letter-spacing: -0.4px;
+}
+
+.registered-login-brand p,
+.registration-panel p {
+  margin: 3px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.registered-login-icon {
+  width: 50px;
+  height: 50px;
+  border-radius: 13px;
+  background: var(--primary);
+  color: var(--primary-fg);
+  display: grid;
+  place-items: center;
+  font-size: 25px;
+  flex: 0 0 auto;
+  box-shadow: var(--shadow);
+}
+
+.registered-shop-section,
+.demo-shop-section {
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 12px;
+  min-width: 0;
+}
+
+.registered-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+  color: var(--muted);
+}
+
+.registered-section-head > span {
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.55px;
+}
+
+.registered-section-head small {
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.registered-shop-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px;
+  min-width: 0;
+}
+
+.registered-shop-chip {
+  min-width: 0;
+  min-height: 58px;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 9px;
+  padding: 10px 11px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--panel);
+  color: var(--ink);
+  text-align: left;
+  box-shadow: none;
+}
+
+.registered-shop-chip.active {
+  background: var(--primary);
+  color: var(--primary-fg);
+  border-color: var(--primary);
+  box-shadow: var(--shadow);
+}
+
+.shop-chip-icon {
+  font-size: 21px;
+  line-height: 1;
+}
+
+.shop-chip-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.shop-chip-copy strong,
+.shop-chip-copy small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.shop-chip-copy strong { font-size: 12.5px; }
+.shop-chip-copy small { font-size: 10px; color: var(--muted); font-weight: 600; }
+.registered-shop-chip.active .shop-chip-copy small { color: color-mix(in srgb, var(--primary-fg) 72%, transparent); }
+.shop-chip-check { font-size: 13px; font-weight: 900; }
+
+.registered-empty,
+.registered-shop-loading {
+  grid-column: 1 / -1;
+  padding: 16px 10px;
+  text-align: center;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+.register-shop-link,
+.demo-shop-toggle,
+.reg-back-link {
+  width: 100%;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  color: var(--ink);
+  min-height: 42px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 750;
+  text-align: center;
+}
+
+.register-shop-link {
+  border-style: dashed;
+  background: var(--bg);
+}
+
+.demo-shop-toggle {
+  min-height: 36px;
+  color: var(--muted);
+  font-size: 11px;
+  background: transparent;
+}
+
+.login-success-notice,
+.form-alert-error,
+.login-error-msg {
+  padding: 9px 11px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.45;
+}
+
+.login-success-notice {
+  background: var(--ok-bg);
+  color: var(--ok);
+  border: 1px solid color-mix(in srgb, var(--ok) 30%, transparent);
+}
+
+.login-error-msg,
+.form-alert-error {
+  background: var(--danger-bg);
+  color: var(--danger);
+  border: 1px solid color-mix(in srgb, var(--danger) 30%, transparent);
+}
+
+.form-alert-error {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.login-divider {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 2px 0;
+}
+
+.login-divider span { height: 1px; flex: 1; background: var(--line); }
+.login-divider small { color: var(--muted); font-size: 10.5px; text-transform: uppercase; letter-spacing: .5px; }
+
+.registered-pin-input {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  text-align: center;
+  font-size: 22px;
+  letter-spacing: 4px;
+  font-weight: 800;
+  padding: 11px 12px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--panel);
+  color: var(--ink);
+}
+
+.registered-pin-pad {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 9px;
+}
+
+.registered-pin-pad button { min-width: 0; }
+
+.registered-login-footer {
+  border-top: 1px solid var(--line);
+  padding-top: 10px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+}
+
+.registered-login-footer small { color: var(--muted); font-size: 11px; }
+.registered-login-footer a {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--ink);
+  text-decoration: none;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  padding: 7px 10px;
+  border-radius: 7px;
+  font-size: 11px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.registration-screen { place-items: start center; }
+.registration-panel {
+  margin: 22px auto;
+  padding: 30px 28px;
+  border-radius: 16px;
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow-lg);
+  background: var(--panel);
+  display: grid;
+  gap: 15px;
+}
+
+.reg-back-link {
+  width: auto;
+  justify-self: start;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  text-align: left;
+}
+
+.form-section-title {
+  margin-top: 3px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 10px;
+  color: var(--ink);
+}
+
+.form-section-title > span {
+  font-size: 11px;
+  font-weight: 850;
+  text-transform: uppercase;
+  letter-spacing: .55px;
+}
+
+.form-section-title small { color: var(--muted); font-size: 10.5px; }
+.form-label-group { display: grid; gap: 6px; }
+.label-text { color: var(--ink); font-size: 12px; font-weight: 750; }
+.form-row-2col { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.registration-panel input,
+.registration-panel select {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  min-height: 43px;
+  padding: 10px 13px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--bg);
+  color: var(--ink);
+  font-size: 14px;
+}
+.registration-panel input:focus,
+.registration-panel select:focus,
+.registered-pin-input:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 12%, transparent);
+}
+.custom-category-box { display: grid; gap: 10px; }
+.registration-help { color: var(--muted); line-height: 1.5; font-size: 11.5px; }
+.register-submit-btn {
+  width: 100%;
+  min-height: 46px;
+  background: var(--primary);
+  color: var(--primary-fg);
+  border-radius: 8px;
+  font-size: 13.5px;
+  font-weight: 850;
+}
+
+@media (max-width: 560px) {
+  .registered-login-screen,
+  .registration-screen {
+    padding-left: 10px;
+    padding-right: 10px;
+  }
+  .registered-login-panel,
+  .registration-panel {
+    width: 100%;
+    border-radius: 12px;
+  }
+  .registered-login-panel { padding: 18px 14px; }
+  .registration-panel { padding: 22px 16px; margin: 12px auto; }
+  .registered-shop-grid { grid-template-columns: 1fr; }
+  .form-row-2col { grid-template-columns: 1fr; }
+  .registered-login-footer { align-items: stretch; flex-direction: column; }
+  .registered-login-footer a { justify-content: center; width: 100%; box-sizing: border-box; }
+  .registered-login-brand { padding-right: 30px; }
+  .registered-login-brand h1 { font-size: 20px; }
+}
