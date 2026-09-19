@@ -6,6 +6,7 @@
   <title>Oraforge POS</title>
   <link rel="stylesheet" href="inter.css">
   <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="shop-registration.css">
   <script>
     (function() {
       var t = localStorage.getItem('pos_theme') || 'light';
@@ -54,7 +55,11 @@
     <section class="pos-shell" data-page="pos"></section>
   </main>
   <script src="sqlite-bridge.js"></script>
+  <script src="shop-registry.js" defer></script>
   <script src="app.js" defer></script>
+  <script src="shop-profile-sync.js" defer></script>
+  <script src="shop-registration.js" defer></script>
+  <script src="image-search-sync.js" defer></script>
   <script>
     function updateClock() {
       const now = new Date();
