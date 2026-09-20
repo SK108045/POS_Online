@@ -869,3 +869,17 @@ html, body { max-width: 100%; overflow-x: hidden; }
   .toast-container { left: 12px; right: 12px; bottom: 12px; }
   .toast { min-width: 0; width: 100%; }
 }
+
+/* Mobile records, marketing actions, and dialogs. */
+@media (max-width: 860px) {
+  .page-header, .panel-header, .promo-queue-row { flex-wrap: wrap; gap: 12px; }
+  .page-header > div, .panel-header > div, .panel-body > div { min-width: 0; }
+  .page-header > div:last-child { flex-wrap: wrap; }
+  .data-table { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .promo-sms-layout { grid-template-columns: minmax(0, 1fr) !important; }
+  #promoSmsSendBtn { width: 100%; white-space: normal; }
+  .promo-hint, #promoSmsStatus, .promo-customer-info { overflow-wrap: anywhere; }
+  .promo-actions > button { flex: 1 1 180px; white-space: normal; }
+  .modal-box { max-width: 100%; max-height: 90dvh; overflow-y: auto; }
+  .form-input, .form-select, .form-textarea { min-width: 0; max-width: 100%; }
+}

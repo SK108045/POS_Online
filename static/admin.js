@@ -965,7 +965,7 @@ function buildPromotions() {
         <span class="badge badge-active">LIVE</span>
       </div>
       <div class="panel-body">
-        <div style="display:grid;grid-template-columns:minmax(0,1fr) auto;gap:16px;align-items:end">
+        <div class="promo-sms-layout" style="display:grid;grid-template-columns:minmax(0,1fr) auto;gap:16px;align-items:end">
           <div>
             <div class="form-label">Selected customers</div>
             <div style="font-size:16px;font-weight:800;margin-top:4px"><span id="promoSmsSelectedCount">${state.promoSelected?.size || 0}</span> selected</div>

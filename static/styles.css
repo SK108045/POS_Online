@@ -1976,3 +1976,22 @@ main { min-height: calc(100vh - 69px); }
     display: none;
   }
 }
+
+/* Keep wide records reachable on touch screens. */
+.sales-table-container { min-width: 0; max-width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+@media (max-width: 700px) {
+  [data-page], .panel, .content-grid, .form-grid { min-width: 0; }
+  .sales-table-container { margin: 0 12px 16px; }
+  .sales-table { min-width: 640px; }
+  .sales-table th, .sales-row td { padding: 12px; }
+  .panel-title-group { flex-wrap: wrap; gap: 12px; margin-left: 12px !important; margin-right: 12px !important; }
+  .panel-title-group > div { flex-wrap: wrap; gap: 8px; margin-left: 0 !important; }
+  .panel-title-group h2 { flex: 1 0 100%; }
+  .toolbar, .stock-toolbar, .filter-pills { flex-wrap: wrap; min-width: 0; }
+  .toolbar .field, .toolbar .search-box { min-width: 0; max-width: 100%; }
+  .content-grid, .form-grid { grid-template-columns: minmax(0, 1fr) !important; }
+  [data-page="settings"] [style*="grid-template-columns"],
+  [data-page="reports"] [style*="grid-template-columns"] { grid-template-columns: minmax(0, 1fr) !important; }
+  .qty-popup, .modal-box { overflow-y: auto; overscroll-behavior-y: contain; }
+  .qty-popup input, .qty-popup select, .modal-box input, .modal-box select { min-width: 0; max-width: 100%; box-sizing: border-box; }
+}
