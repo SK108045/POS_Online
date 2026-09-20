@@ -37,6 +37,9 @@ jobs:
       - name: Validate APK JavaScript
         working-directory: capacitor
         run: |
+          node --check www/app.js
+          node --check www/admin.js
+          node --test tests/native-providers.cjs
           node --check www/shop-registry.js
           node --check www/shop-profile-sync.js
           node --check www/shop-registration.js

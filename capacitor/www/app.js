@@ -1779,6 +1779,14 @@ async function triggerPaystackMpesaCharge(params) {
     }
   };
 
+  if (window.OraforgeNative) {
+    try {
+      return await window.OraforgeProviders.charge(payload);
+    } catch (error) {
+      return {status:false, message:error.message || 'Could not confirm STK submission. Check payment status before retrying.'};
+    }
+  }
+
   // 1. Try local dev server proxy if running
   try {
     const res = await fetch('/api/paystack/charge', {
@@ -1787,7 +1795,8 @@ async function triggerPaystackMpesaCharge(params) {
       body: JSON.stringify(payload)
     });
     if (res.ok || res.status === 400 || res.status === 401) {
-      const data = await res.json().catch(() => ({}));
+      const data = await res.json();
+      if (typeof data.status !== 'boolean') throw new Error('Invalid payment server response');
       return data;
     }
   } catch (_) {}

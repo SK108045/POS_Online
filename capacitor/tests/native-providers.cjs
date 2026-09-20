@@ -1,0 +1,37 @@
+const {test} = require('node:test');
+const assert = require('node:assert/strict');
+const fs = require('fs');
+const vm = require('vm');
+const path = require('path');
+const source = fs.readFileSync(path.join(__dirname,'../src/native-providers.js'),'utf8')
+  .replace("import config from './provider-config.json';", "const config = {paystack:'test-paystack', sms:'test-sms', username:'sk10'};")
+  .replace('export function', 'function');
+const ctx = vm.createContext({URLSearchParams});
+vm.runInContext(source,ctx);
+test('native STK uses HTTPS provider endpoint and preserves request',async()=>{
+  let request;
+  const provider = ctx.createNativeProviders({request:async value=>{request=value;return {data:{status:true,data:{status:'pay_offline'}}}}});
+  const result = await provider.charge({amount:6000,email:'test@example.com',mobile_money:{phone:'+254713574168',provider:'mpesa'}});
+  assert.equal(request.url,'https://api.paystack.co/charge');
+  assert.equal(request.data.amount,6000);
+  assert.equal(request.headers.Authorization,'Bearer test-paystack');
+  assert.equal(result.data.status,'pay_offline');
+});
+test('SMS normalizes and deduplicates Airtel recipients and encodes message',async()=>{
+  let request;
+  const provider = ctx.createNativeProviders({request:async value=>{request=value;return {data:JSON.stringify({SMSMessageData:{Recipients:[{statusCode:101}]}})}}});
+  const result = await provider.sms('/api/admin/sms/send',{message:'Hello & welcome + thanks',recipients:['0756205063','+254756205063']});
+  assert.equal(request.url,'https://api.africastalking.com/version1/messaging');
+  const form = new URLSearchParams(request.data);
+  assert.equal(form.get('to'),'+254756205063');
+  assert.equal(form.get('message'),'Hello & welcome + thanks');
+  assert.equal(result.sent,1);assert.equal(result.total,1);
+});
+test('invalid recipients do not send; provider rejections propagate',async()=>{
+  let calls=0;
+  const provider = ctx.createNativeProviders({request:async()=>{calls++;throw new Error('Authentication invalid')}});
+  await assert.rejects(provider.sms('/api/admin/sms/send',{message:'Hello',recipients:['123']}),/invalid Kenyan/);
+  assert.equal(calls,0);
+  await assert.rejects(provider.charge({}),/Authentication invalid/);
+  assert.equal(calls,1);
+});

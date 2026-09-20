@@ -14,7 +14,7 @@ function buildBridge() {
   try {
     if (!fs.existsSync(BRIDGE_SRC)) return;
     console.log('[DevServer] Building SQLite bridge bundle (www/sqlite-bridge.js)...');
-    execSync('npx esbuild src/sqlite-bridge.js --bundle --format=iife --platform=browser --outfile=www/sqlite-bridge.js', {
+    execSync('npm run build:bridge', {
       cwd: __dirname,
       stdio: 'inherit'
     });

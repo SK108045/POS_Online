@@ -188,8 +188,11 @@ async function cloudApi(path, opts = {}) {
   if (!navigator.onLine) throw new Error('This feature needs an internet connection.');
   const method = (opts.method || 'GET').toUpperCase();
   const body = opts.body ? (typeof opts.body === 'string' ? JSON.parse(opts.body) : opts.body) : null;
+  if (window.OraforgeNative && path.startsWith('/api/admin/sms/')) {
+    return window.OraforgeProviders.sms(path, body || {});
+  }
   const localSms = path.startsWith('/api/admin/sms/') && ['localhost', '127.0.0.1'].includes(location.hostname);
-  const url = (localSms ? '' : CLOUD_API_BASE) + path;
+  const url = localSms ? new URL(path, location.origin).href : CLOUD_API_BASE + path;
   if (window.OraforgeHttp?.request) {
     const response = await window.OraforgeHttp.request({ url, method, headers:{'Content-Type':'application/json','Accept':'application/json'}, data:body });
     return typeof response.data === 'string' ? JSON.parse(response.data) : response.data;

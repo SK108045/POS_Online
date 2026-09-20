@@ -1,3 +1,4 @@
+import { createNativeProviders } from './native-providers';
 import { Capacitor, CapacitorHttp } from '@capacitor/core';
 import { CapacitorSQLite, SQLiteConnection } from '@capacitor-community/sqlite';
 
@@ -49,6 +50,7 @@ window.OraforgeDB = new OraforgeDB();
 window.OraforgeDBReady = window.OraforgeDB.init();
 
 
+window.OraforgeNative = Capacitor.isNativePlatform();
 window.OraforgeHttp = {
   async request({ url, method = 'GET', headers = {}, data = null, params = null, connectTimeout = 10000, readTimeout = 15000 }) {
     const options = { url, method, headers, connectTimeout, readTimeout };
@@ -58,7 +60,7 @@ window.OraforgeHttp = {
     if (response.status < 200 || response.status >= 300) {
       let message = `Network request failed (${response.status})`;
       const payload = response.data;
-      if (payload && typeof payload === 'object') message = payload.error || payload.message || message;
+      if (payload && typeof payload === 'object') message = payload.error || payload.errorMessage || payload.message || message;
       else if (typeof payload === 'string' && payload.trim()) message = payload.slice(0, 180);
       const error = new Error(message);
       error.status = response.status;
@@ -68,3 +70,5 @@ window.OraforgeHttp = {
     return response;
   }
 };
+
+window.OraforgeProviders = createNativeProviders(window.OraforgeHttp);
