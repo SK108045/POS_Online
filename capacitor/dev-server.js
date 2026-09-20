@@ -156,6 +156,11 @@ function handleRequest(req, res) {
   }
 
   // Paystack Charge proxy endpoint
+  if (pathname.startsWith('/api/admin/sms/')) {
+    require('./sms').handle(req, res, pathname);
+    return;
+  }
+
   if (pathname === '/api/paystack/charge' && req.method === 'POST') {
     let raw = '';
     req.on('data', chunk => raw += chunk);
@@ -166,8 +171,8 @@ function handleRequest(req, res) {
         
         let secretKey = 'sk_live_91baa01872ba458e72ab98118415ed9a69778dee';
         const keyFileCandidates = [
-          path.join(__dirname, 'paystack.txt'),
           path.join(__dirname, '..', 'paystack.txt'),
+          path.join(__dirname, 'paystack.txt'),
           path.join(WWW_DIR, 'paystack.txt')
         ];
         for (const kf of keyFileCandidates) {
@@ -176,10 +181,10 @@ function handleRequest(req, res) {
             if (k) { secretKey = k; break; }
           }
         }
-        if (payload.secret_key) secretKey = payload.secret_key;
+        // The configured key file is authoritative for proxied payments.
 
         const dataStr = JSON.stringify({
-          email: payload.email || `customer_${Date.now()}@oraforge.pos`,
+          email: String(payload.email || `mpesa.${String(payload.phone || payload.mobile_money?.phone || '').replace(/\D/g, '')}@example.com`).trim(),
           amount: payload.amount,
           currency: payload.currency || 'KES',
           mobile_money: payload.mobile_money || { phone: payload.phone, provider: 'mpesa' }

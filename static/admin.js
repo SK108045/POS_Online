@@ -1053,10 +1053,22 @@ async function sendPromoSmsSelected() {
 
   try {
     const result = await api('/api/admin/sms/send', { method:'POST', body:{ message, customer_ids: ids } });
-    const providerMessage = result.message ? ` · ${promoEscape(result.message)}` : '';
-    const skipped = result.skipped ? ` · ${result.skipped} skipped` : '';
-    if (status) status.innerHTML = `<div style="padding:10px 12px;border-radius:8px;background:#dcfce7;color:#166534;font-weight:700">✓ SMS campaign sent: ${result.sent}/${result.total} successful${skipped}${providerMessage}</div>`;
-    toast(`SMS sent to ${result.sent} customer${result.sent === 1 ? '' : 's'}`);
+    if (Number(result.sent) < Number(result.total) || !result.sent) {
+      throw new Error('Some messages could not be sent. Please check the selected recipients.');
+    }
+    if (status) status.textContent = '';
+    openModal(`
+      <div role="dialog" aria-modal="true" aria-label="SMS sent successfully" style="padding:28px;text-align:center;background:#dcfce7;color:#166534;border-radius:12px;">
+        <div aria-hidden="true" style="font-size:40px;margin-bottom:12px;">✓</div>
+        <h3 style="margin:0 0 20px;color:#166534;">Sent successfully</h3>
+        <button type="button" class="btn btn-primary" data-sms-close style="background:#16a34a;border-color:#16a34a;color:white;">OK</button>
+      </div>
+    `, overlay => {
+      const closeButton = overlay.querySelector('[data-sms-close]');
+      closeButton.addEventListener('click', () => overlay.remove());
+      overlay.addEventListener('keydown', event => { if (event.key === 'Escape') overlay.remove(); });
+      closeButton.focus();
+    });
   } catch (e) {
     if (status) status.innerHTML = `<div style="padding:10px 12px;border-radius:8px;background:#fee2e2;color:#991b1b;font-weight:700">${promoEscape(e.message)}</div>`;
     toast(e.message, 'error');

@@ -1721,9 +1721,10 @@ class POSHandler(SimpleHTTPRequestHandler):
                     phone_no = "+" + phone_no
                 
                 paystack_key = os.environ.get("PAYSTACK_SECRET_KEY")
-                if not paystack_key and os.path.exists("paystack.txt"):
+                paystack_key_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "paystack.txt")
+                if not paystack_key and os.path.exists(paystack_key_file):
                     try:
-                        with open("paystack.txt", "r") as f:
+                        with open(paystack_key_file, "r") as f:
                             paystack_key = f.read().strip()
                     except:
                         pass
@@ -1731,7 +1732,7 @@ class POSHandler(SimpleHTTPRequestHandler):
                     paystack_key = "sk_live_91baa01872ba458e72ab98118415ed9a69778dee"
 
                 paystack_payload = json.dumps({
-                    "email": data.get("email", f"customer_{int(time.time())}@oraforge.pos"),
+                    "email": str(data.get("email") or ("mpesa." + "".join(c for c in phone_no if c.isdigit()) + "@example.com")).strip(),
                     "amount": int(data.get("amount", 0)),
                     "currency": "KES",
                     "mobile_money": {

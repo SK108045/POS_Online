@@ -188,7 +188,8 @@ async function cloudApi(path, opts = {}) {
   if (!navigator.onLine) throw new Error('This feature needs an internet connection.');
   const method = (opts.method || 'GET').toUpperCase();
   const body = opts.body ? (typeof opts.body === 'string' ? JSON.parse(opts.body) : opts.body) : null;
-  const url = CLOUD_API_BASE + path;
+  const localSms = path.startsWith('/api/admin/sms/') && ['localhost', '127.0.0.1'].includes(location.hostname);
+  const url = (localSms ? '' : CLOUD_API_BASE) + path;
   if (window.OraforgeHttp?.request) {
     const response = await window.OraforgeHttp.request({ url, method, headers:{'Content-Type':'application/json','Accept':'application/json'}, data:body });
     return typeof response.data === 'string' ? JSON.parse(response.data) : response.data;
@@ -1086,9 +1087,9 @@ function buildPromotions() {
             <div class="form-label">Selected customers</div>
             <div style="font-size:16px;font-weight:800;margin-top:4px"><span id="promoSmsSelectedCount">${state.promoSelected?.size || 0}</span> selected</div>
             <div class="promo-hint" style="margin-top:8px">SMS uses the message in the campaign editor above and the phone numbers saved on the selected customer records.</div>
-            <div class="promo-hint" style="margin-top:5px">Provider status: <strong>${state.smsConfig?.configured ? 'Configured' : 'API key not configured on server'}</strong></div>
+            <div class="promo-hint" style="margin-top:5px">Provider status: <strong>${state.smsConfig?.configured ? 'Configured' : promoEscape(state.smsConfig?.message || 'SMS provider unavailable')}</strong></div>
           </div>
-          <button class="btn btn-primary" id="promoSmsSendBtn" ${state.smsConfig?.configured && state.promoSelected?.size ? '' : 'disabled'}>Send SMS to Selected (${state.promoSelected?.size || 0})</button>
+          <button class="btn btn-primary" id="promoSmsSendBtn" ${state.promoSelected?.size ? '' : 'disabled'}>Send SMS to Selected (${state.promoSelected?.size || 0})</button>
         </div>
         <div id="promoSmsStatus" style="margin-top:12px"></div>
       </div>
@@ -1151,6 +1152,12 @@ async function sendPromoSmsSelected() {
   const message = editor?.value?.trim() || '';
   const ids = [...(state.promoSelected || [])];
 
+  if (!state.smsConfig?.configured) {
+    const error = state.smsConfig?.message || 'SMS provider is not configured.';
+    if (status) status.textContent = error;
+    toast(error, 'error');
+    return;
+  }
   if (!ids.length) {
     toast('Select at least one customer first.', 'info');
     return;
@@ -1168,11 +1175,24 @@ async function sendPromoSmsSelected() {
   if (status) status.innerHTML = `<span style="color:var(--muted)">Sending SMS to ${customers.length} customer${customers.length === 1 ? '' : 's'}…</span>`;
 
   try {
-    const result = await api('/api/admin/sms/send', { method:'POST', body:{ message, customer_ids: ids } });
-    const providerMessage = result.message ? ` · ${promoEscape(result.message)}` : '';
-    const skipped = result.skipped ? ` · ${result.skipped} skipped` : '';
-    if (status) status.innerHTML = `<div style="padding:10px 12px;border-radius:8px;background:#dcfce7;color:#166534;font-weight:700">✓ SMS campaign sent: ${result.sent}/${result.total} successful${skipped}${providerMessage}</div>`;
-    toast(`SMS sent to ${result.sent} customer${result.sent === 1 ? '' : 's'}`);
+    const result = await api('/api/admin/sms/send', { method:'POST', body:{ message, customer_ids: ids, recipients: customers.map(c => c.phone) } });
+    if (!result.sent) throw new Error((result.results || []).map(r => `${r.number}: ${r.status}`).join('; ') || result.message || 'Provider accepted no recipients.');
+    if (Number(result.sent) < Number(result.total) || !result.sent) {
+      throw new Error('Some messages could not be sent. Please check the selected recipients.');
+    }
+    if (status) status.textContent = '';
+    openModal(`
+      <div role="dialog" aria-modal="true" aria-label="SMS sent successfully" style="padding:28px;text-align:center;background:#dcfce7;color:#166534;border-radius:12px;">
+        <div aria-hidden="true" style="font-size:40px;margin-bottom:12px;">✓</div>
+        <h3 style="margin:0 0 20px;color:#166534;">Sent successfully</h3>
+        <button type="button" class="btn btn-primary" data-sms-close style="background:#16a34a;border-color:#16a34a;color:white;">OK</button>
+      </div>
+    `, overlay => {
+      const closeButton = overlay.querySelector('[data-sms-close]');
+      closeButton.addEventListener('click', () => overlay.remove());
+      overlay.addEventListener('keydown', event => { if (event.key === 'Escape') overlay.remove(); });
+      closeButton.focus();
+    });
   } catch (e) {
     if (status) status.innerHTML = `<div style="padding:10px 12px;border-radius:8px;background:#fee2e2;color:#991b1b;font-weight:700">${promoEscape(e.message)}</div>`;
     toast(e.message, 'error');
@@ -1224,7 +1244,7 @@ function updatePromoSelectionCount() {
   const smsBtn = $('#promoSmsSendBtn');
   if (smsBtn) {
     smsBtn.textContent = `Send SMS to Selected (${count})`;
-    smsBtn.disabled = !state.smsConfig?.configured || count === 0;
+    smsBtn.disabled = count === 0;
   }
 }
 

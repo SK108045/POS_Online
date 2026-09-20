@@ -1769,7 +1769,7 @@ function formatMpesaDisplayPhone(p) {
 async function triggerPaystackMpesaCharge(params) {
   const secretKey = localStorage.getItem('pos_paystack_secret_key') || PAYSTACK_DEFAULT_KEY;
   const payload = {
-    email: params.email || `customer_${Date.now()}@oraforge.pos`,
+    email: String(params.email || `mpesa.${String(params.phone || '').replace(/\D/g, '')}@example.com`).trim(),
     amount: params.amount,
     currency: 'KES',
     phone: params.phone,
@@ -1784,7 +1784,7 @@ async function triggerPaystackMpesaCharge(params) {
     const res = await fetch('/api/paystack/charge', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...payload, secret_key: secretKey })
+      body: JSON.stringify(payload)
     });
     if (res.ok || res.status === 400 || res.status === 401) {
       const data = await res.json().catch(() => ({}));
@@ -1821,6 +1821,7 @@ function showCheckoutModal(order) {
 
   let selectedMethod = 'mpesa';
   let savedPhone = '';
+  let savedEmail = '';
 
   function renderFormView() {
     overlay.innerHTML = `
@@ -1918,16 +1919,24 @@ function showCheckoutModal(order) {
           return;
         }
 
+        savedEmail = `mpesa.${cleanPhone.replace(/\D/g, '')}@example.com`;
         savedPhone = rawPhone;
         confirmBtn.disabled = true;
         confirmBtn.innerHTML = `<span class="pos-spinner-ring" style="border-color:white; border-top-color:transparent; margin-right:6px;"></span> Sending Prompt…`;
 
         const payResult = await triggerPaystackMpesaCharge({
-          email: `customer_${order.id || Date.now()}@oraforge.pos`,
+          email: savedEmail,
           amount: order.total_cents,
           phone: cleanPhone
         });
 
+        if (payResult.status !== true || payResult.data?.status === 'failed') {
+          msgEl.style.color = 'var(--danger)';
+          msgEl.textContent = 'STK request failed: ' + (payResult.data?.message || payResult.message || 'Please retry.');
+          confirmBtn.disabled = false;
+          confirmBtn.textContent = '⚡ Send STK Prompt';
+          return;
+        }
         renderProcessingView(cleanPhone, payResult);
       } else {
         // Cash payment flow
@@ -1971,7 +1980,7 @@ function showCheckoutModal(order) {
 
         <h3 style="margin: 0 0 6px 0; font-size: 20px;">Processing M-Pesa</h3>
         <p style="margin: 0 0 16px 0; color: var(--muted); font-size: 14px;">
-          STK Prompt triggered to <strong style="color: var(--ink); font-size: 15px;">${displayPhone}</strong>
+          STK request accepted for <strong style="color: var(--ink); font-size: 15px;">${displayPhone}</strong>
         </p>
 
         <div style="background: var(--line, #f1f5f9); border-radius: 10px; padding: 14px; margin-bottom: 16px; text-align: left;">
@@ -2056,16 +2065,18 @@ function showCheckoutModal(order) {
       resendBtn.disabled = true;
       resendBtn.textContent = 'Sending…';
       const retryResult = await triggerPaystackMpesaCharge({
-        email: `customer_${order.id || Date.now()}@oraforge.pos`,
+        email: savedEmail,
         amount: order.total_cents,
         phone: cleanPhone
       });
       resendBtn.disabled = false;
       resendBtn.textContent = '🔄 Resend Prompt';
-      if (typeof toast === 'function') toast('STK Prompt re-sent to ' + displayPhone, 'info');
-      if (!retryResult.status && retryResult.message && typeof toast === 'function') {
-        toast('Paystack note: ' + retryResult.message, 'warning');
+      if (retryResult.status !== true || retryResult.data?.status === 'failed') {
+        if (typeof toast === 'function') toast('STK request failed: ' + (retryResult.data?.message || retryResult.message || 'Please retry.'), 'error');
+        return;
       }
+      renderProcessingView(cleanPhone, retryResult);
+      if (typeof toast === 'function') toast('STK request accepted for ' + displayPhone, 'info');
     });
 
     cancelProcessingBtn.addEventListener('click', () => {
