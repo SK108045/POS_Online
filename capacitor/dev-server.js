@@ -145,6 +145,83 @@ function handleRequest(req, res) {
   const parsedUrl = new URL(req.url, 'http://' + (req.headers.host || 'localhost'));
   let pathname = decodeURIComponent(parsedUrl.pathname);
 
+  // CORS preflight support
+  if (req.method === 'OPTIONS') {
+    res.writeHead(204, {
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type, Authorization'
+    });
+    return res.end();
+  }
+
+  // Paystack Charge proxy endpoint
+  if (pathname === '/api/paystack/charge' && req.method === 'POST') {
+    let raw = '';
+    req.on('data', chunk => raw += chunk);
+    req.on('end', () => {
+      try {
+        const payload = JSON.parse(raw || '{}');
+        const https = require('https');
+        
+        let secretKey = 'sk_live_91baa01872ba458e72ab98118415ed9a69778dee';
+        const keyFileCandidates = [
+          path.join(__dirname, 'paystack.txt'),
+          path.join(__dirname, '..', 'paystack.txt'),
+          path.join(WWW_DIR, 'paystack.txt')
+        ];
+        for (const kf of keyFileCandidates) {
+          if (fs.existsSync(kf)) {
+            const k = fs.readFileSync(kf, 'utf-8').trim();
+            if (k) { secretKey = k; break; }
+          }
+        }
+        if (payload.secret_key) secretKey = payload.secret_key;
+
+        const dataStr = JSON.stringify({
+          email: payload.email || `customer_${Date.now()}@oraforge.pos`,
+          amount: payload.amount,
+          currency: payload.currency || 'KES',
+          mobile_money: payload.mobile_money || { phone: payload.phone, provider: 'mpesa' }
+        });
+
+        const preq = https.request({
+          hostname: 'api.paystack.co',
+          path: '/charge',
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${secretKey}`,
+            'Content-Type': 'application/json',
+            'Content-Length': Buffer.byteLength(dataStr),
+            'User-Agent': 'Oraforge-POS/1.0'
+          }
+        }, pres => {
+          let resData = '';
+          pres.on('data', c => resData += c);
+          pres.on('end', () => {
+            res.writeHead(pres.statusCode || 200, {
+              'Content-Type': 'application/json',
+              'Access-Control-Allow-Origin': '*'
+            });
+            res.end(resData);
+          });
+        });
+
+        preq.on('error', err => {
+          res.writeHead(502, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
+          res.end(JSON.stringify({ status: false, message: 'Paystack connection error: ' + err.message }));
+        });
+
+        preq.write(dataStr);
+        preq.end();
+      } catch (err) {
+        res.writeHead(400, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
+        res.end(JSON.stringify({ status: false, message: 'Invalid payload: ' + err.message }));
+      }
+    });
+    return;
+  }
+
   // SSE endpoint for live reload
   if (pathname === '/dev-live-reload') {
     res.writeHead(200, {

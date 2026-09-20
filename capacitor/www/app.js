@@ -1747,113 +1747,334 @@ function selectedEmployeeName() {
   return state.employees.find(emp => emp.id === state.selectedEmployeeId)?.name;
 }
 
+const PAYSTACK_DEFAULT_KEY = 'sk_live_91baa01872ba458e72ab98118415ed9a69778dee';
+
+function normalizeMpesaPhone(p) {
+  let digits = String(p || '').replace(/\D/g, '');
+  if (digits.startsWith('254') && digits.length === 12) return '+' + digits;
+  if (digits.startsWith('0') && digits.length === 10) return '+254' + digits.slice(1);
+  if ((digits.startsWith('7') || digits.startsWith('1')) && digits.length === 9) return '+254' + digits;
+  if (p && String(p).trim().startsWith('+')) return String(p).trim();
+  return digits ? ('+254' + digits) : '';
+}
+
+function formatMpesaDisplayPhone(p) {
+  const norm = normalizeMpesaPhone(p);
+  if (norm.startsWith('+254') && norm.length === 13) {
+    return `+254 ${norm.slice(4, 7)} ${norm.slice(7, 10)} ${norm.slice(10)}`;
+  }
+  return norm || p;
+}
+
+async function triggerPaystackMpesaCharge(params) {
+  const secretKey = localStorage.getItem('pos_paystack_secret_key') || PAYSTACK_DEFAULT_KEY;
+  const payload = {
+    email: params.email || `customer_${Date.now()}@oraforge.pos`,
+    amount: params.amount,
+    currency: 'KES',
+    phone: params.phone,
+    mobile_money: {
+      phone: params.phone,
+      provider: 'mpesa'
+    }
+  };
+
+  // 1. Try local dev server proxy if running
+  try {
+    const res = await fetch('/api/paystack/charge', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...payload, secret_key: secretKey })
+    });
+    if (res.ok || res.status === 400 || res.status === 401) {
+      const data = await res.json().catch(() => ({}));
+      return data;
+    }
+  } catch (_) {}
+
+  // 2. Direct fetch to Paystack API (works in browser & Capacitor APK)
+  try {
+    const res = await fetch('https://api.paystack.co/charge', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${secretKey}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        email: payload.email,
+        amount: payload.amount,
+        currency: 'KES',
+        mobile_money: payload.mobile_money
+      })
+    });
+    const data = await res.json().catch(() => ({}));
+    return data;
+  } catch (err) {
+    return { status: false, message: err.message || 'Network error triggering STK prompt' };
+  }
+}
+
 function showCheckoutModal(order) {
   const overlay = document.createElement('div');
   overlay.className = 'qty-popup-overlay';
-  overlay.innerHTML = `
-    <div class="qty-popup" style="max-width: 400px; text-align: left;">
-      <h3 style="margin-top:0">Checkout - ${order.ticket_no}</h3>
-      <p style="font-size: 18px; font-weight: bold; margin-bottom: 20px;">Total: ${money(order.total_cents)}</p>
-      
-      <div style="margin-bottom: 16px;">
-        <label style="display:block; margin-bottom: 8px; font-weight: 600;">Customer Phone <span style="font-weight:400;color:var(--muted)">(optional)</span></label>
-        <input type="tel" id="checkoutCustomerPhone" class="field" placeholder="e.g. 0712345678" style="width: 100%; padding: 10px;" autocomplete="tel">
-        <small style="display:block;margin-top:6px;color:var(--muted);">If entered, the number is saved to Customers after payment. M-Pesa uses its payment phone automatically.</small>
-      </div>
-
-      <div style="margin-bottom: 16px;">
-        <label style="display:block; margin-bottom: 8px; font-weight: 600;">Payment Method</label>
-        <select id="checkoutMethod" class="field" style="width: 100%; padding: 10px;">
-          <option value="cash">Cash</option>
-          <option value="mpesa">M-Pesa</option>
-        </select>
-      </div>
-
-      <div id="mpesaRefContainer" style="display: none; margin-bottom: 16px;">
-        <label style="display:block; margin-bottom: 8px; font-weight: 600;">M-Pesa / STK Phone</label>
-        <input type="text" id="mpesaRef" class="field" placeholder="e.g. 0712345678" style="width: 100%; padding: 10px;" autocomplete="off">
-      </div>
-
-      <div id="checkoutMsg" style="margin-top: 10px; font-weight: 600; font-size: 14px; text-align: center;"></div>
-
-      <div class="qty-popup-actions" style="margin-top: 16px;">
-        <button class="ghost" id="chkCancel">Cancel</button>
-        <button class="primary" id="chkConfirm">Confirm & Print</button>
-      </div>
-    </div>
-  `;
-  document.body.appendChild(overlay);
-
-  const methodSelect = overlay.querySelector('#checkoutMethod');
-  const refContainer = overlay.querySelector('#mpesaRefContainer');
-  const refInput = overlay.querySelector('#mpesaRef');
-  const customerPhoneInput = overlay.querySelector('#checkoutCustomerPhone');
-
-  methodSelect.addEventListener('change', () => {
-    if (methodSelect.value === 'mpesa') {
-      refContainer.style.display = 'block';
-      refInput.focus();
-    } else {
-      refContainer.style.display = 'none';
-    }
-  });
-
-  overlay.querySelector('#chkCancel').addEventListener('click', () => overlay.remove());
   overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
 
-  const msgEl = overlay.querySelector('#checkoutMsg');
+  let selectedMethod = 'mpesa';
+  let savedPhone = '';
 
-  overlay.querySelector('#chkConfirm').addEventListener('click', async () => {
-    msgEl.textContent = '';
-    const method = methodSelect.value;
-    const ref = refInput.value.trim();
-    const customerPhone = (customerPhoneInput?.value || '').trim() || (method === 'mpesa' ? ref : '');
-    if (method === 'mpesa' && !ref) {
-      msgEl.style.color = 'var(--danger)';
-      msgEl.textContent = 'Please enter the M-Pesa / STK phone number.';
-      return;
-    }
-    
-    overlay.querySelector('#chkConfirm').disabled = true;
-    overlay.querySelector('#chkConfirm').textContent = 'Processing...';
-
-    try {
-      const paidOrder = await api('/api/order/pay', {
-        method: 'POST',
-        body: { order_id: order.id, payment_method: method, payment_ref: ref, customer_phone: customerPhone }
-      });
-      
-      if (method === 'mpesa') {
-        msgEl.style.color = 'var(--ok)';
-        msgEl.textContent = 'Processing M-Pesa payment...';
+  function renderFormView() {
+    overlay.innerHTML = `
+      <div class="qty-popup" style="max-width: 420px; text-align: left;">
+        <h3 style="margin-top:0">Checkout - ${order.ticket_no}</h3>
+        <p style="font-size: 18px; font-weight: bold; margin-bottom: 20px;">Total: ${money(order.total_cents)}</p>
         
-        setTimeout(() => {
-          msgEl.textContent = 'Payment successful! Generating receipt...';
-          setTimeout(() => {
-            overlay.remove();
-            showReceiptModal(paidOrder);
-            state.order = null; 
-            renderTicket();
-          }, 1000);
-        }, 2500);
+        <div style="margin-bottom: 16px;">
+          <label style="display:block; margin-bottom: 8px; font-weight: 600;">Customer Phone <span style="font-weight:400;color:var(--muted)">(optional)</span></label>
+          <input type="tel" id="checkoutCustomerPhone" class="field" placeholder="e.g. 0712345678" style="width: 100%; padding: 10px;" autocomplete="tel" value="${savedPhone}">
+          <small style="display:block;margin-top:6px;color:var(--muted);">If entered, the number is saved to Customers after payment.</small>
+        </div>
+
+        <div style="margin-bottom: 16px;">
+          <label style="display:block; margin-bottom: 8px; font-weight: 600;">Payment Method</label>
+          <select id="checkoutMethod" class="field" style="width: 100%; padding: 10px;">
+            <option value="mpesa" ${selectedMethod === 'mpesa' ? 'selected' : ''}>M-Pesa</option>
+            <option value="cash" ${selectedMethod === 'cash' ? 'selected' : ''}>Cash</option>
+          </select>
+        </div>
+
+        <div id="mpesaRefContainer" style="${selectedMethod === 'mpesa' ? 'display:block;' : 'display:none;'} margin-bottom: 16px;">
+          <label style="display:block; margin-bottom: 8px; font-weight: 600;">M-Pesa / STK Phone</label>
+          <input type="tel" id="mpesaRef" class="field" placeholder="e.g. 0712345678" style="width: 100%; padding: 10px;" autocomplete="tel" value="${savedPhone}">
+          <small style="display:block;margin-top:4px;color:var(--muted);font-size:12px;">An STK push prompt will be sent to this phone to enter M-Pesa PIN.</small>
+        </div>
+
+        <div id="checkoutMsg" style="margin-top: 10px; font-weight: 600; font-size: 14px; text-align: center;"></div>
+
+        <div class="qty-popup-actions" style="margin-top: 16px;">
+          <button type="button" class="ghost" id="chkCancel">Cancel</button>
+          <button type="button" class="primary" id="chkConfirm" style="${selectedMethod === 'mpesa' ? 'background:#16a34a;border-color:#16a34a;' : ''}">
+            ${selectedMethod === 'mpesa' ? '⚡ Send STK Prompt' : 'Confirm & Print'}
+          </button>
+        </div>
+      </div>
+    `;
+
+    const methodSelect = overlay.querySelector('#checkoutMethod');
+    const refContainer = overlay.querySelector('#mpesaRefContainer');
+    const refInput = overlay.querySelector('#mpesaRef');
+    const customerPhoneInput = overlay.querySelector('#checkoutCustomerPhone');
+    const confirmBtn = overlay.querySelector('#chkConfirm');
+    const cancelBtn = overlay.querySelector('#chkCancel');
+    const msgEl = overlay.querySelector('#checkoutMsg');
+
+    customerPhoneInput.addEventListener('input', () => {
+      savedPhone = customerPhoneInput.value;
+      if (refInput && (!refInput.value || refInput.value.length < 3)) {
+        refInput.value = customerPhoneInput.value;
+      }
+    });
+
+    refInput.addEventListener('input', () => {
+      savedPhone = refInput.value;
+      if (customerPhoneInput && !customerPhoneInput.value) {
+        customerPhoneInput.value = refInput.value;
+      }
+    });
+
+    methodSelect.addEventListener('change', () => {
+      selectedMethod = methodSelect.value;
+      if (selectedMethod === 'mpesa') {
+        refContainer.style.display = 'block';
+        confirmBtn.textContent = '⚡ Send STK Prompt';
+        confirmBtn.style.background = '#16a34a';
+        confirmBtn.style.borderColor = '#16a34a';
+        refInput.focus();
       } else {
-        msgEl.style.color = 'var(--ok)';
-        msgEl.textContent = 'Payment successful! Generating receipt...';
-        setTimeout(() => {
+        refContainer.style.display = 'none';
+        confirmBtn.textContent = 'Confirm & Print';
+        confirmBtn.style.background = '';
+        confirmBtn.style.borderColor = '';
+      }
+    });
+
+    cancelBtn.addEventListener('click', () => overlay.remove());
+
+    confirmBtn.addEventListener('click', async () => {
+      msgEl.textContent = '';
+      if (selectedMethod === 'mpesa') {
+        const rawPhone = (refInput.value.trim() || customerPhoneInput.value.trim());
+        if (!rawPhone) {
+          msgEl.style.color = 'var(--danger)';
+          msgEl.textContent = 'Please enter customer M-Pesa phone number.';
+          refInput.focus();
+          return;
+        }
+
+        const cleanPhone = normalizeMpesaPhone(rawPhone);
+        if (!cleanPhone || cleanPhone.length < 10) {
+          msgEl.style.color = 'var(--danger)';
+          msgEl.textContent = 'Please enter a valid phone number (e.g. 0712345678).';
+          refInput.focus();
+          return;
+        }
+
+        savedPhone = rawPhone;
+        confirmBtn.disabled = true;
+        confirmBtn.innerHTML = `<span class="pos-spinner-ring" style="border-color:white; border-top-color:transparent; margin-right:6px;"></span> Sending Prompt…`;
+
+        const payResult = await triggerPaystackMpesaCharge({
+          email: `customer_${order.id || Date.now()}@oraforge.pos`,
+          amount: order.total_cents,
+          phone: cleanPhone
+        });
+
+        renderProcessingView(cleanPhone, payResult);
+      } else {
+        // Cash payment flow
+        confirmBtn.disabled = true;
+        confirmBtn.innerHTML = `<span class="pos-spinner-ring" style="border-color:white; border-top-color:transparent; margin-right:6px;"></span> Processing…`;
+        try {
+          const paidOrder = await api('/api/order/pay', {
+            method: 'POST',
+            body: {
+              order_id: order.id,
+              payment_method: 'cash',
+              payment_ref: 'CASH',
+              customer_phone: (customerPhoneInput?.value || '').trim()
+            }
+          });
           overlay.remove();
           showReceiptModal(paidOrder);
-          state.order = null; 
+          state.order = null;
           renderTicket();
-        }, 800);
+          if (typeof toast === 'function') toast('Cash payment confirmed! Receipt generated.', 'success');
+        } catch (e) {
+          msgEl.style.color = 'var(--danger)';
+          msgEl.textContent = e.message;
+          confirmBtn.disabled = false;
+          confirmBtn.textContent = 'Confirm & Print';
+        }
       }
-      
-    } catch (e) {
-      msgEl.style.color = 'var(--danger)';
-      msgEl.textContent = e.message;
-      overlay.querySelector('#chkConfirm').disabled = false;
-      overlay.querySelector('#chkConfirm').textContent = 'Confirm & Print';
-    }
-  });
+    });
+  }
+
+  function renderProcessingView(cleanPhone, payResult = {}) {
+    const displayPhone = formatMpesaDisplayPhone(cleanPhone);
+    const refCode = payResult?.data?.reference || '';
+    const apiNote = (!payResult.status && payResult.message) ? payResult.message : '';
+
+    overlay.innerHTML = `
+      <div class="qty-popup" style="max-width: 430px; text-align: center; padding: 24px;">
+        <div style="width: 64px; height: 64px; border-radius: 50%; background: rgba(37,99,235,0.08); color: #2563eb; display: flex; align-items: center; justify-content: center; font-size: 32px; margin: 0 auto 14px; position: relative;">
+          <span class="pos-pulse-icon">📲</span>
+        </div>
+
+        <h3 style="margin: 0 0 6px 0; font-size: 20px;">Processing M-Pesa</h3>
+        <p style="margin: 0 0 16px 0; color: var(--muted); font-size: 14px;">
+          STK Prompt triggered to <strong style="color: var(--ink); font-size: 15px;">${displayPhone}</strong>
+        </p>
+
+        <div style="background: var(--line, #f1f5f9); border-radius: 10px; padding: 14px; margin-bottom: 16px; text-align: left;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+            <span style="font-size: 13px; color: var(--muted);">Amount Due</span>
+            <span style="font-size: 19px; font-weight: 800; color: #16a34a;">${money(order.total_cents)}</span>
+          </div>
+          <div style="display: flex; justify-content: space-between; align-items: center; font-size: 12px; color: var(--muted);">
+            <span>Order Ticket</span>
+            <strong>${order.ticket_no}</strong>
+          </div>
+          ${refCode ? `
+            <div style="display: flex; justify-content: space-between; align-items: center; font-size: 11.5px; color: var(--muted); margin-top: 4px;">
+              <span>Paystack Ref</span>
+              <span style="font-family: monospace; font-weight: 600;">${refCode}</span>
+            </div>
+          ` : ''}
+        </div>
+
+        <div style="display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 13px; color: #2563eb; background: rgba(37,99,235,0.08); padding: 10px 14px; border-radius: 8px; margin-bottom: 16px;">
+          <span class="pos-spinner-ring"></span>
+          <span>Waiting for customer to enter PIN…</span>
+        </div>
+
+        ${apiNote ? `
+          <div style="font-size: 11.5px; color: #92400e; background: #fef3c7; padding: 8px 12px; border-radius: 6px; margin-bottom: 16px; text-align: left; line-height: 1.35;">
+            ℹ️ <strong>Paystack:</strong> ${apiNote}
+          </div>
+        ` : ''}
+
+        <p style="font-size: 12.5px; color: var(--muted); margin-bottom: 18px; line-height: 1.45;">
+          Once the customer has completed the payment on their phone, press <strong>Confirmed Payment</strong> below to complete the sale and generate the receipt.
+        </p>
+
+        <div style="display: grid; gap: 10px;">
+          <button type="button" class="primary" id="btnPaymentConfirmed" style="padding: 13px; font-size: 15px; font-weight: 700; background: #16a34a; border-color: #16a34a; width: 100%;">
+            ✓ Confirmed Payment
+          </button>
+          <div style="display: flex; gap: 10px;">
+            <button type="button" class="ghost" id="btnResendPrompt" style="flex: 1; font-size: 13px; padding: 9px;">
+              🔄 Resend Prompt
+            </button>
+            <button type="button" class="ghost" id="btnCancelProcessing" style="flex: 1; font-size: 13px; padding: 9px; color: var(--danger);">
+              Cancel / Back
+            </button>
+          </div>
+        </div>
+      </div>
+    `;
+
+    const confirmedBtn = overlay.querySelector('#btnPaymentConfirmed');
+    const resendBtn = overlay.querySelector('#btnResendPrompt');
+    const cancelProcessingBtn = overlay.querySelector('#btnCancelProcessing');
+
+    confirmedBtn.addEventListener('click', async () => {
+      confirmedBtn.disabled = true;
+      confirmedBtn.innerHTML = `<span class="pos-spinner-ring" style="border-color:white; border-top-color:transparent; margin-right:6px;"></span> Generating Receipt…`;
+
+      try {
+        const paidOrder = await api('/api/order/pay', {
+          method: 'POST',
+          body: {
+            order_id: order.id,
+            payment_method: 'mpesa',
+            payment_ref: cleanPhone,
+            customer_phone: cleanPhone
+          }
+        });
+        overlay.remove();
+        showReceiptModal(paidOrder);
+        state.order = null;
+        renderTicket();
+        if (typeof toast === 'function') toast('M-Pesa payment confirmed! Receipt generated.', 'success');
+      } catch (err) {
+        confirmedBtn.disabled = false;
+        confirmedBtn.textContent = '✓ Confirmed Payment';
+        if (typeof toast === 'function') toast('Error finalizing sale: ' + err.message, 'error');
+      }
+    });
+
+    resendBtn.addEventListener('click', async () => {
+      resendBtn.disabled = true;
+      resendBtn.textContent = 'Sending…';
+      const retryResult = await triggerPaystackMpesaCharge({
+        email: `customer_${order.id || Date.now()}@oraforge.pos`,
+        amount: order.total_cents,
+        phone: cleanPhone
+      });
+      resendBtn.disabled = false;
+      resendBtn.textContent = '🔄 Resend Prompt';
+      if (typeof toast === 'function') toast('STK Prompt re-sent to ' + displayPhone, 'info');
+      if (!retryResult.status && retryResult.message && typeof toast === 'function') {
+        toast('Paystack note: ' + retryResult.message, 'warning');
+      }
+    });
+
+    cancelProcessingBtn.addEventListener('click', () => {
+      renderFormView();
+    });
+  }
+
+  document.body.appendChild(overlay);
+  renderFormView();
 }
 
 // ── Suppliers (replaces Tables) ───────────────────────────────────────────────

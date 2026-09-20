@@ -1710,6 +1710,53 @@ class POSHandler(SimpleHTTPRequestHandler):
                     )
                 recalc_order(conn, row["order_id"])
                 self.send_json(get_order_payload(conn, row["order_id"]))
+            elif path == "/api/paystack/charge":
+                import urllib.request, urllib.error
+                phone_no = str(data.get("phone", "") or data.get("mobile_money", {}).get("phone", "")).strip()
+                if phone_no.startswith("0"):
+                    phone_no = "+254" + phone_no[1:]
+                elif phone_no.startswith("7") or phone_no.startswith("1"):
+                    phone_no = "+254" + phone_no
+                elif phone_no.startswith("254"):
+                    phone_no = "+" + phone_no
+                
+                paystack_key = os.environ.get("PAYSTACK_SECRET_KEY")
+                if not paystack_key and os.path.exists("paystack.txt"):
+                    try:
+                        with open("paystack.txt", "r") as f:
+                            paystack_key = f.read().strip()
+                    except:
+                        pass
+                if not paystack_key:
+                    paystack_key = "sk_live_91baa01872ba458e72ab98118415ed9a69778dee"
+
+                paystack_payload = json.dumps({
+                    "email": data.get("email", f"customer_{int(time.time())}@oraforge.pos"),
+                    "amount": int(data.get("amount", 0)),
+                    "currency": "KES",
+                    "mobile_money": {
+                        "phone": phone_no,
+                        "provider": "mpesa"
+                    }
+                }).encode("utf-8")
+
+                req = urllib.request.Request("https://api.paystack.co/charge", data=paystack_payload)
+                req.add_header("Authorization", "Bearer " + paystack_key)
+                req.add_header("Content-Type", "application/json")
+                req.add_header("User-Agent", "Oraforge-POS/1.0")
+
+                try:
+                    with urllib.request.urlopen(req) as response:
+                        res_data = json.loads(response.read().decode())
+                        return self.send_json(res_data)
+                except urllib.error.HTTPError as e:
+                    try:
+                        err_res = json.loads(e.read().decode())
+                        return self.send_json(err_res, e.code)
+                    except:
+                        return self.send_json({"status": False, "message": str(e)}, e.code)
+                except Exception as e:
+                    return self.send_json({"status": False, "message": "Connection to Paystack failed: " + str(e)}, 500)
             elif path == "/api/order/pay":
                 order_id = int(data["order_id"])
                 order = conn.execute("SELECT status, total_cents, customer_name FROM orders WHERE id = ? AND business_type = ?", (order_id, btype)).fetchone()
