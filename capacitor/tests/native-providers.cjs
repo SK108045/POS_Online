@@ -4,7 +4,7 @@ const fs = require('fs');
 const vm = require('vm');
 const path = require('path');
 const source = fs.readFileSync(path.join(__dirname,'../src/native-providers.js'),'utf8')
-  .replace("import config from './provider-config.json';", "const config = {paystack:'test-paystack', sms:'test-sms', username:'sk10'};")
+  .replace("import config from './provider-config.json';", "const config = {paystack:'test-paystack', sozuri:{apiKey:'test-sms',project:'sk10',from:'Sozuri',channel:'sms',type:'promotional'}};")
   .replace('export function', 'function');
 const ctx = vm.createContext({URLSearchParams});
 vm.runInContext(source,ctx);
@@ -19,12 +19,12 @@ test('native STK uses HTTPS provider endpoint and preserves request',async()=>{
 });
 test('SMS normalizes and deduplicates Airtel recipients and encodes message',async()=>{
   let request;
-  const provider = ctx.createNativeProviders({request:async value=>{request=value;return {data:JSON.stringify({SMSMessageData:{Recipients:[{statusCode:101}]}})}}});
+  const provider = ctx.createNativeProviders({request:async value=>{request=value;return {data:JSON.stringify({recipients:[{statusCode:'11',to:'254756205063'}]})}}});
   const result = await provider.sms('/api/admin/sms/send',{message:'Hello & welcome + thanks',recipients:['0756205063','+254756205063']});
-  assert.equal(request.url,'https://api.africastalking.com/version1/messaging');
-  const form = new URLSearchParams(request.data);
-  assert.equal(form.get('to'),'+254756205063');
-  assert.equal(form.get('message'),'Hello & welcome + thanks');
+  assert.equal(request.url,'https://sozuri.net/api/v1/messaging');
+  const form = request.data;
+  assert.equal(form.to,'+254756205063');
+  assert.equal(form.message,'Hello & welcome + thanks');
   assert.equal(result.sent,1);assert.equal(result.total,1);
 });
 test('invalid recipients do not send; provider rejections propagate',async()=>{
@@ -34,4 +34,10 @@ test('invalid recipients do not send; provider rejections propagate',async()=>{
   assert.equal(calls,0);
   await assert.rejects(provider.charge({}),/Authentication invalid/);
   assert.equal(calls,1);
+});
+
+test('Sozuri partial failures are not reported as complete success',async()=>{
+ const provider=ctx.createNativeProviders({request:async()=>({data:{recipients:[{to:'254756205063',statusCode:'11'},{to:'254713574168',statusCode:'12',status:'unsupported_number'}]}})});
+ const r=await provider.sms('/api/admin/sms/send',{message:'test',recipients:['0756205063','0713574168']});
+ assert.equal(r.sent,1);assert.equal(r.failed,1);assert.equal(r.results[1].number,'254713574168');
 });

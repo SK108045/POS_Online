@@ -1,5 +1,5 @@
 import { createNativeProviders } from './native-providers';
-import { Capacitor, CapacitorHttp } from '@capacitor/core';
+import { Capacitor, CapacitorHttp, registerPlugin } from '@capacitor/core';
 import { CapacitorSQLite, SQLiteConnection } from '@capacitor-community/sqlite';
 
 class IndexedFallback {
@@ -72,3 +72,5 @@ window.OraforgeHttp = {
 };
 
 window.OraforgeProviders = createNativeProviders(window.OraforgeHttp);
+
+window.OraforgePrinter = registerPlugin("ReceiptPrinter");

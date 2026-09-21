@@ -39,7 +39,7 @@ jobs:
         run: |
           node --check www/app.js
           node --check www/admin.js
-          node --test tests/native-providers.cjs
+          node --test tests/*.cjs
           node --check www/shop-registry.js
           node --check www/shop-profile-sync.js
           node --check www/shop-registration.js
@@ -60,6 +60,10 @@ jobs:
       - name: Add Android platform
         working-directory: capacitor
         run: npx cap add android
+
+      - name: Install native receipt printing
+        working-directory: capacitor
+        run: node install-native-print.js
 
       - name: Sync Capacitor and native plugins
         working-directory: capacitor

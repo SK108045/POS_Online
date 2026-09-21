@@ -32,32 +32,22 @@ STORE_NAME = "NIGHTCLUB"
 STORE_TAGLINE = "Bar & Club POS"
 
 
-def africastalking_sms_config():
-    """Load Africa's Talking credentials directly from this repo's api.txt file."""
-    username = "sk10"
-    key_file = BASE_DIR / "api.txt"
-    api_key = key_file.read_text(encoding="utf-8").strip() if key_file.exists() else ""
-    demo_number = "+254756205063"
-    return {
-        "username": username,
-        "api_key": api_key,
-        "demo_number": demo_number,
-        "configured": bool(api_key),
-    }
+def sozuri_sms_config():
+    key_file = BASE_DIR / "capacitor" / "sozuri-config.json"
+    cfg = json.loads(key_file.read_text(encoding="utf-8")) if key_file.exists() else {}
+    return {**cfg, "api_key": cfg.get("apiKey", ""), "configured": bool(cfg.get("apiKey") and cfg.get("project") and cfg.get("from"))}
 
 
-def send_africastalking_sms(message, recipients):
-    cfg = africastalking_sms_config()
+def send_sozuri_sms(message, recipients):
+    import urllib.request
+    cfg = sozuri_sms_config()
     if not cfg["configured"]:
-        raise RuntimeError("Africa's Talking API key is not configured on the server")
-
-    try:
-        import africastalking
-    except ImportError as exc:
-        raise RuntimeError("Africa's Talking package is not installed. Run pip install -r requirements.txt") from exc
-
-    africastalking.initialize(cfg["username"], cfg["api_key"])
-    return africastalking.SMS.send(message, recipients)
+        raise RuntimeError("Sozuri SMS credentials are missing")
+    payload = {k: cfg[k] for k in ("project", "apiKey", "from", "channel", "type")}
+    payload.update(message=message, to=",".join(recipients))
+    req = urllib.request.Request("https://sozuri.net/api/v1/messaging", data=json.dumps(payload).encode("utf-8"), headers={"Content-Type": "application/json", "Accept": "application/json"})
+    with urllib.request.urlopen(req, timeout=30) as response:
+        return json.load(response)
 
 
 def now():
@@ -1571,11 +1561,11 @@ class POSHandler(SimpleHTTPRequestHandler):
             elif path == "/api/admin/sms/config":
                 if not self.require_manager(user):
                     return
-                sms_cfg = africastalking_sms_config()
+                sms_cfg = sozuri_sms_config()
                 self.send_json({
-                    "provider": "Africa's Talking",
+                    "provider": "Sozuri",
                     "configured": sms_cfg["configured"],
-                    "username": sms_cfg["username"],
+                    "project": sms_cfg.get("project", ""),
                     "bulk_enabled": True,
                 })
             elif path == "/api/admin/users":
@@ -2044,24 +2034,24 @@ class POSHandler(SimpleHTTPRequestHandler):
                 if not recipients:
                     return self.send_json({"error": "None of the selected customers has a valid phone number"}, 400)
 
-                sms_cfg = africastalking_sms_config()
+                sms_cfg = sozuri_sms_config()
                 try:
-                    result = send_africastalking_sms(message, recipients)
+                    result = send_sozuri_sms(message, recipients)
                 except Exception as exc:
                     error_text = str(exc).replace(sms_cfg.get("api_key", ""), "***")
                     return self.send_json({"error": error_text[:300] or "SMS send failed"}, 502)
 
-                sms_data = result.get("SMSMessageData", {}) if isinstance(result, dict) else {}
-                provider_recipients = sms_data.get("Recipients", []) if isinstance(sms_data, dict) else []
+                sms_data = result if isinstance(result, dict) else {}
+                provider_recipients = sms_data.get("recipients", []) if isinstance(sms_data, dict) else []
                 results = []
                 sent = 0
                 for item in provider_recipients:
                     status = str(item.get("status") or "")
                     status_code = item.get("statusCode")
-                    if status.lower() in ("success", "sent") or status_code == 100:
+                    if str(status_code) in ("11", "13", "14"):
                         sent += 1
                     results.append({
-                        "number": item.get("number"),
+                        "number": item.get("to"),
                         "status": status or "Unknown",
                         "status_code": status_code,
                         "message_id": item.get("messageId") or item.get("message_id"),
@@ -2070,14 +2060,14 @@ class POSHandler(SimpleHTTPRequestHandler):
 
                 self.send_json({
                     "ok": True,
-                    "provider": "Africa's Talking",
+                    "provider": "Sozuri",
                     "selected": len(customer_ids),
                     "matched": len(selected_customers),
                     "total": len(recipients),
                     "sent": sent,
                     "failed": max(0, len(recipients) - sent),
                     "skipped": skipped,
-                    "message": sms_data.get("Message") if isinstance(sms_data, dict) else "",
+                    "message": sms_data.get("message") if isinstance(sms_data, dict) else "",
                     "results": results,
                 })
             elif path == "/api/stock/adjust":

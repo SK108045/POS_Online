@@ -53,7 +53,7 @@ function showReceiptModal(order, isKot = false) {
       </tr>`
     ).join('');
 
-    const taxRate = parseFloat(state.settings?.tax_rate || 16.0);
+    const taxRate = parseFloat(state.settings?.tax_rate ?? 16.0);
     const multiplier = 1.0 + (taxRate / 100.0);
     const exclVat = taxRate > 0 ? (order.total_cents / multiplier) : order.total_cents;
     const vatAmount = taxRate > 0 ? (order.total_cents - exclVat) : 0;
@@ -115,7 +115,14 @@ function showReceiptModal(order, isKot = false) {
 
   overlay.addEventListener('click', e => { if (e.target === overlay) close(); });
   document.getElementById('receiptModalClose').addEventListener('click', close);
-  document.getElementById('receiptPrintBtn').addEventListener('click', () => window.print());
+  document.getElementById('receiptPrintBtn').addEventListener('click', async () => {
+    try {
+      if (window.OraforgeNative) {
+        if (!window.OraforgePrinter) throw new Error('Install the latest APK to enable printing.');
+        await window.OraforgePrinter.print({name:'Receipt '+(order.ticket_no || order.id)});
+      } else { window.print(); }
+    } catch(e) { toast('Could not open printing: '+e.message,'error'); }
+  });
 
   const onKey = e => { if (e.key === 'Escape') close(); };
   document.addEventListener('keydown', onKey);
@@ -345,6 +352,7 @@ function sanitizeProfileCategories(categories, profileId) {
   }
 
   return categories.filter(c => {
+    if (c.custom) return true;
     const lower = String(c.name || '').toLowerCase();
     if (otherCats.has(lower) && !validSampleCats.has(lower)) {
       return false;
@@ -689,6 +697,16 @@ const LocalPOS = {
       const supplier = suppliers.find(s => s.id === Number(url.searchParams.get('id')));
       if (!supplier) throw new Error('Supplier not found');
       return { ...supplier, total_purchases: 0, products: products.filter(p => Number(p.supplier_id || 0) === supplier.id) };
+    }
+
+    if (cleanPath === '/api/menu/category' && method === 'POST') {
+      const name=String(body.name || '').trim();
+      if (!name || name.length>80) throw new Error('Enter a category name of 1–80 characters.');
+      const categories=await this.getShop('categories',[],btype);
+      if (categories.some(c=>c.name.trim().toLowerCase()===name.toLowerCase())) throw new Error('That category already exists.');
+      categories.push({id:this.nextId(categories),name,custom:true});
+      await this.setShop('categories',categories,btype);
+      return {categories};
     }
 
     if (cleanPath === '/api/settings' && method === 'POST') {
@@ -2428,6 +2446,7 @@ function renderProductAdmin() {
           </svg>
           <span>Scan Barcode / Add</span>
         </button>
+        <button class="secondary" id="addCategoryBtn">+ Category</button>
         <button class="primary add-btn" id="showAddProductModal">+ Add Product</button>
       </div>
     </div>
@@ -2439,11 +2458,11 @@ function renderProductAdmin() {
       </div>
       <select class="field cat-filter" id="productCatFilter">
         <option value="">All Categories</option>
-        ${state.categories.map(c => `<option value="${c.id}" ${productCategoryFilter == c.id ? 'selected' : ''}>${c.name}</option>`).join('')}
+        ${state.categories.map(c => `<option value="${c.id}" ${productCategoryFilter == c.id ? 'selected' : ''}>${String(c.name).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}</option>`).join('')}
       </select>
     </div>
 
-    <div class="content-grid product-grid" id="productAdminGrid"></div>
+    <div class="sales-table-container staff-product-list" id="productAdminGrid"></div>
   `;
 
   // Global Event Listeners for the page
@@ -2460,6 +2479,11 @@ function renderProductAdmin() {
     renderProductAdminGrid();
   });
 
+  qs('#addCategoryBtn')?.addEventListener('click', async()=>{
+    const name=prompt('New category name');
+    if (name===null) return;
+    try {const result=await api('/api/menu/category',{method:'POST',body:{name}});state.categories=result.categories;renderProductAdmin();toast('Category added');} catch(e){toast(e.message,'error');}
+  });
   qs('#showAddProductModal')?.addEventListener('click', () => showProductModal());
   qs('#scanAddProductBtn')?.addEventListener('click', () => showBarcodeModal('product'));
 
@@ -2542,67 +2566,8 @@ function renderProductAdminGrid() {
   const badge = qs('#productCountBadge');
   if (badge) badge.textContent = `${filteredItems.length} active`;
 
-  grid.innerHTML = filteredItems.map(item => {
-    const isExpired = item.expiry_date && new Date(item.expiry_date) < new Date();
-    const isExpiringSoon = item.expiry_date && !isExpired && (new Date(item.expiry_date) - new Date() < 30 * 86400000);
-    const lowStock = (item.stock_qty || 0) <= (item.reorder_level || 5);
-
-    return `
-      <article class="menu-card product-card" data-id="${item.id}">
-        <div class="card-header">
-          <span class="badge" style="background:${item.color || '#334155'};color:white">${categoryName(item.category_id)}</span>
-          <div class="card-actions">
-            <button class="action-menu-btn">⋮</button>
-            <div class="action-menu hidden">
-              <button class="edit-btn" data-id="${item.id}">Edit Product</button>
-              <button class="delete-btn" data-id="${item.id}">Delete</button>
-            </div>
-          </div>
-        </div>
-        <strong>${item.name}</strong>
-        ${item.strength ? `<div style="font-size:12px; color:#2563eb; font-weight:700;">${item.strength}</div>` : ''}
-        ${item.manufacturer ? `<small style="color:var(--muted); font-size:11px;">Mfr: ${item.manufacturer}</small>` : ''}
-        ${item.sku ? `<small class="sku-text">SKU: ${item.sku}</small>` : '<small class="sku-text">No SKU</small>'}
-        ${item.barcode ? `<small class="sku-text" style="color:var(--muted)">Barcode: ${item.barcode}</small>` : ''}
-
-        ${hasCap('batches_expiry') && item.batch_no ? `<small style="font-size:11px; color:#475569;">Batch: <strong>${item.batch_no}</strong></small>` : ''}
-        ${hasCap('batches_expiry') && item.expiry_date ? `
-          <div style="margin-top:2px;">
-            <span class="expiry-badge" style="font-size:11px; padding:2px 6px; border-radius:4px; font-weight:700; ${isExpired ? 'background:#fee2e2; color:#b91c1c;' : (isExpiringSoon ? 'background:#fef3c7; color:#b45309;' : 'background:#dcfce7; color:#15803d;')}">
-              ${isExpired ? 'EXPIRED' : (isExpiringSoon ? 'Exp Soon' : 'Exp')}: ${item.expiry_date}
-            </span>
-          </div>
-        ` : ''}
-
-        ${(hasCap('variants') || item.variants_json) && item.variants_json ? formatVariantChips(item.variants_json) : ''}
-        
-        <div class="price-tier">
-          <div class="price-row">
-            <span class="price-label">Retail (Sell)</span>
-            <span class="price-value sell-price">${money(item.price_cents)}</span>
-          </div>
-          ${hasCap('wholesale_pricing') && item.wholesale_price_cents ? `
-            <div class="price-row">
-              <span class="price-label">Wholesale</span>
-              <span class="price-value" style="color:#2563eb; font-weight:700;">${money(item.wholesale_price_cents)}</span>
-            </div>
-          ` : `
-            <div class="price-row">
-              <span class="price-label">Cost</span>
-              <span class="price-value cost-price">${money(item.cost_cents || 0)}</span>
-            </div>
-          `}
-        </div>
-        
-        <div class="card-footer">
-          <small style="color:${lowStock ? '#b91c1c; font-weight:700;' : 'var(--muted)'}">
-            Stock: ${item.stock_qty !== undefined ? item.stock_qty : '?'} ${item.unit || 'pcs'}
-          </small>
-          ${hasCap('reorder_levels') && item.reorder_level ? `<small style="color:var(--muted)">Min: ${item.reorder_level}</small>` : ''}
-        </div>
-      </article>
-    `;
-  }).join('') || '<div class="empty">No products match your criteria</div>';
+  const safe = value => String(value ?? '').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  grid.innerHTML = `<table class="sales-table staff-products"><thead><tr><th>Product</th><th>Category</th><th>SKU</th><th>Price</th><th>Stock</th><th>Actions</th></tr></thead><tbody>${filteredItems.map(item=>`<tr class="sales-row"><td><strong>${safe(item.name)}</strong>${item.strength?`<small>${safe(item.strength)}</small>`:''}</td><td>${safe(categoryName(item.category_id))}</td><td><code>${safe(item.sku || '—')}</code></td><td><strong>${money(item.price_cents)}</strong></td><td><span class="staff-stock ${(item.stock_qty||0)<=(item.reorder_level||5)?'low':''}">${safe(item.stock_qty ?? '—')} ${safe(item.unit || 'pcs')}</span></td><td><div class="product-actions"><button class="edit-btn" data-id="${item.id}">Edit</button><button class="delete-btn" data-id="${item.id}">Delete</button></div></td></tr>`).join('') || '<tr><td colspan="6">No products match your criteria.</td></tr>'}</tbody></table>`;
 
   // Dropdown toggles
   qsa('.action-menu-btn', grid).forEach(btn => {
@@ -2835,7 +2800,7 @@ function showProductModal(item = null) {
           <div class="form-group">
             <label>Category</label>
             <select class="field" name="category_id">
-              ${state.categories.map(c => `<option value="${c.id}" ${item?.category_id == c.id ? 'selected' : ''}>${c.name}</option>`).join('')}
+              ${state.categories.map(c => `<option value="${c.id}" ${item?.category_id == c.id ? 'selected' : ''}>${String(c.name).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}</option>`).join('')}
             </select>
           </div>
           <div class="form-group">
@@ -3252,6 +3217,7 @@ async function renderSettings() {
   const root = qs('[data-page="settings"]');
   if (!root) return;
 
+  const settingsText = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const activeType = state.settings?.business_type || 'bar';
   const curTheme = document.documentElement.getAttribute('data-theme') || localStorage.getItem('pos_theme') || 'light';
 
@@ -3333,31 +3299,31 @@ async function renderSettings() {
         <div class="form-grid" style="display:grid; grid-template-columns:repeat(auto-fit, minmax(240px, 1fr)); gap:16px;">
           <div class="form-group">
             <label style="display:block; font-size:13px; font-weight:600; margin-bottom:6px; color:var(--muted);">Store / Business Name *</label>
-            <input class="field" name="business_name" id="settingsBusinessName" value="${state.settings?.business_name || ''}" required style="width:100%;">
+            <input class="field" name="business_name" id="settingsBusinessName" value="${settingsText(state.settings?.business_name || '')}" required style="width:100%;">
           </div>
           <div class="form-group">
             <label style="display:block; font-size:13px; font-weight:600; margin-bottom:6px; color:var(--muted);">Tagline / Subtitle</label>
-            <input class="field" name="business_tagline" value="${state.settings?.business_tagline || ''}" style="width:100%;">
+            <input class="field" name="business_tagline" value="${settingsText(state.settings?.business_tagline || '')}" style="width:100%;">
           </div>
           <div class="form-group">
             <label style="display:block; font-size:13px; font-weight:600; margin-bottom:6px; color:var(--muted);">Phone Number</label>
-            <input class="field" name="phone" value="${state.settings?.phone || ''}" style="width:100%;">
+            <input class="field" name="phone" value="${settingsText(state.settings?.phone || '')}" style="width:100%;">
           </div>
           <div class="form-group">
             <label style="display:block; font-size:13px; font-weight:600; margin-bottom:6px; color:var(--muted);">Store Address</label>
-            <input class="field" name="address" value="${state.settings?.address || ''}" style="width:100%;">
+            <input class="field" name="address" value="${settingsText(state.settings?.address || '')}" style="width:100%;">
           </div>
           <div class="form-group">
             <label style="display:block; font-size:13px; font-weight:600; margin-bottom:6px; color:var(--muted);">Currency Code</label>
-            <input class="field" name="currency" value="${state.settings?.currency || 'KES'}" style="width:100%;">
+            <input class="field" name="currency" value="${settingsText(state.settings?.currency || 'KES')}" style="width:100%;">
           </div>
           <div class="form-group">
             <label style="display:block; font-size:13px; font-weight:600; margin-bottom:6px; color:var(--muted);">Tax Rate % (VAT)</label>
-            <input class="field" name="tax_rate" type="number" step="0.1" value="${state.settings?.tax_rate || 16.0}" style="width:100%;">
+            <input class="field" name="tax_rate" type="number" step="0.1" value="${state.settings?.tax_rate ?? 16.0}" style="width:100%;">
           </div>
           <div class="form-group" style="grid-column: 1 / -1;">
             <label style="display:block; font-size:13px; font-weight:600; margin-bottom:6px; color:var(--muted);">Receipt Footer Note</label>
-            <textarea class="field" name="receipt_footer" rows="2" style="width:100%; padding:8px;">${state.settings?.receipt_footer || ''}</textarea>
+            <textarea class="field" name="receipt_footer" rows="2" style="width:100%; padding:8px;">${settingsText(state.settings?.receipt_footer || '')}</textarea>
           </div>
         </div>
 

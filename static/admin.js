@@ -862,7 +862,7 @@ function promoTemplateBody(type, campaign) {
 }
 
 function makePromoTemplate(type, campaign, businessName) {
-  return promoTemplateBody(type, campaign);
+  return `${businessName}: ${promoTemplateBody(type, campaign)}`;
 }
 
 function personalizePromoMessage(template, customer) {
@@ -959,7 +959,7 @@ function buildPromotions() {
     <div class="panel" style="margin-top:20px">
       <div class="panel-header">
         <div>
-          <div class="panel-title">SMS Marketing · Africa's Talking</div>
+          <div class="panel-title">SMS Marketing · Sozuri</div>
           <div class="panel-subtitle">Send the campaign above to the same customers you select for WhatsApp.</div>
         </div>
         <span class="badge badge-active">LIVE</span>
@@ -1019,11 +1019,17 @@ function resetPromoTemplate() {
   updatePromoSmsCounter();
 }
 
+function brandedSmsMessage(text) {
+  const name=String(state.promoSettings?.business_name || '').trim();
+  const body=String(text || '').trim().replaceAll('{business_name}',name);
+  return name && !body.toLowerCase().startsWith((name+':').toLowerCase()) ? `${name}: ${body}` : body;
+}
+
 function updatePromoSmsCounter() {
   const editor = $('#promoMessageEditor');
   const label = $('#promoSmsCharCount');
   if (!editor || !label) return;
-  const length = editor.value.length;
+  const length = brandedSmsMessage(editor.value).length;
   const segments = Math.max(1, Math.ceil(length / 160));
   label.textContent = `${length} characters · ${segments} SMS segment${segments === 1 ? '' : 's'}`;
 }
@@ -1032,20 +1038,22 @@ async function sendPromoSmsSelected() {
   const editor = $('#promoMessageEditor');
   const button = $('#promoSmsSendBtn');
   const status = $('#promoSmsStatus');
-  const message = editor?.value?.trim() || '';
+  const rawMessage = editor?.value?.trim() || '';
+  const message = brandedSmsMessage(rawMessage);
   const ids = [...(state.promoSelected || [])];
 
   if (!ids.length) {
     toast('Select at least one customer first.', 'info');
     return;
   }
-  if (!message) {
+  if (!rawMessage) {
     toast('Write a promotion message first.', 'error');
     return;
   }
 
+  if (!state.promoSettings?.business_name?.trim()) { toast('Set your business name in Settings before sending SMS.', 'error'); return; }
   const customers = ids.map(id => state.promoCustomers.find(c => Number(c.id) === Number(id))).filter(Boolean);
-  if (!confirm(`Send this SMS campaign through Africa's Talking to ${customers.length} selected customer${customers.length === 1 ? '' : 's'}?`)) return;
+  if (!confirm(`Send this SMS campaign through Sozuri to ${customers.length} selected customer${customers.length === 1 ? '' : 's'}?`)) return;
 
   const oldText = button?.textContent;
   if (button) { button.disabled = true; button.textContent = 'Sending…'; }

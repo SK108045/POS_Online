@@ -15,7 +15,7 @@ export function createNativeProviders(http) {
       }));
     },
     async sms(path, body = {}) {
-      if (path === '/api/admin/sms/config') return {configured: !!config.sms, message: 'Configured'};
+      if (path === '/api/admin/sms/config') return {configured: !!config.sozuri?.apiKey, message: 'Configured'};
       if (path !== '/api/admin/sms/send') throw new Error('Unknown SMS endpoint.');
       const message = String(body.message || '').trim();
       if (!message || message.length > 1000) throw new Error('Enter a message of 1–1000 characters.');
@@ -28,14 +28,14 @@ export function createNativeProviders(http) {
         return '+' + digits;
       }))];
       const response = parse(await http.request({
-        url: 'https://api.africastalking.com/version1/messaging', method: 'POST',
-        headers: {apiKey:config.sms, Accept:'application/json', 'Content-Type':'application/x-www-form-urlencoded'},
-        data: new URLSearchParams({username:config.username, to:recipients.join(','), message}).toString(),
+        url: 'https://sozuri.net/api/v1/messaging', method: 'POST',
+        headers: {Accept:'application/json', 'Content-Type':'application/json'},
+        data: {...config.sozuri, to:recipients.join(','), message},
         readTimeout: 30000
       }));
-      const results = response.SMSMessageData?.Recipients || [];
-      const sent = results.filter(r => [100,101].includes(Number(r.statusCode)) || /^(success|sent)$/i.test(r.status)).length;
-      return {sent, total:recipients.length, failed:recipients.length-sent, results, message:response.SMSMessageData?.Message || ''};
+      const results = response.recipients || [];
+      const sent = results.filter(r => [11,13,14].includes(Number(r.statusCode))).length;
+      return {sent, total:recipients.length, failed:recipients.length-sent, results:results.map(r=>({...r,number:r.to})), message:response.message || ''};
     }
   };
 }

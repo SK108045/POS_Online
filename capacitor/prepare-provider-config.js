@@ -13,8 +13,7 @@ function read(names) {
 }
 const config = {
   paystack: read(['paystack.txt']),
-  sms: read(['api.txt', 'capacitor/live_api.txt']),
-  username: 'sk10'
+  sozuri: require('./sozuri-config.json')
 };
 fs.writeFileSync(path.join(__dirname, 'src/provider-config.json'), JSON.stringify(config));
 console.log('Native provider configuration prepared.');
