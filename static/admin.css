@@ -867,3 +867,8 @@ html, body {
   .modal-box { max-width: 100%; max-height: 90dvh; overflow-y: auto; }
   .form-input, .form-select, .form-textarea { min-width: 0; max-width: 100%; }
 }
+
+/* Reserve space inside the chart panel for tapped price labels. */
+.chart-area { box-sizing:border-box;padding-top:42px; }
+.chart-bar-wrap { min-width:0; }
+.chart-val { max-width:100%;box-sizing:border-box;white-space:normal;overflow-wrap:anywhere;text-align:center; }

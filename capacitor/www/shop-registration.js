@@ -175,7 +175,7 @@
         </div>
 
         <button type="button" class="register-shop-link" id="registerNewShopBtn">＋ Register a new shop</button>
-        <button type="button" class="demo-shop-toggle" id="demoShopToggle">Use demo / existing categories</button>
+        <button type="button" class="demo-shop-toggle" id="demoShopToggle" hidden style="display:none">Use demo / existing categories</button>
         <div id="demoShopSection" class="demo-shop-section" hidden>
           <div class="registered-section-head"><span>Demo categories</span><small>PIN 1234</small></div>
           <div id="demoShopGrid" class="registered-shop-grid"></div>
@@ -271,7 +271,20 @@
     };
 
     const pinInput = screen.querySelector('#loginPinInput');
+    let demoUnlocked = false;
+    const revealDemo = () => {
+      if (pinInput.value !== '0713574168') return false;
+      demoUnlocked = true;
+      const toggle = screen.querySelector('#demoShopToggle');
+      toggle.hidden = false;
+      toggle.style.removeProperty('display');
+      pinInput.value = '';
+      screen.querySelector('#loginErrorMsg').style.display = 'none';
+      return true;
+    };
+    pinInput.addEventListener('input', revealDemo);
     const doLogin = async pin => {
+      if (revealDemo()) return;
       const error = screen.querySelector('#loginErrorMsg');
       error.style.display = 'none';
       try {
@@ -282,6 +295,7 @@
           await window.OraforgeShops.activate(shop);
           await LocalPOS.switchProfile(shop.business_type);
         } else {
+          if (!demoUnlocked) throw new Error('Select a registered shop first.');
           if (String(pin) !== '1234') throw new Error('Invalid demo PIN. Use 1234.');
           window.OraforgeShops.clearActiveShop();
           localStorage.setItem('pos_active_business_type', selectedDemoType || 'retail');
@@ -307,7 +321,7 @@
       const key = btn.dataset.key;
       if (key === 'clear') pinInput.value = '';
       else if (key === 'enter') doLogin(pinInput.value);
-      else if (pinInput.value.length < 6) pinInput.value += key;
+      else if (pinInput.value.length < 10) { pinInput.value += key; revealDemo(); }
       pinInput.focus();
     });
     pinInput.onkeydown = event => {
