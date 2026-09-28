@@ -12,7 +12,7 @@ function read(names) {
   throw new Error('Missing provider credential: ' + names.join(' or '));
 }
 const config = {
-  paystack: read(['paystack.txt']),
+  swifta: read(['swifta.txt']),
   sozuri: require('./sozuri-config.json')
 };
 fs.writeFileSync(path.join(__dirname, 'src/provider-config.json'), JSON.stringify(config));

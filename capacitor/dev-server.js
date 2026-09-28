@@ -124,6 +124,8 @@ function serveFile(res, filePath, contentType) {
 
     if (contentType.startsWith('text/html')) {
       let html = content.toString('utf-8');
+      const backupScripts = (html.includes('src="shop-operations.js"') ? '' : '<script src="/shop-operations.js" defer></script>') + '<script src="/auto-backup.js" defer></script>';
+      html = html.replace('</body>', backupScripts + '</body>');
       if (html.includes('</body>')) {
         html = html.replace('</body>', LIVE_RELOAD_SCRIPT + '\n</body>');
       } else {
@@ -145,6 +147,11 @@ function handleRequest(req, res) {
   const parsedUrl = new URL(req.url, 'http://' + (req.headers.host || 'localhost'));
   let pathname = decodeURIComponent(parsedUrl.pathname);
 
+  if (pathname === '/api/local/daily-backup') {
+    require('./auto-backup').handle(req, res);
+    return;
+  }
+
   // CORS preflight support
   if (req.method === 'OPTIONS') {
     res.writeHead(204, {
@@ -161,73 +168,11 @@ function handleRequest(req, res) {
     return;
   }
 
-  if (pathname === '/api/paystack/charge' && req.method === 'POST') {
-    let raw = '';
-    req.on('data', chunk => raw += chunk);
-    req.on('end', () => {
-      try {
-        const payload = JSON.parse(raw || '{}');
-        const https = require('https');
-        
-        let secretKey = 'sk_live_91baa01872ba458e72ab98118415ed9a69778dee';
-        const keyFileCandidates = [
-          path.join(__dirname, '..', 'paystack.txt'),
-          path.join(__dirname, 'paystack.txt'),
-          path.join(WWW_DIR, 'paystack.txt')
-        ];
-        for (const kf of keyFileCandidates) {
-          if (fs.existsSync(kf)) {
-            const k = fs.readFileSync(kf, 'utf-8').trim();
-            if (k) { secretKey = k; break; }
-          }
-        }
-        // The configured key file is authoritative for proxied payments.
-
-        const dataStr = JSON.stringify({
-          email: String(payload.email || `mpesa.${String(payload.phone || payload.mobile_money?.phone || '').replace(/\D/g, '')}@example.com`).trim(),
-          amount: payload.amount,
-          currency: payload.currency || 'KES',
-          mobile_money: payload.mobile_money || { phone: payload.phone, provider: 'mpesa' }
-        });
-
-        const preq = https.request({
-          hostname: 'api.paystack.co',
-          path: '/charge',
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${secretKey}`,
-            'Content-Type': 'application/json',
-            'Content-Length': Buffer.byteLength(dataStr),
-            'User-Agent': 'Oraforge-POS/1.0'
-          }
-        }, pres => {
-          let resData = '';
-          pres.on('data', c => resData += c);
-          pres.on('end', () => {
-            res.writeHead(pres.statusCode || 200, {
-              'Content-Type': 'application/json',
-              'Access-Control-Allow-Origin': '*'
-            });
-            res.end(resData);
-          });
-        });
-
-        preq.on('error', err => {
-          res.writeHead(502, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
-          res.end(JSON.stringify({ status: false, message: 'Paystack connection error: ' + err.message }));
-        });
-
-        preq.write(dataStr);
-        preq.end();
-      } catch (err) {
-        res.writeHead(400, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
-        res.end(JSON.stringify({ status: false, message: 'Invalid payload: ' + err.message }));
-      }
-    });
+  if (pathname === '/api/swifta/stkpush' && req.method === 'POST') {
+    require('./swifta').handle(req, res);
     return;
   }
 
-  // SSE endpoint for live reload
   if (pathname === '/dev-live-reload') {
     res.writeHead(200, {
       'Content-Type': 'text/event-stream',

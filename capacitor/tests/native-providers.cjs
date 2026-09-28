@@ -4,17 +4,18 @@ const fs = require('fs');
 const vm = require('vm');
 const path = require('path');
 const source = fs.readFileSync(path.join(__dirname,'../src/native-providers.js'),'utf8')
-  .replace("import config from './provider-config.json';", "const config = {paystack:'test-paystack', sozuri:{apiKey:'test-sms',project:'sk10',from:'Sozuri',channel:'sms',type:'promotional'}};")
+  .replace("import swifta from '../swifta-contract';", '')
+  .replace("import config from './provider-config.json';", "const config = {swifta:'test-swifta', sozuri:{apiKey:'test-sms',project:'sk10',from:'Sozuri',channel:'sms',type:'promotional'}};")
   .replace('export function', 'function');
-const ctx = vm.createContext({URLSearchParams});
+const ctx = vm.createContext({URLSearchParams,swifta:require('../swifta-contract')});
 vm.runInContext(source,ctx);
 test('native STK uses HTTPS provider endpoint and preserves request',async()=>{
   let request;
-  const provider = ctx.createNativeProviders({request:async value=>{request=value;return {data:{status:true,data:{status:'pay_offline'}}}}});
-  const result = await provider.charge({amount:6000,email:'test@example.com',mobile_money:{phone:'+254713574168',provider:'mpesa'}});
-  assert.equal(request.url,'https://api.paystack.co/charge');
-  assert.equal(request.data.amount,6000);
-  assert.equal(request.headers.Authorization,'Bearer test-paystack');
+  const provider = ctx.createNativeProviders({request:async value=>{request=value;return {data:{ResponseCode:'0',CheckoutRequestID:'test-checkout'}}}});
+  const result = await provider.charge({amount:60,phone:'+254713574168',accountReference:'ORAFORGE-R001'});
+  assert.equal(request.url,'https://app.swifta.co.ke/stkpush');
+  assert.equal(request.data.amount,60);
+  assert.equal(request.headers['x-api-key'],'test-swifta');
   assert.equal(result.data.status,'pay_offline');
 });
 test('SMS normalizes and deduplicates Airtel recipients and encodes message',async()=>{
@@ -32,7 +33,7 @@ test('invalid recipients do not send; provider rejections propagate',async()=>{
   const provider = ctx.createNativeProviders({request:async()=>{calls++;throw new Error('Authentication invalid')}});
   await assert.rejects(provider.sms('/api/admin/sms/send',{message:'Hello',recipients:['123']}),/invalid Kenyan/);
   assert.equal(calls,0);
-  await assert.rejects(provider.charge({}),/Authentication invalid/);
+  await assert.rejects(provider.charge({amount:1,phone:'0713574168',accountReference:'TEST'}),/Authentication invalid/);
   assert.equal(calls,1);
 });
 

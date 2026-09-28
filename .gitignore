@@ -19,3 +19,6 @@ api.txt
 capacitor/www/sqlite-bridge.js
 
 capacitor/src/provider-config.json
+
+# Local daily shop backups
+/backups/

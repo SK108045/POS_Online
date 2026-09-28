@@ -1700,54 +1700,32 @@ class POSHandler(SimpleHTTPRequestHandler):
                     )
                 recalc_order(conn, row["order_id"])
                 self.send_json(get_order_payload(conn, row["order_id"]))
-            elif path == "/api/paystack/charge":
+            elif path == "/api/swifta/stkpush":
                 import urllib.request, urllib.error
-                phone_no = str(data.get("phone", "") or data.get("mobile_money", {}).get("phone", "")).strip()
-                if phone_no.startswith("0"):
-                    phone_no = "+254" + phone_no[1:]
-                elif phone_no.startswith("7") or phone_no.startswith("1"):
-                    phone_no = "+254" + phone_no
-                elif phone_no.startswith("254"):
-                    phone_no = "+" + phone_no
-                
-                paystack_key = os.environ.get("PAYSTACK_SECRET_KEY")
-                paystack_key_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "paystack.txt")
-                if not paystack_key and os.path.exists(paystack_key_file):
-                    try:
-                        with open(paystack_key_file, "r") as f:
-                            paystack_key = f.read().strip()
-                    except:
-                        pass
-                if not paystack_key:
-                    paystack_key = "sk_live_91baa01872ba458e72ab98118415ed9a69778dee"
-
-                paystack_payload = json.dumps({
-                    "email": str(data.get("email") or ("mpesa." + "".join(c for c in phone_no if c.isdigit()) + "@example.com")).strip(),
-                    "amount": int(data.get("amount", 0)),
-                    "currency": "KES",
-                    "mobile_money": {
-                        "phone": phone_no,
-                        "provider": "mpesa"
-                    }
-                }).encode("utf-8")
-
-                req = urllib.request.Request("https://api.paystack.co/charge", data=paystack_payload)
-                req.add_header("Authorization", "Bearer " + paystack_key)
-                req.add_header("Content-Type", "application/json")
-                req.add_header("User-Agent", "Oraforge-POS/1.0")
-
+                import math
+                phone = "".join(c for c in str(data.get("phone", "")) if c.isdigit())
+                if phone.startswith("254") and len(phone) == 12:
+                    phone = "0" + phone[3:]
+                amount = data.get("amount")
+                if len(phone) != 10 or phone[:2] not in ("07", "01") or isinstance(amount, bool) or not isinstance(amount, (int, float)) or not math.isfinite(amount) or amount <= 0 or not data.get("accountReference"):
+                    return self.send_json({"status": False, "message": "Invalid phone, amount or reference"}, 400)
+                key_file = BASE_DIR / "swifta.txt"
+                key = key_file.read_text().strip() if key_file.exists() else ""
+                if not key:
+                    return self.send_json({"status": False, "message": "Swifta key is missing from swifta.txt"}, 503)
+                payload = {"phone": phone, "amount": amount, "accountReference": str(data["accountReference"]), "description": str(data.get("description") or "POS payment")}
+                req = urllib.request.Request("https://app.swifta.co.ke/stkpush", data=json.dumps(payload).encode(), headers={"x-api-key": key, "Content-Type": "application/json", "Accept": "application/json"})
                 try:
-                    with urllib.request.urlopen(req) as response:
-                        res_data = json.loads(response.read().decode())
-                        return self.send_json(res_data)
-                except urllib.error.HTTPError as e:
-                    try:
-                        err_res = json.loads(e.read().decode())
-                        return self.send_json(err_res, e.code)
-                    except:
-                        return self.send_json({"status": False, "message": str(e)}, e.code)
-                except Exception as e:
-                    return self.send_json({"status": False, "message": "Connection to Paystack failed: " + str(e)}, 500)
+                    with urllib.request.urlopen(req, timeout=30) as response:
+                        result = json.load(response)
+                    details = result.get("data") if isinstance(result.get("data"), dict) else result
+                    code = details.get("ResponseCode", details.get("responseCode", result.get("ResponseCode", result.get("responseCode"))))
+                    failed = result.get("success") is False or result.get("status") is False or details.get("success") is False or details.get("status") is False or (code is not None and str(code) != "0")
+                    accepted = not failed and (str(code) == "0" or result.get("success") is True or result.get("status") is True or str(result.get("status")).lower() in ("success", "accepted", "pending"))
+                    message = details.get("errorMessage") or result.get("errorMessage") or details.get("ResponseDescription") or result.get("message") or ("STK request accepted" if accepted else "Could not confirm STK acceptance. Check Swifta before retrying.")
+                    return self.send_json({"status": accepted, "message": str(message).replace(key, "[redacted]"), "data": {"status": "pay_offline" if accepted else "failed", "reference": details.get("CheckoutRequestID") or details.get("checkoutRequestId") or details.get("reference") or ""}})
+                except Exception:
+                    return self.send_json({"status": False, "message": "Could not confirm the Swifta request. Check payment status before retrying."}, 502)
             elif path == "/api/order/pay":
                 order_id = int(data["order_id"])
                 order = conn.execute("SELECT status, total_cents, customer_name FROM orders WHERE id = ? AND business_type = ?", (order_id, btype)).fetchone()

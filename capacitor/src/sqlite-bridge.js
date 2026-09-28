@@ -34,6 +34,31 @@ class OraforgeDB {
     }
     return this;
   }
+  async exportRecords(){
+    if (this.native && this.db) {
+      const result = await this.db.query('SELECT key, value FROM kv_store;');
+      return (result.values || []).map(row => [row.key, JSON.parse(row.value)]);
+    }
+    const db = await this.fallback.open();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction('kv', 'readonly'), rows = [];
+      const request = tx.objectStore('kv').openCursor();
+      request.onsuccess = () => { const cursor = request.result; if(cursor){ rows.push([cursor.key, cursor.value]); cursor.continue(); } };
+      tx.oncomplete = () => resolve(rows); tx.onerror = () => reject(tx.error);
+    });
+  }
+  async replaceRecords(rows){
+    if (this.native && this.db) {
+      await this.db.executeSet([{statement:'DELETE FROM kv_store;', values:[]}, ...rows.map(([key,value]) => ({statement:'INSERT INTO kv_store(key,value) VALUES (?,?);', values:[key,JSON.stringify(value)]}))], true);
+      return;
+    }
+    const db = await this.fallback.open();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction('kv','readwrite'), store = tx.objectStore('kv');
+      store.clear(); rows.forEach(([key,value]) => store.put(value,key));
+      tx.oncomplete = () => resolve(); tx.onerror = () => reject(tx.error); tx.onabort = () => reject(tx.error || new Error('Restore cancelled'));
+    });
+  }
   async get(key,fallback){
     if (!this.native || !this.db) return this.fallback.get(key,fallback);
     const r = await this.db.query('SELECT value FROM kv_store WHERE key = ? LIMIT 1;', [key]);

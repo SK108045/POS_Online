@@ -103,3 +103,16 @@ MIT License. Open for personal and commercial point of sale deployments.
 ## Android APK architecture
 
 The Android build is offline-first. The Capacitor WebView bundles the POS UI locally and stores operational data on-device using native SQLite (`@capacitor-community/sqlite`) with an IndexedDB fallback for browser testing. Core sales do not require a Python server or internet connection. Network-only integrations such as SMS, cloud sync, remote image search and future M-Pesa integrations should call a remote HTTPS backend so API secrets are never bundled in the APK.
+
+### Single-machine backups (browser preview)
+
+- **Settings → Backup & restore** downloads a versioned JSON export of local database records and shop-selection preferences. The browser uses IndexedDB; the APK bridge uses SQLite. This is a logical data export, not a copy of the separate Flask `data/pos.sqlite3` database.
+- Restore replaces all local shops, after validation and confirmation, downloads a safety copy first, and signs out. Close other POS tabs before restoring. Keep backups on a USB drive or another safe location; manual downloads and daily PC backups are local, not cloud backups.
+- API key files and image files referenced by URL/path are not embedded in the export. Retain the application files (including uploads) separately. Images stored inside database records remain included.
+- This workflow is wired into `capacitor/www` used by `start-apk-browser.sh`. The separate legacy Flask interface is not changed by these features.
+
+### Daily automatic backups on PC
+
+The Node preview server now enables one automatic backup per local calendar day, from either the POS or Admin page. While a page is open, it checks every minute and on window focus. If the application was closed, it catches up on the next opening after shop data is available. It cannot read browser data while the browser is closed.
+
+Files are written atomically to `backups/daily-YYYY-MM-DD.json` in the project root, outside the publicly served web folder and excluded from Git. Existing daily copies are retained; there is no automatic deletion. Restore these files through Settings → Backup & restore. Settings displays the most recent success or a retryable error. Restart `start-apk-browser.sh` after installing this change. The APK does not load this scheduler; automatic mobile backups remain unimplemented.

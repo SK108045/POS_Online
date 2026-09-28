@@ -74,6 +74,7 @@ function showReceiptModal(order, isKot = false) {
         <div style="border-top: 1px dashed var(--line); margin: 10px 0;"></div>
         <table><tbody>${itemRows}</tbody></table>
         <div style="border-top: 1px dashed var(--line); margin: 10px 0;"></div>
+        ${order.discount_cents ? `<div class="receipt-line"><span>Subtotal</span><strong>${money(order.subtotal_cents)}</strong></div><div class="receipt-line"><span>Discount</span><strong>−${money(order.discount_cents)}</strong></div>` : ''}
         <div class="receipt-total"><span>Total</span><strong>KES ${moneyRaw(order.total_cents)}</strong></div>
         ${isQuote ? '' : `
           <div class="receipt-line"><span>Amount Tendered</span><strong>KES ${moneyRaw(order.total_cents)}</strong></div>
@@ -472,7 +473,10 @@ const LocalPOS = {
   recalc(order) {
     order.subtotal_cents = (order.items || []).reduce((sum, it) => sum + Number(it.line_total_cents || 0), 0);
     order.tax_cents = 0;
-    order.total_cents = order.subtotal_cents;
+    order.discount_cents = Math.min(order.subtotal_cents, Math.round(order.discount_type === 'percent'
+      ? order.subtotal_cents * Number(order.discount_value || 0) / 100
+      : Number(order.discount_value || 0) * 100));
+    order.total_cents = order.subtotal_cents - order.discount_cents;
     order.updated_at = Math.floor(Date.now() / 1000);
     return order;
   },
@@ -631,12 +635,24 @@ const LocalPOS = {
       return order;
     }
 
+    if (cleanPath === '/api/order/discount' && method === 'POST') {
+      const orders = await this.getShop('orders', [], btype);
+      const order = orders.find(o => o.id === Number(body.order_id));
+      if (!order || !['open','sent'].includes(order.status)) throw new Error('Only unpaid sales can be discounted.');
+      const value = Number(body.value);
+      if (!['percent','fixed'].includes(body.type) || !Number.isFinite(value) || value < 0 || !Number.isSafeInteger(Math.round(value * 100)) || Math.abs(value * 100 - Math.round(value * 100)) > 0.00001) throw new Error('Enter a valid discount with up to two decimal places.');
+      if (value > (body.type === 'percent' ? 100 : order.subtotal_cents / 100)) throw new Error('Discount exceeds the sale amount.');
+      order.discount_type = body.type; order.discount_value = value;
+      this.recalc(order); await this.saveOrders(orders, btype); return order;
+    }
+
     if (cleanPath === '/api/order/pay' && method === 'POST') {
       const orders = await this.getShop('orders', [], btype);
       const products = await this.getShop('items', [], btype);
       const customers = await this.getShop('customers', [], btype);
       const order = orders.find(o => o.id === Number(body.order_id));
       if (!order) throw new Error('Sale not found');
+      if (order.status === 'paid') return order;
       if (order.status !== 'paid') {
         for (const oi of order.items || []) {
           const product = products.find(p => p.id === oi.menu_item_id);
@@ -700,12 +716,22 @@ const LocalPOS = {
     }
 
     if (cleanPath === '/api/menu/category' && method === 'POST') {
-      const name=String(body.name || '').trim();
-      if (!name || name.length>80) throw new Error('Enter a category name of 1–80 characters.');
-      const categories=await this.getShop('categories',[],btype);
-      if (categories.some(c=>c.name.trim().toLowerCase()===name.toLowerCase())) throw new Error('That category already exists.');
-      categories.push({id:this.nextId(categories),name,custom:true});
-      await this.setShop('categories',categories,btype);
+      const categories = await this.getShop('categories', [], btype);
+      const id = Number(body.id), existing = categories.find(c => c.id === id);
+      if (body.id && !existing) throw new Error('Category not found.');
+      if (body.action === 'delete') {
+        if (!existing) throw new Error('Category not found.');
+        const items = await this.getShop('items', [], btype);
+        if (items.some(i => Number(i.category_id) === id)) throw new Error('Move products to another category before deleting this category.');
+        categories.splice(categories.indexOf(existing), 1);
+      } else {
+        const name = String(body.name || '').trim();
+        if (!name || name.length > 80) throw new Error('Enter a category name of 1–80 characters.');
+        if (categories.some(c => c.id !== id && c.name.trim().toLowerCase() === name.toLowerCase())) throw new Error('That category already exists.');
+        if (existing) Object.assign(existing, {name, custom:true});
+        else categories.push({id:this.nextId(categories), name, custom:true});
+      }
+      await this.setShop('categories', categories, btype);
       return {categories};
     }
 
@@ -1715,6 +1741,8 @@ function renderTicket() {
       ${state.order.pricing_tier === 'wholesale' ? `<div><span>Tier</span><span class="cap-pill" style="background:#e0e7ff; color:#3730a3; font-size:10px;">Wholesale</span></div>` : ''}
       <div><span>Served By</span><span>${state.order.employee_name || selectedEmployeeName() || '-'}</span></div>
       <div><span>Subtotal</span><span>${money(state.order.subtotal_cents)}</span></div>
+      <div><span>Discount</span><span>−${money(state.order.discount_cents || 0)}</span></div>
+      <button class="secondary" id="discountBtn">Apply / edit discount</button>
       <div class="grand"><span>Total</span><span>${money(state.order.total_cents)}</span></div>
     </div>
     <div class="actions" style="display:flex; flex-direction:column; gap:8px;">
@@ -1733,6 +1761,7 @@ function renderTicket() {
     </div>
   `;
 
+  qs('#discountBtn')?.addEventListener('click', showDiscountEditor);
   if (isQuote) {
     qs('#convertQuoteBtn')?.addEventListener('click', async () => {
       try {
@@ -1765,7 +1794,6 @@ function selectedEmployeeName() {
   return state.employees.find(emp => emp.id === state.selectedEmployeeId)?.name;
 }
 
-const PAYSTACK_DEFAULT_KEY = 'sk_live_91baa01872ba458e72ab98118415ed9a69778dee';
 
 function normalizeMpesaPhone(p) {
   let digits = String(p || '').replace(/\D/g, '');
@@ -1784,71 +1812,34 @@ function formatMpesaDisplayPhone(p) {
   return norm || p;
 }
 
-async function triggerPaystackMpesaCharge(params) {
-  const secretKey = localStorage.getItem('pos_paystack_secret_key') || PAYSTACK_DEFAULT_KEY;
-  const payload = {
-    email: String(params.email || `mpesa.${String(params.phone || '').replace(/\D/g, '')}@example.com`).trim(),
-    amount: params.amount,
-    currency: 'KES',
-    phone: params.phone,
-    mobile_money: {
-      phone: params.phone,
-      provider: 'mpesa'
-    }
-  };
-
-  if (window.OraforgeNative) {
-    try {
-      return await window.OraforgeProviders.charge(payload);
-    } catch (error) {
-      return {status:false, message:error.message || 'Could not confirm STK submission. Check payment status before retrying.'};
-    }
-  }
-
-  // 1. Try local dev server proxy if running
+async function triggerSwiftaMpesaCharge(params) {
   try {
-    const res = await fetch('/api/paystack/charge', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    });
-    if (res.ok || res.status === 400 || res.status === 401) {
-      const data = await res.json();
-      if (typeof data.status !== 'boolean') throw new Error('Invalid payment server response');
-      return data;
-    }
-  } catch (_) {}
-
-  // 2. Direct fetch to Paystack API (works in browser & Capacitor APK)
-  try {
-    const res = await fetch('https://api.paystack.co/charge', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${secretKey}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        email: payload.email,
-        amount: payload.amount,
-        currency: 'KES',
-        mobile_money: payload.mobile_money
-      })
-    });
-    const data = await res.json().catch(() => ({}));
-    return data;
-  } catch (err) {
-    return { status: false, message: err.message || 'Network error triggering STK prompt' };
+    if (!Number.isSafeInteger(params.amount) || params.amount<=0) throw new Error('Payment amount must be greater than zero.');
+    const phone = normalizeMpesaPhone(params.phone);
+    const payload = {
+      phone: phone.startsWith('+254') ? '0'+phone.slice(4) : phone,
+      amount: params.amount / 100,
+      accountReference: 'ORAFORGE-'+String(params.reference),
+      description: 'POS payment'
+    };
+    if (window.OraforgeNative) return await window.OraforgeProviders.charge(payload);
+    const response = await fetch('/api/swifta/stkpush', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+    const result = await response.json();
+    if (!response.ok) return {status:false,message:result.message || 'Swifta request failed.'};
+    return result;
+  } catch(error) {
+    return {status:false,message:error.message || 'Could not confirm STK submission. Check payment status before retrying.'};
   }
 }
 
-function showCheckoutModal(order) {
+async function showCheckoutModal(order) {
+
   const overlay = document.createElement('div');
   overlay.className = 'qty-popup-overlay';
   overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
 
   let selectedMethod = 'mpesa';
   let savedPhone = '';
-  let savedEmail = '';
 
   function renderFormView() {
     overlay.innerHTML = `
@@ -1946,13 +1937,12 @@ function showCheckoutModal(order) {
           return;
         }
 
-        savedEmail = `mpesa.${cleanPhone.replace(/\D/g, '')}@example.com`;
         savedPhone = rawPhone;
         confirmBtn.disabled = true;
         confirmBtn.innerHTML = `<span class="pos-spinner-ring" style="border-color:white; border-top-color:transparent; margin-right:6px;"></span> Sending Prompt…`;
 
-        const payResult = await triggerPaystackMpesaCharge({
-          email: savedEmail,
+        const payResult = await triggerSwiftaMpesaCharge({
+          reference: order.ticket_no || order.id,
           amount: order.total_cents,
           phone: cleanPhone
         });
@@ -2021,7 +2011,7 @@ function showCheckoutModal(order) {
           </div>
           ${refCode ? `
             <div style="display: flex; justify-content: space-between; align-items: center; font-size: 11.5px; color: var(--muted); margin-top: 4px;">
-              <span>Paystack Ref</span>
+              <span>Swifta Ref</span>
               <span style="font-family: monospace; font-weight: 600;">${refCode}</span>
             </div>
           ` : ''}
@@ -2034,7 +2024,7 @@ function showCheckoutModal(order) {
 
         ${apiNote ? `
           <div style="font-size: 11.5px; color: #92400e; background: #fef3c7; padding: 8px 12px; border-radius: 6px; margin-bottom: 16px; text-align: left; line-height: 1.35;">
-            ℹ️ <strong>Paystack:</strong> ${apiNote}
+            ℹ️ <strong>Swifta:</strong> ${apiNote}
           </div>
         ` : ''}
 
@@ -2091,8 +2081,8 @@ function showCheckoutModal(order) {
     resendBtn.addEventListener('click', async () => {
       resendBtn.disabled = true;
       resendBtn.textContent = 'Sending…';
-      const retryResult = await triggerPaystackMpesaCharge({
-        email: savedEmail,
+      const retryResult = await triggerSwiftaMpesaCharge({
+        reference: order.ticket_no || order.id,
         amount: order.total_cents,
         phone: cleanPhone
       });
@@ -2446,7 +2436,7 @@ function renderProductAdmin() {
           </svg>
           <span>Scan Barcode / Add</span>
         </button>
-        <button class="secondary" id="addCategoryBtn">+ Category</button>
+        <button class="secondary" id="addCategoryBtn">Manage Categories</button>
         <button class="primary add-btn" id="showAddProductModal">+ Add Product</button>
       </div>
     </div>
@@ -2479,11 +2469,7 @@ function renderProductAdmin() {
     renderProductAdminGrid();
   });
 
-  qs('#addCategoryBtn')?.addEventListener('click', async()=>{
-    const name=prompt('New category name');
-    if (name===null) return;
-    try {const result=await api('/api/menu/category',{method:'POST',body:{name}});state.categories=result.categories;renderProductAdmin();toast('Category added');} catch(e){toast(e.message,'error');}
-  });
+  qs('#addCategoryBtn')?.addEventListener('click', showCategoryManager);
   qs('#showAddProductModal')?.addEventListener('click', () => showProductModal());
   qs('#scanAddProductBtn')?.addEventListener('click', () => showBarcodeModal('product'));
 
@@ -3339,6 +3325,8 @@ async function renderSettings() {
     </div>
   `;
 
+  await window.OraforgeOperations.backupUI(root.querySelector(".settings-container"));
+
   // Theme switch handlers
   const setTheme = (theme) => {
     document.documentElement.setAttribute('data-theme', theme);
@@ -3629,6 +3617,7 @@ function showLoginScreen() {
 
 // ── Entry Point ───────────────────────────────────────────────────────────────
 async function start() {
+  if (location.pathname.replace(/\/+$/, '') === '/shifts') history.replaceState(null, '', '/pos');
   if (localStorage.getItem('pos_logged_in') !== 'true') {
     showLoginScreen();
     return;
@@ -3657,3 +3646,41 @@ async function start() {
 }
 
 start().catch(renderShellError);
+
+function operationsDialog(title) {
+  const d = document.createElement('dialog');
+  d.style = 'width:min(560px,90vw);max-height:85vh;overflow:auto;background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:12px;padding:24px';
+  const heading = document.createElement('h2'); heading.textContent = title; d.append(heading);
+  const close = document.createElement('button'); close.textContent = 'Close'; close.className = 'secondary'; close.onclick = () => d.close(); d.append(close);
+  d.addEventListener('close', () => d.remove()); document.body.append(d); d.showModal(); return d;
+}
+function showDiscountEditor() {
+  const d = operationsDialog('Sale discount'), form = document.createElement('form');
+  form.style = 'display:grid;gap:12px;margin-top:16px';
+  form.innerHTML = '<label>Discount type<select name="type" class="field"><option value="percent">Percentage (%)</option><option value="fixed">Amount (KES)</option></select></label><label>Discount value (0 removes discount)<input name="value" class="field" type="number" min="0" step="0.01" required></label><button class="primary">Apply discount</button><p role="alert"></p>';
+  form.elements.type.value = state.order.discount_type || 'percent'; form.elements.value.value = state.order.discount_value || 0;
+  const orderId = state.order.id;
+  form.onsubmit = async e => { e.preventDefault(); const button = form.querySelector('button'); button.disabled = true;
+    try { state.order = await api('/api/order/discount', {method:'POST',body:{order_id:orderId,type:form.elements.type.value,value:form.elements.value.value}}); d.close(); renderTicket(); }
+    catch(err) {form.querySelector('p').textContent = err.message;} finally {button.disabled = false;}
+  }; d.append(form);
+}
+function showCategoryManager() {
+  const d = operationsDialog('Manage categories');
+  const body = document.createElement('div'); d.append(body);
+  const draw = () => {
+    body.replaceChildren();
+    const explanation = document.createElement('p'); explanation.textContent = 'Create your shop categories here, then select them when adding products. Move products before deleting a category.'; body.append(explanation);
+    const error = document.createElement('p'); error.setAttribute('role','alert');
+    for (const category of [...state.categories, {id:null,name:''}]) {
+      const form = document.createElement('form'); form.style = 'display:flex;gap:8px;flex-wrap:wrap;margin:12px 0';
+      const input = document.createElement('input'); input.className = 'field'; input.value = category.name; input.placeholder = 'New category name'; input.required = true; input.maxLength = 80; input.setAttribute('aria-label', category.id ? 'Category name' : 'New category name'); form.append(input);
+      const save = document.createElement('button'); save.className='primary'; save.textContent = category.id ? 'Rename' : 'Add'; form.append(save);
+      const update = async payload => { save.disabled=true; try { const result=await api('/api/menu/category',{method:'POST',body:payload}); state.categories=result.categories; productCategoryFilter=''; renderProductAdmin(); draw(); } catch(err){error.textContent=err.message;} finally{save.disabled=false;} };
+      form.onsubmit=e=>{e.preventDefault();update({id:category.id,name:input.value});};
+      if(category.id){const del=document.createElement('button');del.type='button';del.className='danger';del.textContent='Delete';del.onclick=()=>{if(confirm('Delete category "'+category.name+'"?'))update({id:category.id,action:'delete'});};form.append(del);}
+      body.append(form);
+    }
+    body.append(error);
+  }; draw();
+}

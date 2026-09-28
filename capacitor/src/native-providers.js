@@ -1,3 +1,4 @@
+import swifta from '../swifta-contract';
 import config from './provider-config.json';
 
 export function createNativeProviders(http) {
@@ -8,11 +9,11 @@ export function createNativeProviders(http) {
   };
   return {
     async charge(payload) {
-      return parse(await http.request({
-        url: 'https://api.paystack.co/charge', method: 'POST',
-        headers: {Authorization: `Bearer ${config.paystack}`, 'Content-Type':'application/json', Accept:'application/json'},
-        data: payload, readTimeout: 30000
-      }));
+      return swifta.normalize(parse(await http.request({
+        url: 'https://app.swifta.co.ke/stkpush', method: 'POST',
+        headers: {'x-api-key':config.swifta, 'Content-Type':'application/json', Accept:'application/json'},
+        data: swifta.validate(payload), readTimeout: 30000
+      })));
     },
     async sms(path, body = {}) {
       if (path === '/api/admin/sms/config') return {configured: !!config.sozuri?.apiKey, message: 'Configured'};
