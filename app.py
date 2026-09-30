@@ -389,7 +389,7 @@ def init_db():
                      JOIN menu_items mi ON mi.id = oi.menu_item_id
                      JOIN categories c ON c.id = mi.category_id
                     WHERE oi.order_id = orders.id
-                      AND c.business_type IN ('retail','pharmacy','restaurant','hardware','boutique','bar')
+                      AND c.business_type IN ('retail','pharmacy','restaurant','hardware','boutique','bar','garage')
                     ORDER BY oi.id
                     LIMIT 1
                ), business_type)
@@ -403,7 +403,7 @@ def init_db():
                      FROM menu_items mi
                      JOIN categories c ON c.id = mi.category_id
                     WHERE mi.supplier_id = suppliers.id
-                      AND c.business_type IN ('retail','pharmacy','restaurant','hardware','boutique','bar')
+                      AND c.business_type IN ('retail','pharmacy','restaurant','hardware','boutique','bar','garage')
                     LIMIT 1
                ), business_type)
         """)
@@ -1365,7 +1365,7 @@ class POSHandler(SimpleHTTPRequestHandler):
                 low_stock_alerts = 0
                 if profile["capabilities"].get("reorder_levels"):
                     low_stock_alerts = conn.execute(
-                        "SELECT COUNT(*) FROM menu_items mi JOIN categories c ON c.id = mi.category_id WHERE mi.active = 1 AND c.business_type = ? AND mi.stock_qty <= mi.reorder_level", (btype,)
+                        "SELECT COUNT(*) FROM menu_items mi JOIN categories c ON c.id = mi.category_id WHERE mi.active = 1 AND c.business_type = ? AND mi.unit != 'service' AND mi.stock_qty <= mi.reorder_level", (btype,)
                     ).fetchone()[0]
 
                 tables = self.tables_payload(conn, btype) if profile["capabilities"].get("tables") else []
@@ -1428,12 +1428,12 @@ class POSHandler(SimpleHTTPRequestHandler):
             elif path == "/api/stock":
                 self.send_json(rows(conn.execute(
                     """
-                    SELECT id, name, sku, barcode, stock_qty, unit, category_id, price_cents, cost_cents,
+                    SELECT mi.id, mi.name, mi.sku, mi.barcode, mi.stock_qty, mi.unit, mi.category_id, mi.price_cents, mi.cost_cents,
                            wholesale_price_cents, reorder_level, batch_no, expiry_date, manufacturer, strength,
                            variants_json, decimal_qty_enabled, image_url
                     FROM menu_items mi
                     JOIN categories c ON c.id = mi.category_id
-                    WHERE mi.active = 1 AND c.business_type = ?
+                    WHERE mi.active = 1 AND c.business_type = ? AND mi.unit != 'service'
                     ORDER BY mi.stock_qty ASC, mi.name
                     """, (btype,)
                 )))
@@ -1539,7 +1539,7 @@ class POSHandler(SimpleHTTPRequestHandler):
                         COALESCE(SUM(mi.stock_qty * (mi.price_cents - mi.cost_cents)), 0) AS potential_profit
                     FROM menu_items mi
                     JOIN categories c ON c.id = mi.category_id
-                    WHERE mi.active = 1 AND mi.stock_qty > 0 AND c.business_type = ?
+                    WHERE mi.active = 1 AND mi.stock_qty > 0 AND c.business_type = ? AND mi.unit != 'service'
                     """,
                     (btype,),
                 ).fetchone())
@@ -1618,7 +1618,7 @@ class POSHandler(SimpleHTTPRequestHandler):
                 self.send_json(get_order_payload(conn, order_id))
             elif path == "/api/order/convert-quote":
                 order_id = int(data["order_id"])
-                conn.execute("UPDATE orders SET is_quote = 0, status = 'open', updated_at = ? WHERE id = ?", (now(), order_id))
+                conn.execute("UPDATE orders SET is_quote = 0, order_type = 'walk-in', status = 'open', updated_at = ? WHERE id = ?", (now(), order_id))
                 recalc_order(conn, order_id)
                 self.send_json(get_order_payload(conn, order_id))
             elif path == "/api/orders":
@@ -1733,9 +1733,9 @@ class POSHandler(SimpleHTTPRequestHandler):
                     return self.send_json({"error": "order_not_found"}, 404)
                 
                 if order["status"] != "paid":
-                    items = conn.execute("SELECT menu_item_id, qty FROM order_items WHERE order_id = ?", (order_id,)).fetchall()
+                    items = conn.execute("SELECT oi.menu_item_id, oi.qty, mi.unit FROM order_items oi LEFT JOIN menu_items mi ON mi.id = oi.menu_item_id WHERE oi.order_id = ?", (order_id,)).fetchall()
                     for item in items:
-                        if item["menu_item_id"]:
+                        if item["menu_item_id"] and item["unit"] != "service":
                             conn.execute("UPDATE menu_items SET stock_qty = stock_qty - ? WHERE id = ?", (item["qty"], item["menu_item_id"]))
                             conn.execute(
                                 "INSERT INTO stock_movements(product_id, qty_change, reason, note, created_by, created_at, business_type) VALUES (?, ?, ?, ?, ?, ?, ?)",
@@ -2190,3 +2190,4 @@ if __name__ == "__main__":
         allow_reuse_address = True
 
     ReuseServer((HOST, PORT), POSHandler).serve_forever()
+

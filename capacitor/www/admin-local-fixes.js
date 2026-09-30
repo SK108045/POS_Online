@@ -96,6 +96,7 @@
   }
 
   const PROFILE_SAMPLE_SKU_PREFIXES = {
+    garage: 'GAR-',
     pharmacy: 'PHARM-',
     hardware: 'HDW-',
     boutique: 'BTQ-',
@@ -191,3 +192,4 @@
     return originalHandle(path, opts);
   };
 })();
+

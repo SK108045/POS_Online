@@ -3,6 +3,12 @@ const $$ = s => [...document.querySelectorAll(s)];
 const money = c => `KES ${(c/100).toLocaleString('en-KE', {minimumFractionDigits:2})}`;
 const fmt = n => Number(n).toLocaleString('en-KE');
 
+function garageUnitOptions(currentUnit = 'pcs') {
+  const units = [...new Set(['pcs', 'btl', 'set', 'litre', 'service', currentUnit])];
+  const escape = value => String(value).replace(/[&<>"]/g, c => ({'&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;'}[c]));
+  return units.map(unit => `<option value="${escape(unit)}" ${currentUnit === unit ? 'selected' : ''}>${unit === 'service' ? 'Service / Labour (no stock)' : escape(unit)}</option>`).join('');
+}
+
 // ── STATE ──
 let state = { user: null, summary: null, users: [], suppliers: [], menu: null };
 
@@ -518,7 +524,7 @@ function buildMenu() {
         <td style="color:var(--muted)">${catName(i.category_id)}</td>
         <td style="color:var(--muted);font-family:monospace">${i.sku||'—'}</td>
         <td style="font-weight:700">${money(i.price_cents)}</td>
-        <td><span class="badge" style="${(i.stock_qty||0)<=5?'background:#fee2e2;color:#dc2626':'background:#dcfce7;color:#16a34a'}">${i.stock_qty||0} ${i.unit||'pcs'}</span></td>
+        <td><span class="badge" style="${i.unit !== 'service' && (i.stock_qty||0)<=5?'background:#fee2e2;color:#dc2626':'background:#dcfce7;color:#16a34a'}">${i.unit === 'service' ? 'Service' : `${i.stock_qty||0} ${i.unit||'pcs'}`} </span></td>
         <td>
           <button class="btn btn-ghost btn-sm" onclick="editItem(${i.id})">Edit</button>
         </td>
@@ -576,7 +582,7 @@ function openItemModal(item) {
       </div>
       <div class="form-group">
         <label class="form-label">Unit</label>
-        <input class="form-input" id="mUnit" value="${item?.unit||'pcs'}" placeholder="pcs / kg / m / box">
+        ${(state.profile?.id || state.menu?.profile?.id || localStorage.getItem('pos_active_business_type')) === 'garage' ? `<select class="form-select" id="mUnit">${garageUnitOptions(item?.unit || 'pcs')}</select>` : `<input class="form-input" id="mUnit" value="${item?.unit||'pcs'}" placeholder="pcs / kg / m / box">`}
       </div>
       <div class="form-group">
         <label class="form-label">Barcode</label>
@@ -747,6 +753,7 @@ async function renderStockAdmin() {
 }
 
 function buildStockAdmin(items) {
+  items = items.filter(i => i.unit !== 'service');
   const sec = $('#sec-stock');
   const low = items.filter(i => i.stock_qty <= 5);
   sec.innerHTML = `
@@ -1303,3 +1310,4 @@ async function boot() {
 }
 
 boot().catch(e => { console.error(e); });
+

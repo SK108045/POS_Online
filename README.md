@@ -116,3 +116,10 @@ The Android build is offline-first. The Capacitor WebView bundles the POS UI loc
 The Node preview server now enables one automatic backup per local calendar day, from either the POS or Admin page. While a page is open, it checks every minute and on window focus. If the application was closed, it catches up on the next opening after shop data is available. It cannot read browser data while the browser is closed.
 
 Files are written atomically to `backups/daily-YYYY-MM-DD.json` in the project root, outside the publicly served web folder and excluded from Git. Existing daily copies are retained; there is no automatic deletion. Restore these files through Settings → Backup & restore. Settings displays the most recent success or a retryable error. Restart `start-apk-browser.sh` after installing this change. The APK does not load this scheduler; automatic mobile backups remain unimplemented.
+
+
+### Garage & Auto Spares profile
+
+Choose **Garage & Auto Spares** when registering a shop. It includes garage categories, parts stock tracking, quotations and workshop services. In the product editor, choose **Service / Labour (no stock)** for labour or diagnostics; these items can be sold without a stock balance and are excluded from inventory alerts and deductions. Item instructions can record a vehicle registration, model or repair details.
+
+The Garage demo profile includes six sample spare parts and two workshop services, with bundled catalogue photos that work offline. Demo prices and quantities are illustrative. Registered garages start with empty stock and the seven garage categories so demo products do not appear as real inventory.

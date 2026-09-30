@@ -3,11 +3,18 @@ const $$ = s => [...document.querySelectorAll(s)];
 const money = c => `KES ${(c/100).toLocaleString('en-KE', {minimumFractionDigits:2})}`;
 const fmt = n => Number(n).toLocaleString('en-KE');
 
+function garageUnitOptions(currentUnit = 'pcs') {
+  const units = [...new Set(['pcs', 'btl', 'set', 'litre', 'service', currentUnit])];
+  const escape = value => String(value).replace(/[&<>"]/g, c => ({'&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;'}[c]));
+  return units.map(unit => `<option value="${escape(unit)}" ${currentUnit === unit ? 'selected' : ''}>${unit === 'service' ? 'Service / Labour (no stock)' : escape(unit)}</option>`).join('');
+}
+
 // ── STATE ──
 let state = { user: null, summary: null, users: [], suppliers: [], menu: null };
 
 // ── API ──
 const ADMIN_PROFILES = {
+  garage: { id:'garage', name:'Garage & Auto Spares', icon:'🚗', item_label:'Parts & Services', tagline:'Auto Parts, Repairs & Workshop POS' },
   retail: { id:'retail', name:'Retail / Mini-Mart', icon:'🛒', item_label:'Products', tagline:'Supermarket, Grocery & General Retail POS' },
   pharmacy: { id:'pharmacy', name:'Pharmacy', icon:'💊', item_label:'Medicines', tagline:'Pharmacy & Chemist POS' },
   restaurant: { id:'restaurant', name:'Restaurant / Café', icon:'🍽️', item_label:'Menu Items', tagline:'Food, Dining & Kitchen POS' },
@@ -167,7 +174,7 @@ const LocalAdmin = {
       await this.set('suppliers', suppliers); return suppliers;
     }
 
-    if (cleanPath === '/api/stock') return items;
+    if (cleanPath === '/api/stock') return items.filter(i => i.unit !== 'service');
     if (cleanPath === '/api/stock/adjust' && method === 'POST') {
       const product = items.find(i => i.id === Number(body.product_id));
       if (!product) throw new Error('Product not found');
@@ -639,7 +646,7 @@ function buildMenu() {
         <td style="color:var(--muted)">${catName(i.category_id)}</td>
         <td style="color:var(--muted);font-family:monospace">${i.sku||'—'}</td>
         <td style="font-weight:700">${money(i.price_cents)}</td>
-        <td><span class="badge" style="${(i.stock_qty||0)<=5?'background:#fee2e2;color:#dc2626':'background:#dcfce7;color:#16a34a'}">${i.stock_qty||0} ${i.unit||'pcs'}</span></td>
+        <td><span class="badge" style="${i.unit !== 'service' && (i.stock_qty||0)<=5?'background:#fee2e2;color:#dc2626':'background:#dcfce7;color:#16a34a'}">${i.unit === 'service' ? 'Service' : `${i.stock_qty||0} ${i.unit||'pcs'}`} </span></td>
         <td>
           <button class="btn btn-ghost btn-sm" onclick="editItem(${i.id})">Edit</button>
         </td>
@@ -697,7 +704,7 @@ function openItemModal(item) {
       </div>
       <div class="form-group">
         <label class="form-label">Unit</label>
-        <input class="form-input" id="mUnit" value="${item?.unit||'pcs'}" placeholder="pcs / kg / m / box">
+        ${(state.profile?.id || state.menu?.profile?.id || localStorage.getItem('pos_active_business_type')) === 'garage' ? `<select class="form-select" id="mUnit">${garageUnitOptions(item?.unit || 'pcs')}</select>` : `<input class="form-input" id="mUnit" value="${item?.unit||'pcs'}" placeholder="pcs / kg / m / box">`}
       </div>
       <div class="form-group">
         <label class="form-label">Barcode</label>
@@ -868,6 +875,7 @@ async function renderStockAdmin() {
 }
 
 function buildStockAdmin(items) {
+  items = items.filter(i => i.unit !== 'service');
   const sec = $('#sec-stock');
   const low = items.filter(i => i.stock_qty <= 5);
   sec.innerHTML = `
@@ -1487,3 +1495,4 @@ async function boot() {
 }
 
 boot().catch(e => { console.error(e); const sec = $('#sec-dashboard'); if (sec) sec.innerHTML = `<div class="empty-state"><div class="empty-state-icon">⚠️</div><p>${e.message}</p></div>`; });
+

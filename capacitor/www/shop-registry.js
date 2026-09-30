@@ -1,5 +1,6 @@
 (() => {
   const PROFILE_META = {
+    garage: { id:'garage', name:'Garage & Auto Spares', icon:'🚗', tagline:'Auto Parts, Repairs & Workshop POS' },
     retail: { id:'retail', name:'Retail / Mini-Mart', icon:'🛒', tagline:'Supermarket, Grocery & General Retail POS' },
     pharmacy: { id:'pharmacy', name:'Pharmacy', icon:'💊', tagline:'Pharmacy & Chemist POS' },
     restaurant: { id:'restaurant', name:'Restaurant / Café', icon:'🍽️', tagline:'Food, Dining & Kitchen POS' },
@@ -149,6 +150,8 @@
     const prefix = name => `shop:${shop.id}:${name}`;
     const categories = shop.business_type === 'butchery'
       ? ['Beef', 'Goat & Mutton', 'Chicken', 'Other Meat']
+      : shop.business_type === 'garage'
+        ? ["Oils & Lubricants", "Filters", "Brakes & Suspension", "Engine Parts", "Batteries & Electrical", "Tyres & Wheels", "Workshop Services"]
       : shop.is_custom
         ? [shop.category_name, 'General']
         : ['General'];
@@ -270,3 +273,4 @@
     setGlobal,
   };
 })();
+

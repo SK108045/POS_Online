@@ -173,6 +173,35 @@
           "takeaway"
         ]
       }
+    },
+    "garage": {
+      "id": "garage",
+      "name": "Garage & Auto Spares",
+      "tagline": "Auto Parts, Repairs & Workshop POS",
+      "icon": "\ud83d\ude97",
+      "item_label": "Parts & Services",
+      "order_type_default": "walk-in",
+      "capabilities": {
+        "barcode": true,
+        "stock_tracking": true,
+        "reorder_levels": true,
+        "suppliers": true,
+        "tables": false,
+        "waiters": false,
+        "kot": false,
+        "batches_expiry": false,
+        "decimal_qty": false,
+        "units_extended": true,
+        "quotations": true,
+        "wholesale_pricing": false,
+        "variants": false,
+        "order_notes": true,
+        "order_types": [
+          "walk-in",
+          "service",
+          "quote"
+        ]
+      }
     }
   },
   "sample_data": {
@@ -769,6 +798,131 @@
           "sku": "SN-001",
           "stock_qty": 30,
           "unit": "pkt"
+        }
+      ]
+    },
+    "garage": {
+      "categories": [
+        "Oils & Lubricants",
+        "Filters",
+        "Brakes & Suspension",
+        "Engine Parts",
+        "Batteries & Electrical",
+        "Tyres & Wheels",
+        "Workshop Services"
+      ],
+      "items": [
+        {
+          "name": "Engine Oil 5W-30 \u00b7 4L",
+          "category": "Oils & Lubricants",
+          "price": 3500,
+          "cost": 2600,
+          "sku": "GAR-001",
+          "barcode": "2000000700014",
+          "stock": 24,
+          "stock_qty": 24,
+          "unit": "btl",
+          "color": "#183d35",
+          "reorder_level": 5,
+          "image_url": "/static/uploads/garage_engine_oil.jpg"
+        },
+        {
+          "name": "Oil Filter",
+          "category": "Filters",
+          "price": 850,
+          "cost": 500,
+          "sku": "GAR-002",
+          "barcode": "2000000700021",
+          "stock": 40,
+          "stock_qty": 40,
+          "unit": "pcs",
+          "color": "#183d35",
+          "reorder_level": 8,
+          "image_url": "/static/uploads/garage_oil_filter.jpg"
+        },
+        {
+          "name": "Front Brake Pads Set",
+          "category": "Brakes & Suspension",
+          "price": 2800,
+          "cost": 1900,
+          "sku": "GAR-003",
+          "barcode": "2000000700038",
+          "stock": 18,
+          "stock_qty": 18,
+          "unit": "set",
+          "color": "#183d35",
+          "reorder_level": 4,
+          "image_url": "/static/uploads/garage_brake_pads.jpg"
+        },
+        {
+          "name": "Spark Plugs \u00b7 Set of 4",
+          "category": "Engine Parts",
+          "price": 1800,
+          "cost": 1100,
+          "sku": "GAR-004",
+          "barcode": "2000000700045",
+          "stock": 32,
+          "stock_qty": 32,
+          "unit": "set",
+          "color": "#183d35",
+          "reorder_level": 6,
+          "image_url": "/static/uploads/garage_spark_plugs.jpg"
+        },
+        {
+          "name": "Car Battery \u00b7 12V 60Ah",
+          "category": "Batteries & Electrical",
+          "price": 9500,
+          "cost": 7300,
+          "sku": "GAR-005",
+          "barcode": "2000000700052",
+          "stock": 10,
+          "stock_qty": 10,
+          "unit": "pcs",
+          "color": "#183d35",
+          "reorder_level": 3,
+          "image_url": "/static/uploads/garage_car_battery.jpg"
+        },
+        {
+          "name": "Passenger Tyre \u00b7 195/65 R15",
+          "category": "Tyres & Wheels",
+          "price": 6500,
+          "cost": 4700,
+          "sku": "GAR-006",
+          "barcode": "2000000700069",
+          "stock": 16,
+          "stock_qty": 16,
+          "unit": "pcs",
+          "color": "#183d35",
+          "reorder_level": 4,
+          "image_url": "/static/uploads/garage_tyre.jpg"
+        },
+        {
+          "name": "Computer Diagnostics",
+          "category": "Workshop Services",
+          "price": 1500,
+          "cost": 0,
+          "sku": "GAR-007",
+          "barcode": "",
+          "stock": 0,
+          "stock_qty": 0,
+          "unit": "service",
+          "color": "#183d35",
+          "reorder_level": 0,
+          "image_url": "/static/uploads/garage_diagnostics.jpg"
+        },
+        {
+          "name": "Oil Change Labour",
+          "category": "Workshop Services",
+          "price": 800,
+          "cost": 0,
+          "sku": "GAR-008",
+          "barcode": "",
+          "stock": 0,
+          "stock_qty": 0,
+          "unit": "service",
+          "color": "#183d35",
+          "reorder_level": 0,
+          "image_url": "/static/uploads/garage_engine_oil.jpg"
         }
       ]
     }
