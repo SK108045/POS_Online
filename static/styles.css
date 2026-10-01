@@ -2612,3 +2612,19 @@ button:focus-visible, a:focus-visible { outline: 3px solid #87a857; outline-offs
 .nav-link[href="/reports"] { --nav-symbol: var(--icon-chart); }
 .nav-link[href="/settings"] { --nav-symbol: var(--icon-settings); }
 .nav-link[href="admin.html"] { --nav-symbol: var(--icon-user); }
+
+/* Report surfaces and action text must follow the selected theme. */
+.report-stat-card {
+  background: var(--panel);
+  color: var(--ink);
+  padding: 20px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, .02);
+}
+.add-btn, .sales-row:hover .view-receipt-btn { color: var(--primary-fg); }
+.pill.active { color: var(--bg); }
+.report-stock-status { background: var(--ok-bg); color: var(--ink); }
+.report-stock-status.low { background: var(--danger-bg); color: var(--ink); }
+[data-page="reports"] { --muted: #58675e; }
+[data-theme="dark"] [data-page="reports"] { --muted: #a0b5a9; --info: #8ab4ff; }

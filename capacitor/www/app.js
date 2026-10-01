@@ -3120,38 +3120,38 @@ async function renderReports(period = 'today') {
           <option value="week" ${period === 'week' ? 'selected' : ''}>Last 7 Days</option>
           <option value="month" ${period === 'month' ? 'selected' : ''}>Last 30 Days</option>
         </select>
-        <button class="add-btn" id="printReportBtn" style="background:var(--ink)">Print Z-Report</button>
+        <button class="add-btn" id="printReportBtn">Print Z-Report</button>
       </div>
     </div>
     
     <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin: 0 24px 24px;">
-      <div style="background: white; padding: 20px; border-radius: 12px; border: 1px solid var(--line); box-shadow: 0 4px 12px rgba(0,0,0,0.02);">
+      <div class="report-stat-card">
         <div style="font-size: 12px; font-weight: 700; color: var(--muted); text-transform: uppercase;">Gross Revenue</div>
         <div style="font-size: 28px; font-weight: 800; color: var(--ink); margin-top: 8px;">${money(report.totals.sales)}</div>
         <div style="font-size: 13px; color: var(--muted); margin-top: 4px;">From ${report.totals.orders} sales</div>
       </div>
-      <div style="background: white; padding: 20px; border-radius: 12px; border: 1px solid var(--line); box-shadow: 0 4px 12px rgba(0,0,0,0.02);">
+      <div class="report-stat-card">
         <div style="font-size: 12px; font-weight: 700; color: var(--muted); text-transform: uppercase;">Gross Profit</div>
         <div style="font-size: 28px; font-weight: 800; color: var(--ok); margin-top: 8px;">${money(profit)}</div>
         <div style="font-size: 13px; color: var(--muted); margin-top: 4px;">Realized Margin: ${margin}%</div>
       </div>
-      <div style="background: white; padding: 20px; border-radius: 12px; border: 1px solid var(--line); box-shadow: 0 4px 12px rgba(0,0,0,0.02);">
+      <div class="report-stat-card">
         <div style="font-size: 12px; font-weight: 700; color: var(--muted); text-transform: uppercase;">Inventory Value</div>
-        <div style="font-size: 28px; font-weight: 800; color: #1d4ed8; margin-top: 8px;">${money(report.stock?.inventory_value || 0)}</div>
+        <div style="font-size: 28px; font-weight: 800; color: var(--info); margin-top: 8px;">${money(report.stock?.inventory_value || 0)}</div>
         <div style="font-size: 13px; color: var(--muted); margin-top: 4px;">Potential Profit: ${money(report.stock?.potential_profit || 0)}</div>
       </div>
-      <div style="background: white; padding: 20px; border-radius: 12px; border: 1px solid var(--line); box-shadow: 0 4px 12px rgba(0,0,0,0.02);">
+      <div class="report-stat-card">
         <div style="font-size: 12px; font-weight: 700; color: var(--muted); text-transform: uppercase;">Cash Sales</div>
-        <div style="font-size: 28px; font-weight: 800; color: #16a34a; margin-top: 8px;">${money(cashTotal)}</div>
+        <div style="font-size: 28px; font-weight: 800; color: var(--ok); margin-top: 8px;">${money(cashTotal)}</div>
       </div>
-      <div style="background: white; padding: 20px; border-radius: 12px; border: 1px solid var(--line); box-shadow: 0 4px 12px rgba(0,0,0,0.02);">
+      <div class="report-stat-card">
         <div style="font-size: 12px; font-weight: 700; color: var(--muted); text-transform: uppercase;">M-Pesa Sales</div>
-        <div style="font-size: 28px; font-weight: 800; color: #16a34a; margin-top: 8px;">${money(mpesaTotal)}</div>
+        <div style="font-size: 28px; font-weight: 800; color: var(--ok); margin-top: 8px;">${money(mpesaTotal)}</div>
       </div>
     </div>
     
     <div class="sales-table-container">
-      <div style="padding: 16px 20px; font-weight: 700; font-size: 12px; color: var(--muted); text-transform: uppercase; border-bottom: 1px solid var(--line); background: #f8fafc;">TOP MOVERS (BY REVENUE)</div>
+      <div style="padding: 16px 20px; font-weight: 700; font-size: 12px; color: var(--muted); text-transform: uppercase; border-bottom: 1px solid var(--line); background: var(--surface-soft);">TOP MOVERS (BY REVENUE)</div>
       <table class="sales-table" style="border-top: none;">
         <thead>
           <tr>
@@ -3168,7 +3168,7 @@ async function renderReports(period = 'today') {
               <td style="text-align: right">${item.qty}</td>
               <td style="text-align: right; font-weight: 700; color: var(--primary-dark)">${money(item.sales)}</td>
               <td style="text-align: right">
-                <span class="pay-badge" style="${item.current_stock > 10 ? 'background:#dcfce7;color:#16a34a;' : 'background:#fee2e2;color:#dc2626;'}">
+                <span class="pay-badge report-stock-status ${item.current_stock > 10 ? '' : 'low'}">
                   ${item.current_stock || 0} left
                 </span>
               </td>
