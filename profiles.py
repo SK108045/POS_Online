@@ -1123,7 +1123,7 @@ SAMPLE_DATA = {
                 "stock": 12,
                 "unit": "pcs",
                 "reorder_level": 3,
-                "image_url": "/static/uploads/tech_shop_hero.jpg",
+                "image_url": "",
                 "color": "#0f766e",
             },
             {
@@ -1136,7 +1136,7 @@ SAMPLE_DATA = {
                 "stock": 16,
                 "unit": "pcs",
                 "reorder_level": 4,
-                "image_url": "/static/uploads/tech_shop_hero.jpg",
+                "image_url": "",
                 "color": "#ea580c",
             },
         ],
