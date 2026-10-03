@@ -877,6 +877,158 @@ def page(title, active, content, role=None, settings=None):
 </body>
 </html>"""
 
+
+def tech_demo_page():
+    profile = PROFILES["tech_accessories"]
+    return f"""<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{profile["name"]} — Client Demo</title>
+  <link rel="stylesheet" href="/static/inter.css">
+  <style>
+    :root {{
+      color-scheme: light;
+      --ink:#10211b;
+      --muted:#66756f;
+      --line:#dfe8e3;
+      --panel:#ffffff;
+      --accent:#16a34a;
+      --accent-dark:#0f7a37;
+      --soft:#f4f8f5;
+    }}
+    * {{ box-sizing:border-box; }}
+    body {{
+      margin:0;
+      min-height:100vh;
+      font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+      color:var(--ink);
+      background:
+        radial-gradient(circle at 12% 15%, rgba(22,163,74,.10), transparent 25rem),
+        radial-gradient(circle at 88% 82%, rgba(37,99,235,.08), transparent 24rem),
+        var(--soft);
+    }}
+    .wrap {{ width:min(1120px, calc(100% - 32px)); margin:0 auto; padding:34px 0 46px; }}
+    .top {{ display:flex; align-items:center; justify-content:space-between; gap:16px; margin-bottom:34px; }}
+    .brand {{ display:flex; align-items:center; gap:12px; font-weight:850; letter-spacing:-.02em; }}
+    .brand-icon {{ width:46px; height:46px; border-radius:14px; display:grid; place-items:center; background:#10211b; color:#fff; font-size:24px; box-shadow:0 10px 24px rgba(16,33,27,.12); }}
+    .badge {{ padding:8px 12px; border:1px solid var(--line); border-radius:999px; background:rgba(255,255,255,.78); color:var(--muted); font-size:12px; font-weight:750; }}
+    .hero {{ display:grid; grid-template-columns:1.15fr .85fr; gap:28px; align-items:stretch; }}
+    .hero-copy, .preview {{ background:rgba(255,255,255,.9); border:1px solid var(--line); border-radius:26px; box-shadow:0 18px 55px rgba(29,54,43,.08); }}
+    .hero-copy {{ padding:42px; }}
+    .eyebrow {{ display:inline-flex; align-items:center; gap:8px; margin-bottom:16px; color:var(--accent-dark); font-weight:800; font-size:13px; text-transform:uppercase; letter-spacing:.08em; }}
+    h1 {{ margin:0; font-size:clamp(34px,5vw,58px); line-height:.98; letter-spacing:-.055em; max-width:780px; }}
+    .lead {{ max-width:650px; margin:20px 0 28px; color:var(--muted); font-size:17px; line-height:1.65; }}
+    .actions {{ display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px; }}
+    .portal {{ display:flex; flex-direction:column; gap:7px; min-height:148px; padding:22px; border-radius:20px; text-decoration:none; transition:.18s ease; }}
+    .portal:hover {{ transform:translateY(-3px); box-shadow:0 14px 34px rgba(16,33,27,.10); }}
+    .portal-worker {{ background:#10211b; color:#fff; }}
+    .portal-admin {{ background:#eaf7ee; color:#153d25; border:1px solid #cde8d5; }}
+    .portal .icon {{ font-size:29px; }}
+    .portal strong {{ margin-top:auto; font-size:20px; letter-spacing:-.02em; }}
+    .portal small {{ line-height:1.45; opacity:.76; }}
+    .note {{ margin-top:18px; color:var(--muted); font-size:12px; line-height:1.55; }}
+    .preview {{ padding:22px; display:flex; flex-direction:column; gap:14px; }}
+    .preview-head {{ display:flex; align-items:center; justify-content:space-between; gap:12px; }}
+    .preview-head strong {{ font-size:15px; }}
+    .dot {{ width:9px; height:9px; border-radius:50%; background:#22c55e; box-shadow:0 0 0 5px rgba(34,197,94,.10); }}
+    .product-grid {{ display:grid; grid-template-columns:1fr 1fr; gap:12px; flex:1; }}
+    .product {{ overflow:hidden; border:1px solid var(--line); border-radius:18px; background:#fff; min-height:170px; }}
+    .product img {{ width:100%; height:120px; object-fit:cover; display:block; background:#f7faf8; }}
+    .product-copy {{ padding:12px; }}
+    .product-copy strong {{ display:block; font-size:13px; margin-bottom:4px; }}
+    .product-copy span {{ font-size:12px; color:var(--muted); }}
+    .product.wide {{ grid-column:1/-1; display:grid; grid-template-columns:145px 1fr; min-height:145px; }}
+    .product.wide img {{ width:145px; height:100%; min-height:145px; }}
+    .product.wide .product-copy {{ display:flex; flex-direction:column; justify-content:center; }}
+    @media (max-width:800px) {{
+      .hero {{ grid-template-columns:1fr; }}
+      .hero-copy {{ padding:28px 22px; }}
+      .actions {{ grid-template-columns:1fr; }}
+      .top {{ align-items:flex-start; }}
+    }}
+    @media (max-width:480px) {{
+      .wrap {{ width:min(100% - 20px,1120px); padding-top:18px; }}
+      .badge {{ display:none; }}
+      .product-grid {{ grid-template-columns:1fr; }}
+      .product.wide {{ grid-column:auto; grid-template-columns:1fr; }}
+      .product.wide img {{ width:100%; height:120px; min-height:0; }}
+    }}
+  </style>
+</head>
+<body>
+  <main class="wrap">
+    <div class="top">
+      <div class="brand">
+        <div class="brand-icon">📱</div>
+        <div>Oraforge POS · Tech Shop Demo</div>
+      </div>
+      <div class="badge">No login required · Demo profile only</div>
+    </div>
+
+    <section class="hero">
+      <div class="hero-copy">
+        <div class="eyebrow">● Live client demo workspace</div>
+        <h1>Phone Accessories & Gadgets</h1>
+        <p class="lead">
+          Jump straight into the exact experience you want to show a client.
+          Both portals use the tech-accessories sample catalogue and remain isolated from the other shop profiles.
+        </p>
+
+        <div class="actions">
+          <a class="portal portal-worker" href="/tech-demo/worker" target="_blank" rel="noopener">
+            <span class="icon">🛒</span>
+            <small>Sales counter · products · checkout</small>
+            <strong>Open Worker / POS →</strong>
+          </a>
+          <a class="portal portal-admin" href="/tech-demo/admin" target="_blank" rel="noopener">
+            <span class="icon">📊</span>
+            <small>Dashboard · stock · staff · customers</small>
+            <strong>Open Admin Portal →</strong>
+          </a>
+        </div>
+
+        <div class="note">
+          These links create temporary demo sessions for <strong>tech_accessories</strong> only.
+          The normal staff/admin login routes are unchanged.
+        </div>
+      </div>
+
+      <aside class="preview">
+        <div class="preview-head">
+          <strong>Demo catalogue preview</strong>
+          <span class="dot" title="Demo ready"></span>
+        </div>
+        <div class="product-grid">
+          <article class="product">
+            <img src="/static/uploads/tech_wireless_earbuds.jpg" alt="Wireless earbuds">
+            <div class="product-copy">
+              <strong>Wireless Earbuds Pro</strong>
+              <span>KES 2,499</span>
+            </div>
+          </article>
+          <article class="product">
+            <img src="/static/uploads/tech_phone_cases.jpg" alt="Phone covers">
+            <div class="product-copy">
+              <strong>Premium Phone Covers</strong>
+              <span>From KES 799</span>
+            </div>
+          </article>
+          <article class="product wide">
+            <img src="/static/uploads/tech_charging_bundle.jpg" alt="Charging accessories">
+            <div class="product-copy">
+              <strong>Fast Charger, Cable & Power Bank</strong>
+              <span>Demo stock, pricing and checkout are already loaded.</span>
+            </div>
+          </article>
+        </div>
+      </aside>
+    </section>
+  </main>
+</body>
+</html>"""
+
 def employee_login_page(error="", settings=None):
     if not settings:
         with db() as conn:
@@ -1164,6 +1316,42 @@ class POSHandler(SimpleHTTPRequestHandler):
             # Send with aggressive cache headers for CSS/JS/fonts
             result = super().do_GET()
             return result
+        if path == "/tech-demo":
+            self.send_html(tech_demo_page())
+            return
+        if path in ("/tech-demo/worker", "/tech-demo/admin"):
+            is_admin = path.endswith("/admin")
+            username = "admin" if is_admin else "terminal"
+            with db() as conn:
+                seed_sample_data(conn, "tech_accessories")
+                demo_user = conn.execute(
+                    "SELECT * FROM users WHERE username = ? AND active = 1",
+                    (username,),
+                ).fetchone()
+            if not demo_user:
+                self.send_html(
+                    tech_demo_page().replace(
+                        "</main>",
+                        '<p style="text-align:center;color:#b91c1c;font-weight:700;">Demo account is unavailable. Restart the POS server once to recreate seeded users.</p></main>'
+                    ),
+                    500,
+                )
+                return
+
+            sid = secrets.token_urlsafe(32)
+            SESSIONS[sid] = {
+                "id": demo_user["id"],
+                "username": demo_user["username"],
+                "role": demo_user["role"],
+                "name": demo_user["full_name"],
+                "business_type": "tech_accessories",
+                "demo": True,
+            }
+            self.send_response(302)
+            self.send_header("Set-Cookie", f"sid={sid}; HttpOnly; SameSite=Lax; Path=/")
+            self.send_header("Location", "/admin" if is_admin else "/pos")
+            self.end_headers()
+            return
         if path in ("/", "/login"):
             if self.session_user():
                 self.send_response(302)
