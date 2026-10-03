@@ -4,7 +4,7 @@
       "id": "retail",
       "name": "Retail / Mini-Mart",
       "tagline": "Supermarket, Grocery & General Retail POS",
-      "icon": "\ud83d\uded2",
+      "icon": "🛒",
       "item_label": "Products",
       "order_type_default": "walk-in",
       "capabilities": {
@@ -33,7 +33,7 @@
       "id": "pharmacy",
       "name": "Pharmacy",
       "tagline": "Pharmacy & Chemist POS",
-      "icon": "\ud83d\udc8a",
+      "icon": "💊",
       "item_label": "Medicines",
       "order_type_default": "walk-in",
       "capabilities": {
@@ -60,9 +60,9 @@
     },
     "restaurant": {
       "id": "restaurant",
-      "name": "Restaurant / Caf\u00e9",
+      "name": "Restaurant / Café",
       "tagline": "Food, Dining & Kitchen POS",
-      "icon": "\ud83c\udf7d\ufe0f",
+      "icon": "🍽️",
       "item_label": "Menu Items",
       "order_type_default": "dine-in",
       "capabilities": {
@@ -91,7 +91,7 @@
       "id": "hardware",
       "name": "Hardware",
       "tagline": "Hardware, Building Materials & Tools POS",
-      "icon": "\ud83d\udd27",
+      "icon": "🔧",
       "item_label": "Hardware Items",
       "order_type_default": "walk-in",
       "capabilities": {
@@ -120,7 +120,7 @@
       "id": "boutique",
       "name": "Boutique / Cosmetics",
       "tagline": "Fashion, Beauty & Cosmetics POS",
-      "icon": "\ud83d\udc57",
+      "icon": "👗",
       "item_label": "Apparel & Beauty",
       "order_type_default": "walk-in",
       "capabilities": {
@@ -149,7 +149,7 @@
       "id": "bar",
       "name": "Bar / Nightclub",
       "tagline": "Bar, Lounge & Club POS",
-      "icon": "\ud83c\udf78",
+      "icon": "🍸",
       "item_label": "Drinks & Snacks",
       "order_type_default": "dine-in",
       "capabilities": {
@@ -178,7 +178,7 @@
       "id": "garage",
       "name": "Garage & Auto Spares",
       "tagline": "Auto Parts, Repairs & Workshop POS",
-      "icon": "\ud83d\ude97",
+      "icon": "🚗",
       "item_label": "Parts & Services",
       "order_type_default": "walk-in",
       "capabilities": {
@@ -200,6 +200,35 @@
           "walk-in",
           "service",
           "quote"
+        ]
+      }
+    },
+    "tech_accessories": {
+      "id": "tech_accessories",
+      "name": "Phone Accessories & Gadgets",
+      "tagline": "Covers, Earphones, Chargers & Everyday Tech POS",
+      "icon": "📱",
+      "item_label": "Accessories & Gadgets",
+      "order_type_default": "walk-in",
+      "capabilities": {
+        "barcode": true,
+        "stock_tracking": true,
+        "reorder_levels": true,
+        "suppliers": true,
+        "tables": false,
+        "waiters": false,
+        "kot": false,
+        "batches_expiry": false,
+        "decimal_qty": false,
+        "units_extended": false,
+        "quotations": false,
+        "wholesale_pricing": true,
+        "variants": true,
+        "order_notes": true,
+        "order_types": [
+          "walk-in",
+          "delivery",
+          "wholesale"
         ]
       }
     }
@@ -813,7 +842,7 @@
       ],
       "items": [
         {
-          "name": "Engine Oil 5W-30 \u00b7 4L",
+          "name": "Engine Oil 5W-30 · 4L",
           "category": "Oils & Lubricants",
           "price": 3500,
           "cost": 2600,
@@ -855,7 +884,7 @@
           "image_url": "/static/uploads/garage_brake_pads.jpg"
         },
         {
-          "name": "Spark Plugs \u00b7 Set of 4",
+          "name": "Spark Plugs · Set of 4",
           "category": "Engine Parts",
           "price": 1800,
           "cost": 1100,
@@ -869,7 +898,7 @@
           "image_url": "/static/uploads/garage_spark_plugs.jpg"
         },
         {
-          "name": "Car Battery \u00b7 12V 60Ah",
+          "name": "Car Battery · 12V 60Ah",
           "category": "Batteries & Electrical",
           "price": 9500,
           "cost": 7300,
@@ -883,7 +912,7 @@
           "image_url": "/static/uploads/garage_car_battery.jpg"
         },
         {
-          "name": "Passenger Tyre \u00b7 195/65 R15",
+          "name": "Passenger Tyre · 195/65 R15",
           "category": "Tyres & Wheels",
           "price": 6500,
           "cost": 4700,
@@ -923,6 +952,97 @@
           "color": "#183d35",
           "reorder_level": 0,
           "image_url": "/static/uploads/garage_engine_oil.jpg"
+        }
+      ]
+    },
+    "tech_accessories": {
+      "categories": [
+        "Earphones & Audio",
+        "Phone Covers",
+        "Chargers & Cables",
+        "Power Banks",
+        "Smart Watches",
+        "Bluetooth Speakers"
+      ],
+      "items": [
+        {
+          "category": "Earphones & Audio",
+          "name": "Wireless Earbuds Pro",
+          "price": 2499,
+          "cost": 1650,
+          "sku": "TECH-001",
+          "barcode": "2000000800011",
+          "stock": 18,
+          "unit": "pcs",
+          "reorder_level": 5,
+          "image_url": "/static/uploads/tech_wireless_earbuds.jpg",
+          "color": "#16a34a"
+        },
+        {
+          "category": "Phone Covers",
+          "name": "Premium Phone Cover",
+          "price": 799,
+          "cost": 350,
+          "sku": "TECH-002",
+          "barcode": "2000000800028",
+          "stock": 45,
+          "unit": "pcs",
+          "reorder_level": 10,
+          "image_url": "/static/uploads/tech_phone_cases.jpg",
+          "color": "#7c3aed",
+          "variants_json": "[{\"name\":\"iPhone / Navy\",\"size\":\"iPhone\",\"color\":\"Navy\",\"shade\":\"\",\"stock\":12,\"price_cents\":79900},{\"name\":\"Samsung / Clear\",\"size\":\"Samsung\",\"color\":\"Clear\",\"shade\":\"\",\"stock\":18,\"price_cents\":79900},{\"name\":\"Tecno / Black\",\"size\":\"Tecno\",\"color\":\"Black\",\"shade\":\"\",\"stock\":15,\"price_cents\":69900}]"
+        },
+        {
+          "category": "Chargers & Cables",
+          "name": "20W Fast Charger + Type-C Cable",
+          "price": 1299,
+          "cost": 780,
+          "sku": "TECH-003",
+          "barcode": "2000000800035",
+          "stock": 28,
+          "unit": "set",
+          "reorder_level": 7,
+          "image_url": "/static/uploads/tech_charging_bundle.jpg",
+          "color": "#2563eb"
+        },
+        {
+          "category": "Power Banks",
+          "name": "Slim Power Bank 10000mAh",
+          "price": 1999,
+          "cost": 1350,
+          "sku": "TECH-004",
+          "barcode": "2000000800042",
+          "stock": 14,
+          "unit": "pcs",
+          "reorder_level": 4,
+          "image_url": "/static/uploads/tech_charging_bundle.jpg",
+          "color": "#334155"
+        },
+        {
+          "category": "Smart Watches",
+          "name": "Smart Watch Series Fit",
+          "price": 2999,
+          "cost": 1900,
+          "sku": "TECH-005",
+          "barcode": "2000000800059",
+          "stock": 12,
+          "unit": "pcs",
+          "reorder_level": 3,
+          "image_url": "",
+          "color": "#0f766e"
+        },
+        {
+          "category": "Bluetooth Speakers",
+          "name": "Mini Bluetooth Speaker",
+          "price": 2199,
+          "cost": 1450,
+          "sku": "TECH-006",
+          "barcode": "2000000800066",
+          "stock": 16,
+          "unit": "pcs",
+          "reorder_level": 4,
+          "image_url": "",
+          "color": "#ea580c"
         }
       ]
     }
