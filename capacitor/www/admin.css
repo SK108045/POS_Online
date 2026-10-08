@@ -1410,3 +1410,46 @@ button:focus-visible, .nav-item:focus-visible, a:focus-visible { outline: 3px so
 .nav-item[data-section="promotions"] { --nav-symbol: var(--icon-tag); }
 .nav-item[data-section="etims"] { --nav-symbol: var(--icon-receipt); }
 .nav-item[data-section="pos"] { --nav-symbol: var(--icon-arrow); }
+
+/* Green-theme contrast audit — readable actions, page headers and forms. */
+.btn-primary,
+.btn-primary:hover {
+  background: var(--primary);
+  color: var(--primary-fg);
+}
+.btn-primary:hover {
+  background: var(--primary-dark);
+}
+/* Header button surfaces are otherwise forced to --panel by a generic rule. */
+.page-header .btn.btn-primary {
+  background: var(--primary);
+  color: var(--primary-fg);
+  border-color: var(--primary);
+}
+.page-header .btn.btn-primary:hover {
+  background: var(--primary-dark);
+  color: var(--primary-fg);
+  border-color: var(--primary-dark);
+}
+.page-header .btn.btn-ghost {
+  background: var(--panel);
+  color: var(--ink);
+}
+.form-label,
+.modal-box .form-group .form-label {
+  color: var(--ink);
+  font-size: 12.5px;
+  font-weight: 700;
+}
+.modal-box .form-input,
+.modal-box .form-select,
+.modal-box .form-textarea {
+  background: var(--surface-soft, var(--bg));
+  color: var(--ink);
+  border-color: var(--line-strong);
+}
+.modal-box .form-input::placeholder,
+.modal-box .form-textarea::placeholder {
+  color: var(--muted);
+  opacity: 1;
+}
