@@ -667,6 +667,7 @@ const LocalPOS = {
       const orders = await this.getShop('orders', [], btype);
       const order = orders.find(o => o.id === Number(body.order_id));
       if (!order) throw new Error('Sale not found');
+      if (body.status === 'paid') throw new Error('Payment status can only be set by a verified checkout.');
       order.status = body.status || order.status;
       order.updated_at = Math.floor(Date.now() / 1000);
       await this.saveOrders(orders, btype);
