@@ -163,6 +163,8 @@
       business_tagline: shop.is_custom ? `${shop.category_name} POS` : p.tagline,
       theme: localStorage.getItem('pos_theme') || 'light',
       phone: '',
+      email: '',
+      kra_pin: '',
       address: '',
       logo_url: '',
       receipt_header: `Welcome to ${shop.name}`,
