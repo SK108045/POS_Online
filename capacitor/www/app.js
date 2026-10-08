@@ -53,10 +53,15 @@ function showReceiptModal(order, isKot = false) {
       </tr>`
     ).join('');
 
-    const taxRate = parseFloat(state.settings?.tax_rate ?? 16.0);
-    const multiplier = 1.0 + (taxRate / 100.0);
-    const exclVat = taxRate > 0 ? (order.total_cents / multiplier) : order.total_cents;
-    const vatAmount = taxRate > 0 ? (order.total_cents - exclVat) : 0;
+    // Use VAT recorded with this transaction; never invent tax by re-splitting
+    // the gross total using today's settings. Legacy orders had tax_cents = 0.
+    const vatAmount = Math.max(0, Math.min(Number(order.total_cents || 0), Math.round(Number(order.tax_cents || 0))));
+    const exclVat = Number(order.total_cents || 0) - vatAmount;
+    const savedTaxRate = Number(order.tax_rate);
+    const taxRate = vatAmount > 0
+      ? (order.tax_rate != null && Number.isFinite(savedTaxRate) ? savedTaxRate
+        : (exclVat > 0 ? vatAmount / exclVat * 100 : 0))
+      : 0;
 
     bodyHtml = `
       <div class="receipt">
@@ -455,7 +460,8 @@ const LocalPOS = {
         business_name: prof.name + ' POS',
         business_tagline: prof.tagline || '',
         business_type: btype,
-        tax_rate: 16.0,
+        tax_rate: 0,
+        tax_rate_confirmed: false,
         currency: 'KES',
         receipt_header: 'Welcome to ' + prof.name,
         receipt_footer: 'Thank you for your business!\n------- END OF RECEIPT -------'
@@ -527,7 +533,13 @@ const LocalPOS = {
         await this.setShop('categories', cats, btype);
       }
 
-      const settings = await this.getShop('settings', {}, btype);
+      let settings = await this.getShop('settings', {}, btype);
+      // Previous versions assigned 16% automatically without tax verification.
+      // Migrate that unconfirmed legacy default once; preserve owner-confirmed rates.
+      if (Number(settings.tax_rate) === 16 && settings.tax_rate_confirmed !== true) {
+        settings = { ...settings, tax_rate: 0, tax_rate_confirmed: false };
+        await this.setShop('settings', settings, btype);
+      }
       const low = items.filter(i => tracksStock(i) && Number(i.stock_qty || 0) <= Number(i.reorder_level ?? 5)).length;
       return {
         user: { id: 1, username: 'terminal', full_name: 'POS Terminal', role: 'cashier', business_type: btype },
@@ -672,6 +684,17 @@ const LocalPOS = {
           if (tracksStock(product)) product.stock_qty = Math.max(0, Number(product.stock_qty || 0) - Number(oi.qty || 0));
         }
       }
+      // Item prices are tax-inclusive. Tax only exists if the owner explicitly
+      // selected a non-zero rate; it never increases the charged total.
+      const configuredSettings = await this.getShop('settings', {}, btype);
+      const configuredRate = Number(configuredSettings.tax_rate);
+      const taxRate = configuredSettings.tax_rate_confirmed === true &&
+        Number.isFinite(configuredRate) && configuredRate > 0 && configuredRate <= 100
+        ? configuredRate : 0;
+      order.tax_rate = taxRate;
+      order.tax_cents = taxRate > 0
+        ? Math.round(Number(order.total_cents || 0) * taxRate / (100 + taxRate))
+        : 0;
       order.status = 'paid';
       order.payment_method = body.payment_method || 'cash';
       order.payment_ref = body.payment_ref || (order.payment_method === 'cash' ? 'CASH' : `TXN-${Date.now()}`);
@@ -751,6 +774,14 @@ const LocalPOS = {
     if (cleanPath === '/api/settings' && method === 'POST') {
       const current = await this.getShop('settings', {}, btype);
       const settings = { ...current, ...body, business_type: btype };
+      if (Object.prototype.hasOwnProperty.call(body, 'tax_rate')) {
+        const rate = Number(body.tax_rate);
+        if (!Number.isFinite(rate) || rate < 0 || rate > 100) {
+          throw new Error('VAT rate must be between 0% and 100%.');
+        }
+        settings.tax_rate = rate;
+        settings.tax_rate_confirmed = true; // Only an owner's saved selection authorizes VAT.
+      }
       await this.setShop('settings', settings, btype);
       return { settings, profile: prof, capabilities: prof.capabilities || {} };
     }
@@ -3320,7 +3351,7 @@ async function renderSettings() {
           </div>
           <div class="form-group">
             <label style="display:block; font-size:13px; font-weight:600; margin-bottom:6px; color:var(--muted);">Tax Rate % (VAT)</label>
-            <input class="field" name="tax_rate" type="number" step="0.1" value="${state.settings?.tax_rate ?? 16.0}" style="width:100%;">
+            <input class="field" name="tax_rate" type="number" step="0.1" value="${state.settings?.tax_rate ?? 0}" style="width:100%;">
           </div>
           <div class="form-group" style="grid-column: 1 / -1;">
             <label style="display:block; font-size:13px; font-weight:600; margin-bottom:6px; color:var(--muted);">Receipt Footer Note</label>
