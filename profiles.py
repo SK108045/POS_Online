@@ -224,7 +224,8 @@ DEFAULT_SETTINGS = {
     "receipt_header": "Welcome to our store",
     "receipt_footer": "Thank you for your visit!\nPowered by POS System\n------- END OF RECEIPT -------",
     "currency": "KES",
-    "tax_rate": "16.0",
+    "tax_rate": "0.0",
+    "tax_rate_confirmed": "false",
 }
 
 
@@ -236,12 +237,25 @@ def get_settings(conn):
             settings[r["key"]] = r["value"]
     except Exception:
         pass
+    # 16% was a pre-filled assumption, not a verified tax assessment.
+    # On older shops, reset only the unconfirmed legacy default.
+    try:
+        assumed_legacy_rate = float(settings.get("tax_rate", 0)) == 16.0
+    except (TypeError, ValueError):
+        assumed_legacy_rate = False
+    confirmed = str(settings.get("tax_rate_confirmed", "false")).lower() in ("1", "true", "yes")
+    if assumed_legacy_rate and not confirmed:
+        settings["tax_rate"] = "0.0"
+
     if settings.get("business_type") not in PROFILES:
         settings["business_type"] = "bar"
     return settings
 
 
 def save_settings(conn, data):
+    if "tax_rate" in data:
+        # Only setting the VAT field explicitly can confirm a nonzero rate.
+        data = {**data, "tax_rate_confirmed": "true"}
     for k, v in data.items():
         if k in DEFAULT_SETTINGS or k in ("business_type", "business_name", "business_tagline", "theme", "phone", "address", "logo_url", "receipt_header", "receipt_footer", "currency", "tax_rate"):
             conn.execute(
