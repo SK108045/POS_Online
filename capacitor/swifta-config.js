@@ -2,14 +2,10 @@
 const fs=require('fs');
 const path=require('path');
 const crypto=require('crypto');
-const OVERRIDE=process.env.SWIFTA_LOCAL_KEY_PATH || path.join(__dirname,'../.swifta-api-key.local');
+// The same local file used for STK payments is edited in place.
+const KEY_FILE=path.join(__dirname,'../swifta.txt');
 function readKey() {
-  try {
-    const key=fs.readFileSync(OVERRIDE,'utf8').trim();
-    if(key) return key;
-  } catch(e) { if(e.code!=='ENOENT') throw e; }
-  return String(process.env.SWIFTA_API_KEY||'').trim() ||
-    fs.readFileSync(path.join(__dirname,'../swifta.txt'),'utf8').trim();
+  return fs.readFileSync(KEY_FILE,'utf8').trim();
 }
 function respond(res,status,obj) {
   res.writeHead(status,{'Content-Type':'application/json','Cache-Control':'no-store','X-Content-Type-Options':'nosniff'});
@@ -22,13 +18,15 @@ function authorized(req) {
   if(!/^(localhost|127\.0\.0\.1|\[::1\]):\d+$/.test(host)) return false;
   const origin=String(req.headers.origin||'');
   if(origin && origin!== 'http://'+host) return false;
-  const expected=String(process.env.SWIFTA_SETUP_TOKEN||'');
-  const actual=String(req.headers['x-swifta-setup-token']||'');
-  if(expected.length<20 || expected.length!==actual.length) return false;
-  return crypto.timingSafeEqual(Buffer.from(expected),Buffer.from(actual));
+  // Keep this password-free setup action local to the POS laptop/browser.
+  // Cross-site POSTs must not be able to modify a device's payment key.
+  const fetchSite=String(req.headers['sec-fetch-site']||'');
+  if(fetchSite && !['same-origin','none'].includes(fetchSite)) return false;
+  if(req.method==='POST' && origin !== 'http://'+host) return false;
+  return true;
 }
 async function handle(req,res) {
-  if(!authorized(req)) return respond(res,403,{ok:false,message:'Local setup token required. Open this page on the same computer as your POS server.'});
+  if(!authorized(req)) return respond(res,403,{ok:false,message:'This key can only be changed from the POS on this computer.'});
   if(req.method==='GET') {
     let configured=false;
     try { configured=Boolean(readKey()); } catch (_) {}
@@ -45,13 +43,13 @@ async function handle(req,res) {
     const data=JSON.parse(raw);
     const key=String(data.apiKey||'').trim();
     if(!/^[\x21-\x7e]{10,256}$/.test(key))return respond(res,400,{ok:false,message:'Enter a valid Swifta key without spaces (10–256 characters).'});
-    const tmp=OVERRIDE+'.'+crypto.randomBytes(8).toString('hex')+'.tmp';
+    const tmp=KEY_FILE+'.'+crypto.randomBytes(8).toString('hex')+'.tmp';
     try {
       fs.writeFileSync(tmp,key+'\n',{flag:'wx',mode:0o600});
-      fs.renameSync(tmp,OVERRIDE);
-      fs.chmodSync(OVERRIDE,0o600);
+      fs.renameSync(tmp,KEY_FILE);
+      fs.chmodSync(KEY_FILE,0o600);
     } finally { try{fs.unlinkSync(tmp)}catch(_){} }
-    return respond(res,200,{ok:true,message:'Swifta payment key updated on this computer.'});
+    return respond(res,200,{ok:true,message:'swifta.txt updated. The next STK payment will use this key.'});
   } catch(e) {
     return respond(res,400,{ok:false,message:'Could not save the key. Check the local server and file permissions.'});
   }
