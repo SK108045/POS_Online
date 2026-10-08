@@ -2260,3 +2260,8 @@ button:focus-visible, a:focus-visible { outline: 3px solid #87a857; outline-offs
   opacity: .6;
   cursor: not-allowed;
 }
+
+/* Explicit bright-green payment confirmation controls need dark text. */
+.primary[style*="#16a34a"] {
+  color: #071e14;
+}
