@@ -10,10 +10,14 @@ function validate(payload) {
 function normalize(result) {
   if (!result || typeof result!=='object' || Array.isArray(result)) return {status:false,message:'Swifta returned an unreadable response. Check payment status before retrying.'};
   const data=result.data && typeof result.data==='object'?result.data:result;
-  const code=data.ResponseCode ?? data.responseCode ?? result.ResponseCode ?? result.responseCode;
+  const mpesa=data.mpesaResponse && typeof data.mpesaResponse==='object'?data.mpesaResponse
+    : result.mpesaResponse && typeof result.mpesaResponse==='object'?result.mpesaResponse : {};
+  const meta=data.meta && typeof data.meta==='object'?data.meta
+    : result.meta && typeof result.meta==='object'?result.meta : {};
+  const code=mpesa.ResponseCode ?? mpesa.responseCode ?? data.ResponseCode ?? data.responseCode ?? result.ResponseCode ?? result.responseCode;
   const failed=result.success===false || result.status===false || data.success===false || data.status===false || (code!=null && String(code)!=='0');
   const accepted=!failed && (String(code)==='0' || result.success===true || result.status===true || ['success','accepted','pending'].includes(String(result.status).toLowerCase()));
   const message=data.errorMessage || result.errorMessage || result.error || data.ResponseDescription || result.message || data.message || data.CustomerMessage;
-  return {status:accepted,message:typeof message==='string'?message:(accepted?'STK request accepted':'Could not confirm STK acceptance. Check Swifta before retrying.'),data:{status:accepted?'pay_offline':'failed',reference:data.CheckoutRequestID || data.checkoutRequestId || data.checkout_request_id || data.reference || result.reference || ''}};
+  return {status:accepted,message:typeof message==='string'?message:(accepted?'STK request accepted':'Could not confirm STK acceptance. Check Swifta before retrying.'),data:{status:accepted?'pay_offline':'failed',reference:mpesa.CheckoutRequestID || mpesa.checkoutRequestId || meta.checkoutRequestId || data.CheckoutRequestID || data.checkoutRequestId || data.checkout_request_id || data.reference || result.reference || ''}};
 }
 module.exports={validate,normalize};
