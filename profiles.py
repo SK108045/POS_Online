@@ -219,6 +219,8 @@ DEFAULT_SETTINGS = {
     "business_tagline": "Bar & Club POS",
     "theme": "light",
     "phone": "0723056885",
+    "email": "",
+    "kra_pin": "",
     "address": "PJ CENTER-PARKLANDS",
     "logo_url": "",
     "receipt_header": "Welcome to our store",
