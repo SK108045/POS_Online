@@ -42,3 +42,27 @@ test('Sozuri partial failures are not reported as complete success',async()=>{
  const r=await provider.sms('/api/admin/sms/send',{message:'test',recipients:['0756205063','0713574168']});
  assert.equal(r.sent,1);assert.equal(r.failed,1);assert.equal(r.results[1].number,'254713574168');
 });
+
+
+test('native payment status only succeeds with real provider success and receipt',async()=>{
+  const requests=[];
+  let gateway={transaction:{status:'pending'}};
+  const provider=ctx.createNativeProviders({request:async request=>{
+    requests.push(request);
+    return {data:gateway};
+  }});
+  const id='ws_CO_191220191020363925';
+  assert.equal((await provider.paymentStatus({reference:id})).status,'pending');
+  gateway={transaction:{status:'success',amount:5350,mpesaReceiptNumber:'QJL12345678',phone:'254713574168'}};
+  const paid=await provider.paymentStatus({reference:id});
+  assert.equal(paid.status,'success');
+  assert.equal(paid.payment_ref,'QJL12345678');
+  assert.equal(paid.checkout_id,id);
+  assert.equal(paid.amount_cents,535000);
+  assert.equal(requests[0].url,'https://app.swifta.co.ke/poll/'+id);
+  assert.equal(requests[0].method,'GET');
+  gateway={transaction:{status:'success'}};
+  assert.equal((await provider.paymentStatus({reference:id})).status,'pending');
+  gateway={transaction:{status:'failed'}};
+  assert.equal((await provider.paymentStatus({reference:id})).status,'failed');
+});
