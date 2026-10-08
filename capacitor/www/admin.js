@@ -51,10 +51,18 @@ const LocalAdmin = {
   profile() { return ADMIN_PROFILES[this.type()] || ADMIN_PROFILES.retail; },
   async settings() {
     const p = this.profile();
-    return await this.get('settings', {
+    let settings = await this.get('settings', {
       business_name: p.name + ' POS', business_tagline: p.tagline, business_type: p.id,
-      currency: 'KES', tax_rate: 16, receipt_footer: 'Thank you for your business!'
+      currency: 'KES', tax_rate: 0, tax_rate_confirmed: false,
+      receipt_footer: 'Thank you for your business!'
     });
+    // Older stores inherited an assumed 16% rate; only preserve explicitly
+    // confirmed VAT. Do not touch products, order history, or sales totals.
+    if (Number(settings.tax_rate) === 16 && settings.tax_rate_confirmed !== true) {
+      settings = { ...settings, tax_rate: 0, tax_rate_confirmed: false };
+      await this.set('settings', settings);
+    }
+    return settings;
   },
   async handle(path, opts = {}) {
     const url = new URL(path, 'https://local.pos');
