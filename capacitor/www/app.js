@@ -1947,10 +1947,17 @@ async function showCheckoutModal(order) {
 
   const overlay = document.createElement('div');
   overlay.className = 'qty-popup-overlay';
-  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+  overlay.addEventListener('click', e => { if (e.target === overlay) { stopPaymentPoll(); overlay.remove(); } });
 
   let selectedMethod = 'mpesa';
   let savedPhone = '';
+  let paymentPollTimer = null;
+  let paymentPollGeneration = 0;
+  function stopPaymentPoll() {
+    paymentPollGeneration++;
+    if(paymentPollTimer) clearTimeout(paymentPollTimer);
+    paymentPollTimer = null;
+  }
 
   function renderFormView() {
     overlay.innerHTML = `
@@ -2027,7 +2034,7 @@ async function showCheckoutModal(order) {
       }
     });
 
-    cancelBtn.addEventListener('click', () => overlay.remove());
+    cancelBtn.addEventListener('click', () => { stopPaymentPoll(); overlay.remove(); });
 
     confirmBtn.addEventListener('click', async () => {
       msgEl.textContent = '';
@@ -2054,6 +2061,7 @@ async function showCheckoutModal(order) {
 
         const payResult = await triggerSwiftaMpesaCharge({
           reference: order.ticket_no || order.id,
+          orderId: order.id,
           amount: order.total_cents,
           phone: cleanPhone
         });
@@ -2095,121 +2103,110 @@ async function showCheckoutModal(order) {
     });
   }
 
+
   function renderProcessingView(cleanPhone, payResult = {}) {
+    stopPaymentPoll();
+    const generation = paymentPollGeneration;
+    const checkoutId = String(payResult?.data?.reference || '');
+    const attemptId = String(payResult?.data?.attempt_id || '');
     const displayPhone = formatMpesaDisplayPhone(cleanPhone);
-    const refCode = payResult?.data?.reference || '';
-    const apiNote = (!payResult.status && payResult.message) ? payResult.message : '';
-
+    if (!checkoutId) {
+      renderFormView();
+      const notice = overlay.querySelector('#checkoutMsg');
+      notice.textContent = 'Swifta did not return a checkout ID. Check Swifta before retrying.';
+      notice.style.color = 'var(--danger)';
+      return;
+    }
     overlay.innerHTML = `
-      <div class="qty-popup" style="max-width: 430px; text-align: center; padding: 24px;">
-        <div style="width: 64px; height: 64px; border-radius: 50%; background: rgba(37,99,235,0.08); color: #2563eb; display: flex; align-items: center; justify-content: center; font-size: 32px; margin: 0 auto 14px; position: relative;">
-          <span class="pos-pulse-icon">📲</span>
+      <div class="qty-popup" style="max-width:430px;text-align:center;padding:24px;">
+        <div style="font-size:32px;padding:9px;">📲</div>
+        <h3 style="margin:0 0 6px;font-size:20px;">Verifying M-Pesa</h3>
+        <p style="font-size:13px;color:var(--muted);line-height:1.5;">STK prompt sent to <strong>${displayPhone}</strong>. Enter the M-Pesa PIN on the customer's phone.</p>
+        <div style="background:var(--line);padding:14px;text-align:left;border-radius:10px;margin:16px 0;">
+          <div style="display:flex;justify-content:space-between;gap:9px;"><span>Amount Due</span><strong>${money(order.total_cents)}</strong></div>
+          <div style="display:flex;justify-content:space-between;gap:9px;margin-top:6px;font-size:12px;"><span>Order Ticket</span><strong>${order.ticket_no}</strong></div>
         </div>
-
-        <h3 style="margin: 0 0 6px 0; font-size: 20px;">Processing M-Pesa</h3>
-        <p style="margin: 0 0 16px 0; color: var(--muted); font-size: 14px;">
-          STK request accepted for <strong style="color: var(--ink); font-size: 15px;">${displayPhone}</strong>
-        </p>
-
-        <div style="background: var(--line, #f1f5f9); border-radius: 10px; padding: 14px; margin-bottom: 16px; text-align: left;">
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-            <span style="font-size: 13px; color: var(--muted);">Amount Due</span>
-            <span style="font-size: 19px; font-weight: 800; color: #16a34a;">${money(order.total_cents)}</span>
-          </div>
-          <div style="display: flex; justify-content: space-between; align-items: center; font-size: 12px; color: var(--muted);">
-            <span>Order Ticket</span>
-            <strong>${order.ticket_no}</strong>
-          </div>
-          ${refCode ? `
-            <div style="display: flex; justify-content: space-between; align-items: center; font-size: 11.5px; color: var(--muted); margin-top: 4px;">
-              <span>Swifta Ref</span>
-              <span style="font-family: monospace; font-weight: 600;">${refCode}</span>
-            </div>
-          ` : ''}
-        </div>
-
-        <div style="display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 13px; color: #2563eb; background: rgba(37,99,235,0.08); padding: 10px 14px; border-radius: 8px; margin-bottom: 16px;">
-          <span class="pos-spinner-ring"></span>
-          <span>Waiting for customer to enter PIN…</span>
-        </div>
-
-        ${apiNote ? `
-          <div style="font-size: 11.5px; color: #92400e; background: #fef3c7; padding: 8px 12px; border-radius: 6px; margin-bottom: 16px; text-align: left; line-height: 1.35;">
-            ℹ️ <strong>Swifta:</strong> ${apiNote}
-          </div>
-        ` : ''}
-
-        <p style="font-size: 12.5px; color: var(--muted); margin-bottom: 18px; line-height: 1.45;">
-          Once the customer has completed the payment on their phone, press <strong>Confirmed Payment</strong> below to complete the sale and generate the receipt.
-        </p>
-
-        <div style="display: grid; gap: 10px;">
-          <button type="button" class="primary" id="btnPaymentConfirmed" style="padding: 13px; font-size: 15px; font-weight: 700; background: #16a34a; border-color: #16a34a; width: 100%;">
-            ✓ Confirmed Payment
-          </button>
-          <div style="display: flex; gap: 10px;">
-            <button type="button" class="ghost" id="btnResendPrompt" style="flex: 1; font-size: 13px; padding: 9px;">
-              🔄 Resend Prompt
-            </button>
-            <button type="button" class="ghost" id="btnCancelProcessing" style="flex: 1; font-size: 13px; padding: 9px; color: var(--danger);">
-              Cancel / Back
-            </button>
-          </div>
+        <div id="paymentVerificationNotice" role="status" aria-live="polite" style="border-radius:9px;padding:12px;background:var(--surface-soft,var(--panel));font-size:13px;line-height:1.5;"><span class="pos-spinner-ring"></span> Checking Swifta for successful payment…</div>
+        <p style="font-size:12px;color:var(--muted);margin:15px 0;">The receipt opens automatically after verified payment. An accepted STK prompt is not proof of payment.</p>
+        <div style="display:grid;gap:9px;">
+          <button type="button" class="primary" id="btnCheckSwiftaStatus">Check Payment Status</button>
+          <button type="button" class="ghost" id="btnRetryFailedSwifta" style="display:none;">Send New STK Prompt</button>
+          <button type="button" class="ghost" id="btnCancelProcessing">Leave Pending / Back</button>
         </div>
       </div>
     `;
+    const notice = overlay.querySelector('#paymentVerificationNotice');
+    const checkBtn = overlay.querySelector('#btnCheckSwiftaStatus');
+    const retryBtn = overlay.querySelector('#btnRetryFailedSwifta');
+    const cancelBtn = overlay.querySelector('#btnCancelProcessing');
+    let polling = false, completed = false, failed = false, checks = 0;
 
-    const confirmedBtn = overlay.querySelector('#btnPaymentConfirmed');
-    const resendBtn = overlay.querySelector('#btnResendPrompt');
-    const cancelProcessingBtn = overlay.querySelector('#btnCancelProcessing');
-
-    confirmedBtn.addEventListener('click', async () => {
-      confirmedBtn.disabled = true;
-      confirmedBtn.innerHTML = `<span class="pos-spinner-ring" style="border-color:white; border-top-color:transparent; margin-right:6px;"></span> Generating Receipt…`;
-
+    async function checkPayment() {
+      if (polling || completed || failed || generation !== paymentPollGeneration) return;
+      polling = true;
       try {
-        const paidOrder = await api('/api/order/pay', {
-          method: 'POST',
-          body: {
-            order_id: order.id,
-            payment_method: 'mpesa',
-            payment_ref: cleanPhone,
-            customer_phone: cleanPhone
-          }
+        const verified = await getVerifiedSwiftaStatus({
+          checkoutId, attemptId, orderId: order.id, amountCents: order.total_cents,
+          shopId: String(window.OraforgeShops?.activeShopId() || localStorage.getItem('pos_active_business_type') || 'retail')
         });
-        overlay.remove();
-        showReceiptModal(paidOrder);
-        state.order = null;
-        renderTicket();
-        if (typeof toast === 'function') toast('M-Pesa payment confirmed! Receipt generated.', 'success');
+        if (generation !== paymentPollGeneration) return;
+        if (verified.status === 'success') {
+          completed = true;
+          notice.textContent = 'M-Pesa verified! Preparing your receipt…';
+          const paidOrder = await api('/api/order/pay', {
+            method:'POST',
+            body:{order_id:order.id,payment_method:'mpesa',payment_ref:verified.payment_ref,
+              customer_phone:cleanPhone,swifta_attempt_id:attemptId,swifta_checkout_id:checkoutId}
+          });
+          if (generation !== paymentPollGeneration) return;
+          stopPaymentPoll();
+          overlay.remove();
+          showReceiptModal(paidOrder);
+          state.order = null;
+          renderTicket();
+          toast('M-Pesa verified. Receipt generated automatically!', 'success');
+          return;
+        }
+        if (verified.status === 'failed') {
+          failed = true;
+          notice.style.color = 'var(--danger)';
+          notice.textContent = 'The M-Pesa payment failed or was cancelled. No paid receipt was generated.';
+          retryBtn.style.display = 'block';
+          return;
+        }
+        checks += 1;
+        notice.textContent = checks > 55
+          ? 'Still unverified. Check Swifta before sending another STK prompt.'
+          : 'Waiting for M-Pesa confirmation — checking automatically…';
       } catch (err) {
-        confirmedBtn.disabled = false;
-        confirmedBtn.textContent = '✓ Confirmed Payment';
-        if (typeof toast === 'function') toast('Error finalizing sale: ' + err.message, 'error');
+        if (generation !== paymentPollGeneration) return;
+        completed = false;
+        notice.textContent = 'Could not reach Swifta. Will retry automatically; this sale is still unpaid.';
+      } finally {
+        polling = false;
+        if (!completed && !failed && generation === paymentPollGeneration)
+          paymentPollTimer = setTimeout(checkPayment, checks > 55 ? 10000 : 3000);
       }
+    }
+    checkBtn.addEventListener('click', () => {
+      if (paymentPollTimer) clearTimeout(paymentPollTimer);
+      paymentPollTimer = null;
+      checkPayment();
     });
-
-    resendBtn.addEventListener('click', async () => {
-      resendBtn.disabled = true;
-      resendBtn.textContent = 'Sending…';
-      const retryResult = await triggerSwiftaMpesaCharge({
-        reference: order.ticket_no || order.id,
-        amount: order.total_cents,
-        phone: cleanPhone
+    retryBtn.addEventListener('click', async () => {
+      if (!failed) return;
+      retryBtn.disabled = true;
+      const next = await triggerSwiftaMpesaCharge({
+        reference:order.ticket_no||order.id,orderId:order.id,amount:order.total_cents,phone:cleanPhone
       });
-      resendBtn.disabled = false;
-      resendBtn.textContent = '🔄 Resend Prompt';
-      if (retryResult.status !== true || retryResult.data?.status === 'failed') {
-        if (typeof toast === 'function') toast('STK request failed: ' + (retryResult.data?.message || retryResult.message || 'Please retry.'), 'error');
-        return;
-      }
-      renderProcessingView(cleanPhone, retryResult);
-      if (typeof toast === 'function') toast('STK request accepted for ' + displayPhone, 'info');
+      if (next.status === true && next.data?.reference) renderProcessingView(cleanPhone,next);
+      else { notice.textContent = next.message || 'Unable to retry the STK prompt.'; retryBtn.disabled=false; }
     });
-
-    cancelProcessingBtn.addEventListener('click', () => {
+    cancelBtn.addEventListener('click', () => {
+      stopPaymentPoll();
       renderFormView();
     });
+    checkPayment();
   }
 
   document.body.appendChild(overlay);
