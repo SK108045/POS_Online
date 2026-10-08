@@ -1453,3 +1453,8 @@ button:focus-visible, .nav-item:focus-visible, a:focus-visible { outline: 3px so
   color: var(--muted);
   opacity: 1;
 }
+
+/* Inline-color success confirmation overrides the normal theme button color. */
+.btn-primary[style*="#16a34a"] {
+  color: #071e14 !important;
+}
