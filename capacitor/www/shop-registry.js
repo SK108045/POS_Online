@@ -252,8 +252,7 @@
   async function deleteShop(id, username, password) {
     const shop = await find(id);
     if (!shop) throw new Error('Shop was not found.');
-    if (String(shop.owner_username).toLowerCase() !== String(username || '').trim().toLowerCase()
-        || !await verifySecret(String(password || ''), shop.owner_password_hash)) {
+    if (!await verifyOwner(id, username, password)) {
       throw new Error('Incorrect owner username or password.');
     }
     return purgeShop(id);
@@ -292,15 +291,63 @@
     return shop;
   }
 
-  async function verifyStaffPin(shopId, pin) {
+  async function usersForShop(shopId) {
     const shop = await find(shopId);
-    return !!shop && await verifySecret(String(pin || ''), shop.staff_pin_hash);
+    if (!shop) return [];
+    // Older shops without a users collection retain their original credentials.
+    return await getGlobal(`shop:${shopId}:users`, [
+      { id: 1, username: 'terminal', full_name: 'POS Terminal', role: 'cashier', active: 1, password_hash: shop.staff_pin_hash },
+      { id: 2, username: shop.owner_username, full_name: shop.owner_name, role: 'manager', active: 1, password_hash: shop.owner_password_hash },
+    ]);
+  }
+
+  async function authenticateStaff(shopId, pin) {
+    for (const user of await usersForShop(shopId)) {
+      if (Number(user.active) === 1 && user.role !== 'manager' && await verifySecret(String(pin || ''), user.password_hash)) return user;
+    }
+    return null;
+  }
+
+  async function verifyStaffPin(shopId, pin) {
+    return !!await authenticateStaff(shopId, pin);
   }
 
   async function verifyOwner(shopId, username, password) {
-    const shop = await find(shopId);
-    if (!shop || String(shop.owner_username).toLowerCase() !== String(username || '').trim().toLowerCase()) return false;
-    return await verifySecret(String(password || ''), shop.owner_password_hash);
+    const user = (await usersForShop(shopId)).find(u => u.role === 'manager' && Number(u.active) === 1
+      && String(u.username).toLowerCase() === String(username || '').trim().toLowerCase());
+    return !!user && await verifySecret(String(password || ''), user.password_hash);
+  }
+
+  async function saveUser(shopId, body) {
+    const users = await usersForShop(shopId);
+    if (!await find(shopId)) throw new Error('Registered shop not found.');
+    const existing = body.id ? users.find(u => u.id === Number(body.id)) : null;
+    if (body.id && !existing) throw new Error('Staff account not found.');
+    const user = { ...existing, id: existing?.id || Math.max(0, ...users.map(u => Number(u.id))) + 1,
+      username: String(body.username || existing?.username || '').trim(),
+      full_name: String(body.full_name || existing?.full_name || '').trim(),
+      role: body.role || existing?.role || 'cashier', active: Number(body.active ?? existing?.active ?? 1) };
+    if (!/^[A-Za-z0-9_.-]{3,40}$/.test(user.username) || !user.full_name) throw new Error('Enter a valid username and full name.');
+    if (!['staff', 'cashier', 'manager'].includes(user.role) || ![0, 1].includes(user.active)) throw new Error('Invalid role or status.');
+    if (users.some(u => u.id !== user.id && u.username.toLowerCase() === user.username.toLowerCase())) throw new Error('Username already exists.');
+    if (user.id === 2 && (user.role !== 'manager' || user.active !== 1)) throw new Error('Keep the shop owner active as a manager.');
+    const password = String(body.password || '');
+    if (password) {
+      if (user.role === 'manager' ? password.length < 8 || password.length > 128 : !/^\d{4,6}$/.test(password)) {
+        throw new Error(user.role === 'manager' ? 'Manager passwords need 8–128 characters.' : 'Staff PINs must contain 4–6 digits.');
+      }
+      if (user.role !== 'manager') {
+        for (const other of users) {
+          if (other.id !== user.id && other.role !== 'manager' && await verifySecret(password, other.password_hash)) throw new Error('Choose a different PIN; another staff member uses this PIN.');
+        }
+      }
+      user.password_hash = await hashSecret(password);
+    } else if (!existing?.password_hash || existing.role !== user.role) {
+      throw new Error('Enter a password / PIN for this account or role change.');
+    }
+    const updated = existing ? users.map(u => u.id === user.id ? user : u) : [...users, user];
+    await setGlobal(`shop:${shopId}:users`, updated);
+    return updated;
   }
 
   window.OraforgeShops = {
@@ -317,6 +364,9 @@
     activeShopId,
     activeMeta,
     verifyStaffPin,
+    authenticateStaff,
+    usersForShop,
+    saveUser,
     verifyOwner,
     getGlobal,
     setGlobal,

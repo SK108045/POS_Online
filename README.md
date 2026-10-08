@@ -111,11 +111,13 @@ The Android build is offline-first. The Capacitor WebView bundles the POS UI loc
 - API key files and image files referenced by URL/path are not embedded in the export. Retain the application files (including uploads) separately. Images stored inside database records remain included.
 - This workflow is wired into `capacitor/www` used by `start-apk-browser.sh`. The separate legacy Flask interface is not changed by these features.
 
-### Daily automatic backups on PC
+### Automatic backups on PC
 
-The Node preview server now enables one automatic backup per local calendar day, from either the POS or Admin page. While a page is open, it checks every minute and on window focus. If the application was closed, it catches up on the next opening after shop data is available. It cannot read browser data while the browser is closed.
+While a POS or Admin page is open, changed data is backed up every minute, on focus, and after completed checkout. Unchanged snapshots are skipped. The browser cannot back up its data while closed.
 
-Files are written atomically to `backups/daily-YYYY-MM-DD.json` in the project root, outside the publicly served web folder and excluded from Git. Existing daily copies are retained; there is no automatic deletion. Restore these files through Settings → Backup & restore. Settings displays the most recent success or a retryable error. Restart `start-apk-browser.sh` after installing this change. The APK does not load this scheduler; automatic mobile backups remain unimplemented.
+The project-root `backups/` folder contains `latest.json`, the most recent snapshot for each day as `daily-YYYY-MM-DD.json`, and the 60 most recent timestamped `auto-*.json` versions. Daily files are retained indefinitely. Writes use temporary files and atomic rename. Restore any of these through Settings → Backup & restore. Copy backups to a USB drive or another computer to protect against drive failure; separate image/configuration files must also be retained. Restart the local server after updating the backup code. The APK does not load this PC scheduler.
+
+Registered-shop Staff changes now control login: active staff/cashiers use a unique 4–6 digit PIN; active managers use a password of 8–128 characters. Changing credentials invalidates the old ones on the next login; disabling staff prevents their next login. Already-open sessions are not forcibly signed out. Blank passwords on an existing unchanged role preserve the current credential. The original owner account must remain an active manager.
 
 
 ### Garage & Auto Spares profile

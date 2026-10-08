@@ -28,6 +28,8 @@
     if (!shopId) return;
     const shop = await window.OraforgeShops.find(shopId);
     if (!shop) return;
+    const owner = (await window.OraforgeShops.usersForShop(shopId)).find(u => u.id === 2);
+    if (owner) shop.owner_username = owner.username;
 
     const overlay = document.querySelector('#adminLoginOverlay');
     if (!overlay) return;

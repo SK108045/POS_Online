@@ -30,43 +30,44 @@ function validate(data) {
 }
 function createStore(directory = BACKUP_DIR, clock = () => new Date()) {
   let pending = Promise.resolve();
-  async function status() {
-    let files;
+  async function latest() {
     try {
-      files = (await fs.readdir(directory))
-        .filter((n) => /^daily-\d{4}-\d{2}-\d{2}\.json$/.test(n))
-        .sort();
+      const data = JSON.parse(await fs.readFile(path.join(directory, "latest.json"), "utf8"));
+      validate(data);
+      return data;
     } catch (err) {
-      if (err.code !== "ENOENT") throw err;
-      files = [];
+      if (err.code === "ENOENT" || err instanceof SyntaxError || err.message.startsWith("Invalid backup")) return null;
+      throw err;
     }
-    const latest = files.at(-1);
-    return {
-      due: !files.includes(`daily-${day(clock())}.json`),
-      last_backup: latest
-        ? (await fs.stat(path.join(directory, latest))).mtime.toISOString()
-        : null,
-      folder: "backups",
-      file: latest || null,
-    };
+  }
+  async function status() {
+    const data = await latest();
+    return { due: !data || clock().getTime() - Date.parse(data.created_at) >= 60000,
+      last_backup: data?.created_at || null, folder: "backups", file: data ? "latest.json" : null };
+  }
+  async function atomicWrite(name, contents) {
+    const file = path.join(directory, name), temp = file + ".tmp";
+    try {
+      await fs.writeFile(temp, contents, { mode: 0o600 });
+      await fs.rename(temp, file);
+    } finally { await fs.unlink(temp).catch(() => {}); }
   }
   function save(data) {
     const job = pending.then(async () => {
       validate(data);
-      if (!(await status()).due) return status();
+      const previous = await latest(), now = clock();
+      const same = previous && JSON.stringify(previous.records) === JSON.stringify(data.records)
+        && JSON.stringify(previous.preferences) === JSON.stringify(data.preferences);
+      if (same && day(new Date(previous.created_at)) === day(now)) return status();
       await fs.mkdir(directory, { recursive: true });
-      const file = path.join(directory, `daily-${day(clock())}.json`),
-        temp = file + ".tmp";
-      try {
-        await fs.writeFile(
-          temp,
-          JSON.stringify({ ...data, created_at: clock().toISOString() }),
-          { mode: 0o600 },
-        );
-        await fs.rename(temp, file);
-      } finally {
-        await fs.unlink(temp).catch(() => {});
-      }
+      const contents = JSON.stringify({ ...data, created_at: now.toISOString() });
+      // Keep the latest snapshot, each day's closing snapshot, and 60 recent versions.
+      const stamp = now.toISOString().replace(/[:.]/g, "-");
+      await atomicWrite(`auto-${stamp}.json`, contents);
+      await atomicWrite(`daily-${day(now)}.json`, contents);
+      await atomicWrite("latest.json", contents);
+      const versions = (await fs.readdir(directory)).filter(n => /^auto-\d{4}-\d{2}-\d{2}T[\d-]+Z\.json$/.test(n)).sort();
+      await Promise.all(versions.slice(0, -60).map(n => fs.unlink(path.join(directory, n))));
       return status();
     });
     pending = job.catch(() => {});

@@ -150,6 +150,7 @@ const LocalAdmin = {
       ]);
     }
     if (cleanPath === '/api/admin/user' && method === 'POST') {
+      if (window.OraforgeShops?.activeShopId()) return window.OraforgeShops.saveUser(window.OraforgeShops.activeShopId(), body);
       const users = await this.get('users', [
         { id:1, username:'terminal', full_name:'POS Terminal', role:'cashier', active:1 },
         { id:2, username:'admin', full_name:'The Owner', role:'manager', active:1 }
@@ -830,7 +831,7 @@ function openUserModal(user) {
       </div>
       <div class="form-group">
         <label class="form-label">${isNew ? 'Password / PIN' : 'New Password (leave blank to keep)'}</label>
-        <input class="form-input" id="mPassword" type="password" placeholder="${isNew?'Default: 1234 or admin123':'Leave blank to keep current'}">
+        <input class="form-input" id="mPassword" type="password" placeholder="${isNew?'Staff: 4–6 digits; manager: 8+ characters':'Leave blank to keep current'}">
       </div>
     </div>
     <div class="modal-footer">

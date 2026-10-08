@@ -379,8 +379,9 @@
       error.style.display = 'none';
       try {
         if (selectedShopId) {
-          const ok = await window.OraforgeShops.verifyStaffPin(selectedShopId, pin);
-          if (!ok) throw new Error('Invalid staff PIN for this shop.');
+          const staff = await window.OraforgeShops.authenticateStaff(selectedShopId, pin);
+          if (!staff) throw new Error('Invalid staff PIN or inactive account.');
+          localStorage.setItem('pos_employee_id', String(staff.id));
           const shop = shopsCache.find(s => s.id === selectedShopId) || await window.OraforgeShops.find(selectedShopId);
           await window.OraforgeShops.activate(shop);
           await LocalPOS.switchProfile(shop.business_type);

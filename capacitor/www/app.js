@@ -572,7 +572,9 @@ const LocalPOS = {
         profile: prof,
         profiles: LOCAL_PROFILES_DATA.profiles,
         capabilities: prof.capabilities || {},
-        employees: [{ id: 1, name: 'POS Terminal' }, { id: 2, name: 'The Owner' }],
+        employees: window.OraforgeShops?.activeShopId()
+          ? (await window.OraforgeShops.usersForShop(window.OraforgeShops.activeShopId())).filter(u => Number(u.active) === 1).map(u => ({ id: u.id, name: u.full_name }))
+          : [{ id: 1, name: 'POS Terminal' }, { id: 2, name: 'The Owner' }],
         menu: { categories: cats, items },
         tables: [{ id: 1, name: 'Counter 1', seats: 4 }, { id: 2, name: 'Counter 2', seats: 4 }],
         alerts: { expiry: 0, low_stock: low }
@@ -591,7 +593,9 @@ const LocalPOS = {
         table_id: body.table_id || null,
         table_name: body.table_id ? `Counter ${body.table_id}` : '',
         employee_id: Number(body.employee_id || 1),
-        employee_name: Number(body.employee_id || 1) === 2 ? 'The Owner' : 'POS Terminal',
+        employee_name: window.OraforgeShops?.activeShopId()
+          ? (await window.OraforgeShops.usersForShop(window.OraforgeShops.activeShopId())).find(u => u.id === Number(body.employee_id || 1))?.full_name || 'POS Terminal'
+          : Number(body.employee_id || 1) === 2 ? 'The Owner' : 'POS Terminal',
         pricing_tier: body.pricing_tier || 'retail',
         is_quote: body.is_quote ? 1 : 0,
         notes: body.notes || '',
@@ -749,6 +753,7 @@ const LocalPOS = {
       await this.saveOrders(orders, btype);
       await this.setShop('items', products, btype);
       await this.setShop('customers', customers, btype);
+      window.OraforgeAutoBackup?.check();
       return order;
     }
 
@@ -828,7 +833,7 @@ const LocalPOS = {
     }
 
     if (cleanPath === '/api/seed-samples' && method === 'POST') {
-      await this.seedShop(btype, true);
+      throw new Error('Sample catalogue replacement is disabled.');
       return { ok: true, menu: { categories: await this.getShop('categories', [], btype), items: await this.getShop('items', [], btype) } };
     }
 
@@ -3432,9 +3437,6 @@ async function renderSettings() {
         </div>
 
         <div style="display:flex; justify-content:space-between; align-items:center; margin-top:24px; padding-top:16px; border-top:1px solid var(--line); flex-wrap:wrap; gap:12px;">
-          <button type="button" id="seedCatalogBtn" class="secondary" style="display:flex; align-items:center; gap:8px; padding:10px 16px;">
-            <span>📦</span> Re-load Sample Products for ${state.profile?.name || activeType}
-          </button>
           <button type="submit" class="primary" id="saveSettingsBtn" style="padding:10px 24px; font-weight:700;">
             Save Store Info
           </button>
@@ -3459,25 +3461,6 @@ async function renderSettings() {
 
   qs('#themeCardLight', root)?.addEventListener('click', () => setTheme('light'));
   qs('#themeCardDark', root)?.addEventListener('click', () => setTheme('dark'));
-
-  // Sample catalog loader
-  qs('#seedCatalogBtn', root)?.addEventListener('click', async () => {
-    const selectedType = activeType;
-    const profileName = state.profiles[selectedType]?.name || selectedType;
-    if (!confirm(`Reload sample products with images for ${profileName}? (Existing items will NOT be deleted).`)) return;
-
-    try {
-      const res = await api('/api/seed-samples', {
-        method: 'POST',
-        body: { profile_id: selectedType }
-      });
-      toast(`Loaded sample products for ${profileName}!`, 'success');
-      await bootstrap();
-      await renderSettings();
-    } catch(err) {
-      toast('Failed to load sample products: ' + err.message, 'error');
-    }
-  });
 
   // Settings form submission
   qs('#settingsForm', root)?.addEventListener('submit', async e => {
