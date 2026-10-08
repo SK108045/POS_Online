@@ -306,7 +306,7 @@ function adminSalesDrawRows() {
       <td>${receiptEscape(adminSalesTime(o.paid_at || o.updated_at || o.created_at))}</td>
       <td>${receiptEscape(o.employee_name || 'POS Terminal')}</td>
       <td>
-        <span class="admin-sales-payment ${String(o.payment_method || '').toLowerCase() === 'mpesa' ? 'mpesa' : 'cash'}">${receiptEscape(String(o.payment_method||'cash').toLowerCase()==='mpesa'?'M-Pesa':(o.payment_method||'cash').toUpperCase())}</span>
+        <span class="admin-sales-payment ${String(o.payment_method || '').toLowerCase() === 'mpesa' ? 'mpesa' : 'cash'}">${receiptEscape(String(o.payment_method||'cash').toLowerCase()==='mpesa'?'M-Pesa':String(o.payment_method||'cash').toLowerCase()==='cash'?'Cash':String(o.payment_method).toUpperCase())}</span>
         ${o.payment_ref ? `<div class="admin-sales-sub">${receiptEscape(o.payment_ref)}</div>` : ''}
       </td>
       <td class="admin-sales-amount">${money(o.total_cents || 0)}</td>
