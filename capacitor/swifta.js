@@ -4,6 +4,7 @@ const path = require('path');
 const https = require('https');
 const crypto = require('crypto');
 const {validate, normalize} = require('./swifta-contract');
+const {readKey} = require('./swifta-config');
 
 const STORE_PATH = process.env.SWIFTA_ATTEMPTS_PATH || path.join(__dirname, '../data/swifta-attempts.json');
 const BASE = 'https://app.swifta.co.ke';
@@ -108,7 +109,7 @@ async function handle(req,res) {
     if(!/^ORAFORGE-[\w.-]{1,80}$/.test(payload.accountReference)) return reply(res,400,{status:false,message:'Invalid POS payment reference.'});
     const amountCents=normalizedAmountCents(payload.amount);
     if(!Number.isSafeInteger(amountCents)||amountCents<=0||Math.abs(payload.amount*100-amountCents)>0.001) return reply(res,400,{status:false,message:'Invalid payment amount.'});
-    const key=(process.env.SWIFTA_API_KEY||fs.readFileSync(path.join(__dirname,'../swifta.txt'),'utf8')).trim();
+    const key=readKey();
     if(!key) throw Error('Swifta credentials are not configured.');
     // Prevent repeated clicks generating multiple prompts for the same order.
     const shopId=String(input.shop_id||'');
