@@ -56,9 +56,8 @@
     try {await refresh()}catch(err){rows.textContent=err.message || 'Could not load shops.'}
   }
   function showSwifta() {
-    const node=shell('Update Swifta API key','<p>For the local Ubuntu POS server. Your key is never shown or stored in the browser. Enter the local setup token configured on the server to authorize this change.</p>'+
+    const node=shell('Update Swifta API key','<p>Paste the replacement key. Saving will overwrite the existing swifta.txt file on this Ubuntu POS computer and immediately use it for new M-Pesa STK requests.</p>'+
       '<form id="swiftaMaintenanceForm" autocomplete="off">'+
-      '<label>Local setup token<input type="password" name="token" required minlength="20" autocomplete="off" placeholder="SWIFTA_SETUP_TOKEN"></label>'+
       '<label>New Swifta API key<input type="password" name="apiKey" required minlength="10" maxlength="256" autocomplete="new-password" placeholder="Paste new key"></label>'+
       '<p id="swiftaMaintenanceNote" role="status"></p>'+
       '<div class="shop-delete-actions"><button type="button" class="shop-delete-cancel" id="swiftaExit">Cancel</button>'+
@@ -72,17 +71,17 @@
       try {
         const response=await fetch('/api/local/swifta-key',{
           method:'POST',cache:'no-store',
-          headers:{'Content-Type':'application/json','X-Swifta-Setup-Token':form.elements.token.value},
+          headers:{'Content-Type':'application/json'},
           body:JSON.stringify({apiKey:form.elements.apiKey.value})
         });
         const result=await response.json();
         if(!response.ok||!result.ok)throw Error(result.message || 'Key update failed.');
         form.elements.apiKey.value='';
-        note.textContent='New Swifta key saved. Future STK requests will use it.';
+        note.textContent='swifta.txt overwritten successfully. Future STK requests will use the new key.';
       }catch(err){note.textContent=err.message || 'Could not update Swifta key.'}
       finally{button.disabled=false}
     };
-    form.elements.token.focus();
+    form.elements.apiKey.focus();
   }
   function run(code) {
     if(code==='0713969647'){showShops();return true}
