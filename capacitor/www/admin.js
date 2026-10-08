@@ -281,6 +281,258 @@ function navigate(section) {
   if (window.innerWidth <= 860) document.querySelector('.admin-shell')?.classList.add('collapsed');
 }
 
+// ── SALES HISTORY (same transaction records and receipt template as POS) ──
+
+const moneyRaw = cents => (Number(cents || 0) / 100).toFixed(2);
+let adminSalesSearch = '';
+let adminSalesRows = [];
+
+function adminSalesTime(ts) {
+  const n = Number(ts);
+  if (!Number.isFinite(n) || n <= 0) return '—';
+  return new Date(n * 1000).toLocaleString('en-GB', {day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'});
+}
+
+function adminSalesDrawRows() {
+  const body = document.querySelector('#adminSalesTableBody');
+  const count = document.querySelector('#adminSalesFilterCount');
+  if (!body) return;
+  const query = adminSalesSearch.toLocaleLowerCase().trim();
+  const visible = adminSalesRows.filter(o => [o.ticket_no,o.customer_name,o.employee_name,o.payment_method,o.payment_ref].map(v=>String(v||'')).join(' ').toLocaleLowerCase().includes(query));
+  if (count) count.textContent = query ? `${visible.length} of ${adminSalesRows.length} paid sales` : `${adminSalesRows.length} paid sales`;
+  body.innerHTML = visible.map(o => `
+    <tr class="admin-sales-row">
+      <td class="admin-sales-ref">${receiptEscape(o.ticket_no || o.id || '—')}</td>
+      <td>${receiptEscape(adminSalesTime(o.paid_at || o.updated_at || o.created_at))}</td>
+      <td>${receiptEscape(o.employee_name || 'POS Terminal')}</td>
+      <td>
+        <span class="admin-sales-payment ${String(o.payment_method || '').toLowerCase() === 'mpesa' ? 'mpesa' : 'cash'}">${receiptEscape(String(o.payment_method||'cash').toLowerCase()==='mpesa'?'M-Pesa':(o.payment_method||'cash').toUpperCase())}</span>
+        ${o.payment_ref ? `<div class="admin-sales-sub">${receiptEscape(o.payment_ref)}</div>` : ''}
+      </td>
+      <td class="admin-sales-amount">${money(o.total_cents || 0)}</td>
+      <td class="admin-sales-action"><button type="button" class="btn btn-ghost admin-sales-view" data-order-id="${Number(o.id)}" aria-label="View receipt ${receiptEscape(o.ticket_no || o.id)}">View Receipt</button></td>
+    </tr>`).join('') || `<tr><td colspan="6" class="admin-sales-empty">${query ? 'No sales match your search.' : 'No paid sales yet. Completed checkouts will appear here.'}</td></tr>`;
+}
+
+async function renderAdminSales() {
+  const root = document.querySelector('#sec-sales');
+  if (!root) return;
+  root.innerHTML = '<div class="admin-sales-loading" role="status">Loading sales history…</div>';
+  try {
+    const orders = await api('/api/orders?status=paid');
+    if (!Array.isArray(orders)) throw new Error('Unable to read the shop sales history.');
+    adminSalesRows = orders.filter(o=>o.status==='paid').sort((a,b)=>
+      Number(b.paid_at||b.updated_at||b.created_at||0) - Number(a.paid_at||a.updated_at||a.created_at||0));
+    const total = adminSalesRows.reduce((sum,o)=>sum+Number(o.total_cents||0),0);
+    root.innerHTML = `
+      <header class="page-header admin-sales-header">
+        <div class="page-header-left">
+          <h1>Sales History</h1>
+          <p>Paid transactions from ${receiptEscape(state.settings?.business_name || state.profile?.name || 'this shop')}. Select a receipt to view or print.</p>
+        </div>
+        <button type="button" id="adminSalesRefresh" class="btn btn-ghost">↻ Refresh</button>
+      </header>
+      <div class="admin-sales-overview">
+        <div class="admin-sales-summary"><span>Completed Sales</span><strong>${fmt(adminSalesRows.length)}</strong></div>
+        <div class="admin-sales-summary"><span>Total Collected</span><strong>${money(total)}</strong></div>
+      </div>
+      <div class="admin-sales-panel">
+        <div class="admin-sales-toolbar">
+          <div><h2>Sales Records</h2><p id="adminSalesFilterCount"></p></div>
+          <label class="admin-sales-search-label">
+            <span class="sr-only">Search sales</span>
+            <input type="search" id="adminSalesSearch" class="form-input" placeholder="Search receipt, cashier, payment…" value="${receiptEscape(adminSalesSearch)}" autocomplete="off">
+          </label>
+        </div>
+        <div class="admin-sales-scroll">
+          <table class="admin-sales-table">
+            <thead><tr>
+              <th>Receipt No.</th><th>Date</th><th>Cashier</th><th>Payment</th>
+              <th class="admin-sales-right">Total</th><th class="admin-sales-right">Action</th>
+            </tr></thead>
+            <tbody id="adminSalesTableBody"></tbody>
+          </table>
+        </div>
+      </div>`;
+    root.querySelector('#adminSalesRefresh').addEventListener('click', renderAdminSales);
+    root.querySelector('#adminSalesSearch').addEventListener('input', e => {
+      adminSalesSearch = e.target.value;
+      adminSalesDrawRows();
+    });
+    root.querySelector('#adminSalesTableBody').addEventListener('click', async e => {
+      const button = e.target.closest('[data-order-id]');
+      if (!button) return;
+      const id = Number(button.dataset.orderId);
+      if (!Number.isSafeInteger(id) || id<=0) return;
+      button.disabled = true;
+      try {
+        const order = await api(`/api/order?id=${id}`);
+        if (order.status !== 'paid') throw new Error('Only completed sales have receipts here.');
+        showAdminSalesReceipt(order);
+      } catch (err) {
+        toast(err.message || 'Could not load the receipt.', 'error');
+      } finally { button.disabled = false; }
+    });
+    adminSalesDrawRows();
+  } catch (err) {
+    root.innerHTML = '<div class="empty-state"><p>Unable to load sales history.</p><button type="button" class="btn btn-ghost" id="adminSalesRetry">Try Again</button></div>';
+    root.querySelector('#adminSalesRetry')?.addEventListener('click',renderAdminSales);
+    toast(err.message || 'Failed to load sales.', 'error');
+  }
+}
+
+const receiptEscape = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;'}[c]));
+function showAdminSalesReceipt(order, isKot = false) {
+  document.getElementById('receiptModal')?.remove();
+
+  const bname = state.settings?.business_name || 'POS SYSTEM';
+  const baddr = state.settings?.address || '';
+  const bphone = state.settings?.phone || '';
+  const bEmail = state.settings?.email || '';
+  const bPin = state.settings?.kra_pin || '';
+  const bfooter = state.settings?.receipt_footer || 'Thank you for your business!\n------- END OF RECEIPT -------';
+  const isQuote = Boolean(order.is_quote || order.order_type === 'quote');
+
+  let bodyHtml = '';
+  if (isKot) {
+    const itemRows = (order.items || []).map(item =>
+      `<tr>
+        <td>
+          <strong>${item.qty} x ${item.name}</strong>
+          ${item.variant_info ? `<br><small style="color:#666">[${item.variant_info}]</small>` : ''}
+          ${item.note ? `<br><small style="color:#2563eb">* ${item.note}</small>` : ''}
+        </td>
+      </tr>`
+    ).join('');
+
+    bodyHtml = `
+      <div class="receipt">
+        <h1 style="font-size:18px;">*** KITCHEN / BAR ORDER ***</h1>
+        <p>Ticket: <strong>#${order.ticket_no}</strong></p>
+        <div style="border-top: 2px dashed var(--line); margin: 10px 0;"></div>
+        <div class="receipt-line"><span>Table / Tab</span><strong>${order.table_name || 'Counter'}</strong></div>
+        <div class="receipt-line"><span>Server</span><strong>${order.employee_name || '-'}</strong></div>
+        <div class="receipt-line"><span>Time</span><strong>${new Date().toLocaleTimeString()}</strong></div>
+        ${order.notes ? `<div class="receipt-line"><span>Note</span><strong>${order.notes}</strong></div>` : ''}
+        <div style="border-top: 2px dashed var(--line); margin: 10px 0;"></div>
+        <table><tbody>${itemRows}</tbody></table>
+        <div style="border-top: 2px dashed var(--line); margin: 10px 0;"></div>
+        <button id="receiptPrintBtn">Print KOT</button>
+      </div>
+    `;
+  } else {
+    const itemRows = (order.items || []).map(item => {
+      const qty = Number(item.qty ?? 1);
+      const total = Number(item.line_total_cents || 0);
+      const unit = Number.isFinite(Number(item.unit_price_cents))
+        ? Number(item.unit_price_cents) : (qty ? total / qty : 0);
+      const notes = [
+        item.variant_info && `<small>${receiptEscape(item.variant_info)}</small>`,
+        item.batch_no && `<small>Batch: ${receiptEscape(item.batch_no)}</small>`,
+        item.note && `<small>${receiptEscape(item.note)}</small>`
+      ].filter(Boolean).join(' ');
+      return `
+        <tr class="receipt-item-name"><td colspan="3">${receiptEscape(item.name)} ${notes}</td></tr>
+        <tr class="receipt-item-values">
+          <td>${receiptEscape(qty)}</td><td>${moneyRaw(unit)}</td><td>${moneyRaw(total)}</td>
+        </tr>`;
+    }).join('');
+    // Do not infer VAT from today's settings. Respect the tax recorded with this sale.
+    const grossCents = Number(order.total_cents || 0);
+    const vatAmount = Math.max(0, Math.min(grossCents, Math.round(Number(order.tax_cents || 0))));
+    const exclVat = grossCents - vatAmount;
+    const savedRate = Number(order.tax_rate);
+    const taxRate = vatAmount > 0
+      ? (order.tax_rate != null && Number.isFinite(savedRate) ? savedRate
+        : (exclVat > 0 ? vatAmount / exclVat * 100 : 0)) : 0;
+    const discountCents = Math.max(0, Number(order.discount_cents || 0));
+    const subtotalCents = Number(order.subtotal_cents ?? (grossCents + discountCents));
+    const saleStamp = Number(order.created_at || order.paid_at || 0);
+    const created = saleStamp > 0 ? new Date(saleStamp * 1000) : new Date();
+    const printedAt = new Date().toLocaleTimeString('en-KE', {hour:'2-digit', minute:'2-digit', second:'2-digit', hour12:true});
+    const contact = [
+      baddr && `<p class="receipt-contact">Address: ${receiptEscape(baddr)}</p>`,
+      bphone && `<p class="receipt-contact">Mobile: ${receiptEscape(bphone)}</p>`,
+      bEmail && `<p class="receipt-contact">Email: ${receiptEscape(bEmail)}</p>`,
+      bPin && `<p class="receipt-contact">KRA PIN: ${receiptEscape(bPin)}</p>`
+    ].filter(Boolean).join('');
+    bodyHtml = `
+      <div class="receipt sales-receipt">
+        <header class="receipt-business-header">
+          <h1 class="receipt-business-name">${receiptEscape(bname)}</h1>
+          ${contact}
+          <p class="receipt-kind">${isQuote ? 'QUOTATION / ESTIMATE' : 'SALES RECEIPT'}</p>
+          <h2 class="receipt-sale-title">${isQuote ? 'Quotation' : 'Cash Sale'}</h2>
+        </header>
+        <div class="receipt-details">
+          <div class="receipt-line"><span>Name</span><span>${receiptEscape(order.customer_name || 'Walk-In Customer')}</span></div>
+          <div class="receipt-line"><span>Receipt No.</span><span>${receiptEscape(order.ticket_no || order.id || '-')}</span></div>
+          <div class="receipt-line"><span>Date</span><span>${created.toLocaleDateString('en-GB')}</span></div>
+          <div class="receipt-line"><span>Print Time</span><span>${printedAt}</span></div>
+          ${order.table_name ? `<div class="receipt-line"><span>Table / Tab</span><span>${receiptEscape(order.table_name)}</span></div>` : ''}
+          <div class="receipt-line"><span>Type</span><span>${receiptEscape((order.order_type || 'walk-in').toUpperCase())}</span></div>
+          <div class="receipt-line"><span>Served By</span><span>${receiptEscape(order.employee_name || 'POS Terminal')}</span></div>
+          <div class="receipt-line"><span>Status</span><span>${receiptEscape((order.status || 'open').toUpperCase())}</span></div>
+        </div>
+        <table class="receipt-items">
+          <thead><tr><th>Qty</th><th>Unit Price</th><th>Total</th></tr></thead>
+          <tbody>${itemRows}</tbody>
+        </table>
+        <div class="receipt-totals">
+          ${discountCents ? `<div class="receipt-line"><span>Subtotal</span><span>${moneyRaw(subtotalCents)}</span></div><div class="receipt-line"><span>Discount</span><span>-${moneyRaw(discountCents)}</span></div>` : ''}
+          <div class="receipt-line"><span>Total Excl. VAT</span><span>${moneyRaw(exclVat)}</span></div>
+          <div class="receipt-line"><span>VAT Total (${Number(taxRate.toFixed(1))}%)</span><span>${moneyRaw(vatAmount)}</span></div>
+          <div class="receipt-total"><span>Total</span><strong>KES ${moneyRaw(grossCents)}</strong></div>
+        </div>
+        ${isQuote ? '' : `
+          <div class="receipt-payment">
+            <div class="receipt-line"><span>Payment Method</span><span>${receiptEscape((order.payment_method || 'CASH').toUpperCase())}</span></div>
+            ${order.payment_ref ? `<div class="receipt-line"><span>Txn Ref</span><span>${receiptEscape(order.payment_ref)}</span></div>` : ''}
+          </div>
+        `}
+        <footer class="receipt-note">${receiptEscape(bfooter)}</footer>
+        <button id="receiptPrintBtn">Print ${isQuote ? 'Quotation' : 'Receipt'}</button>
+      </div>
+    `;
+
+  }
+
+  const overlay = document.createElement('div');
+  overlay.id = 'receiptModal';
+  overlay.className = 'receipt-modal-overlay';
+  overlay.innerHTML = `
+    <div class="receipt-modal" role="dialog" aria-modal="true">
+      <button class="receipt-modal-close" id="receiptModalClose" title="Close">&times;</button>
+      <div class="receipt-modal-print-area">
+        ${bodyHtml}
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(overlay);
+  overlay.classList.add('receipt-modal-visible');
+
+  const close = () => {
+    overlay.remove();
+    document.removeEventListener('keydown', onKey);
+  };
+
+  overlay.addEventListener('click', e => { if (e.target === overlay) close(); });
+  document.getElementById('receiptModalClose').addEventListener('click', close);
+  document.getElementById('receiptPrintBtn').addEventListener('click', async () => {
+    try {
+      if (window.OraforgeNative) {
+        if (!window.OraforgePrinter) throw new Error('Install the latest APK to enable printing.');
+        await window.OraforgePrinter.print({name:'Receipt '+(order.ticket_no || order.id)});
+      } else { window.print(); }
+    } catch(e) { toast('Could not open printing: '+e.message,'error'); }
+  });
+
+  const onKey = e => { if (e.key === 'Escape') close(); };
+  document.addEventListener('keydown', onKey);
+}
+
+
 // ── DASHBOARD ──
 async function renderDashboard() {
   const sec = $('#sec-dashboard');
