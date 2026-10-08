@@ -2932,3 +2932,10 @@ button:focus-visible, a:focus-visible { outline: 3px solid #87a857; outline-offs
   .receipt .receipt-note { font-size: 10px !important; margin: 0 !important; }
   .receipt #receiptPrintBtn { display: none !important; }
 }
+
+/* Server-rendered standalone receipts also print; do not hide them with the
+   modal-only print rule in the legacy stylesheet. */
+@media print {
+  body.receipt-body { background: #fff !important; padding: 0 !important; display: block !important; }
+  body.receipt-body > .receipt { display: block !important; width: 100% !important; }
+}
