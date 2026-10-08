@@ -484,6 +484,10 @@ const LocalPOS = {
         tax_rate: 0,
         tax_rate_confirmed: false,
         currency: 'KES',
+        phone: '',
+        email: '',
+        kra_pin: '',
+        address: '',
         receipt_header: 'Welcome to ' + prof.name,
         receipt_footer: 'Thank you for your business!\n------- END OF RECEIPT -------'
       }, btype);
