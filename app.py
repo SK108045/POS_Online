@@ -1925,6 +1925,14 @@ class POSHandler(SimpleHTTPRequestHandler):
                     return self.send_json({"error": "order_not_found"}, 404)
                 
                 if order["status"] != "paid":
+                    # VAT only applies when an owner has explicitly configured a rate.
+                    # Sale prices remain tax-inclusive; no tax is added to the total.
+                    settings = get_settings(conn)
+                    confirmed = str(settings.get("tax_rate_confirmed", "false")).lower() in ("1", "true", "yes")
+                    rate = float(settings.get("tax_rate", 0) or 0) if confirmed else 0.0
+                    rate = rate if 0.0 < rate <= 100.0 else 0.0
+                    recorded_tax = round(order["total_cents"] * rate / (100.0 + rate)) if rate else 0
+                    conn.execute("UPDATE orders SET tax_cents = ? WHERE id = ?", (recorded_tax, order_id))
                     items = conn.execute("SELECT oi.menu_item_id, oi.qty, mi.unit FROM order_items oi LEFT JOIN menu_items mi ON mi.id = oi.menu_item_id WHERE oi.order_id = ?", (order_id,)).fetchall()
                     for item in items:
                         if item["menu_item_id"] and item["unit"] != "service":
