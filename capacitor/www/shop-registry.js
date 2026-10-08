@@ -168,7 +168,8 @@
       receipt_header: `Welcome to ${shop.name}`,
       receipt_footer: 'Thank you for your business!\nPowered by Oraforge POS\n------- END OF RECEIPT -------',
       currency: 'KES',
-      tax_rate: '16.0',
+      tax_rate: 0,
+      tax_rate_confirmed: false,
     };
     const users = [
       { id: 1, username: 'terminal', full_name: 'POS Terminal', role: 'cashier', active: 1, password_hash: shop.staff_pin_hash },
