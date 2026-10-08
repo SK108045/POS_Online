@@ -703,6 +703,21 @@ const LocalPOS = {
       const order = orders.find(o => o.id === Number(body.order_id));
       if (!order) throw new Error('Sale not found');
       if (order.status === 'paid') return order;
+      let verifiedMpesa = null;
+      if (body.payment_method === 'mpesa') {
+        // Never allow cashier taps or an STK acceptance to mark M-Pesa paid.
+        // Independently recheck the provider before reducing stock or saving a sale.
+        verifiedMpesa = await getVerifiedSwiftaStatus({
+          checkoutId: body.swifta_checkout_id,
+          attemptId: body.swifta_attempt_id,
+          orderId: order.id,
+          amountCents: order.total_cents,
+          shopId: window.OraforgeShops?.activeShopId() || btype
+        });
+        if (verifiedMpesa.status !== 'success') {
+          throw new Error('M-Pesa is not verified yet. Complete the prompt and wait for automatic confirmation.');
+        }
+      }
       if (order.status !== 'paid') {
         for (const oi of order.items || []) {
           const product = products.find(p => p.id === oi.menu_item_id);
@@ -722,7 +737,7 @@ const LocalPOS = {
         : 0;
       order.status = 'paid';
       order.payment_method = body.payment_method || 'cash';
-      order.payment_ref = body.payment_ref || (order.payment_method === 'cash' ? 'CASH' : `TXN-${Date.now()}`);
+      order.payment_ref = verifiedMpesa?.payment_ref || body.payment_ref || (order.payment_method === 'cash' ? 'CASH' : `TXN-${Date.now()}`);
       order.paid_cents = order.total_cents;
       order.paid_at = Math.floor(Date.now() / 1000);
       order.updated_at = order.paid_at;
@@ -1883,6 +1898,29 @@ function formatMpesaDisplayPhone(p) {
   return norm || p;
 }
 
+
+async function getVerifiedSwiftaStatus({attemptId, checkoutId, orderId, amountCents, shopId}) {
+  if (!checkoutId || !Number.isSafeInteger(Number(amountCents)) || Number(amountCents)<=0) return {status:'unknown'};
+  let response;
+  if (window.OraforgeNative) {
+    if (!window.OraforgeProviders?.paymentStatus) throw new Error('Update the APK to enable verified M-Pesa receipts.');
+    response = await window.OraforgeProviders.paymentStatus({reference:checkoutId});
+  } else {
+    if (!/^[a-f0-9]{32}$/.test(String(attemptId||''))) return {status:'unknown'};
+    const result = await fetch('/api/swifta/status?attempt='+encodeURIComponent(attemptId), {cache:'no-store'});
+    if (!result.ok) throw new Error('Unable to verify M-Pesa with the payment server.');
+    response = await result.json();
+  }
+  if (response.status !== 'success') return {status:response.status||'pending'};
+  const receipt=String(response.payment_ref||'').toUpperCase().trim();
+  if(!/^[A-Z0-9]{8,30}$/.test(receipt)) return {status:'unknown'};
+  if (response.checkout_id && response.checkout_id!==checkoutId) return {status:'unknown'};
+  if (response.amount_cents!=null && Number(response.amount_cents)!==Number(amountCents)) return {status:'unknown'};
+  if (response.order_id && String(response.order_id)!==String(orderId)) return {status:'unknown'};
+  if (response.shop_id && response.shop_id!==shopId) return {status:'unknown'};
+  return {status:'success',payment_ref:receipt};
+}
+
 async function triggerSwiftaMpesaCharge(params) {
   try {
     if (!Number.isSafeInteger(params.amount) || params.amount<=0) throw new Error('Payment amount must be greater than zero.');
@@ -1891,7 +1929,9 @@ async function triggerSwiftaMpesaCharge(params) {
       phone: phone.startsWith('+254') ? '0'+phone.slice(4) : phone,
       amount: params.amount / 100,
       accountReference: 'ORAFORGE-'+String(params.reference),
-      description: 'POS payment'
+      description: 'POS payment',
+      shop_id: String(window.OraforgeShops?.activeShopId() || localStorage.getItem('pos_active_business_type') || 'retail'),
+      order_id: String(params.orderId)
     };
     if (window.OraforgeNative) return await window.OraforgeProviders.charge(payload);
     const response = await fetch('/api/swifta/stkpush', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
