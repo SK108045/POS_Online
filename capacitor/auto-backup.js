@@ -1,6 +1,6 @@
 const fs = require("node:fs/promises");
 const path = require("node:path");
-const BACKUP_DIR = path.resolve(__dirname, "../backups");
+const BACKUP_DIR = path.resolve(process.env.POS_BACKUP_DIR || path.join(__dirname, "../backups"));
 const day = (now = new Date()) =>
   `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
 function validate(data) {

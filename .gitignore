@@ -30,3 +30,7 @@ capacitor/src/provider-config.json
 # Local Swifta attempt journal (contains transaction IDs, never commit)
 /data/swifta-attempts.json
 /data/swifta-attempts.json.*.tmp
+
+# Windows delivery archives contain configured provider files and bundled runtime.
+/dist/
+/windows/.cache/

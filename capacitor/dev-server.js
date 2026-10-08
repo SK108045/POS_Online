@@ -3,6 +3,7 @@ const fs = require('fs');
 const path = require('path');
 const { execSync } = require('child_process');
 
+const DESKTOP = process.env.POS_DESKTOP === '1';
 const PORT = parseInt(process.env.PORT || process.env.POS_PORT || '3000', 10);
 const WWW_DIR = path.join(__dirname, 'www');
 const SRC_DIR = path.join(__dirname, 'src');
@@ -25,11 +26,12 @@ function buildBridge() {
 }
 
 if (!fs.existsSync(BRIDGE_OUT)) {
+  if (DESKTOP) throw new Error('Missing packaged SQLite bridge. Extract the complete POS package.');
   buildBridge();
 }
 
 // Watch src/ directory for bridge source edits
-if (fs.existsSync(SRC_DIR)) {
+if (!DESKTOP && fs.existsSync(SRC_DIR)) {
   let bridgeDebounce = null;
   try {
     fs.watch(SRC_DIR, { recursive: true }, () => {
@@ -58,7 +60,7 @@ function notifyReload() {
 // Watch www/ directory for code & styling edits
 let watchDebounce = null;
 try {
-  fs.watch(WWW_DIR, { recursive: true }, (eventType, filename) => {
+  if (!DESKTOP) fs.watch(WWW_DIR, { recursive: true }, (eventType, filename) => {
     if (!filename) return;
     if (filename.includes('.git') || filename.endsWith('~') || filename.endsWith('.tmp')) return;
     clearTimeout(watchDebounce);
@@ -126,10 +128,9 @@ function serveFile(res, filePath, contentType) {
       let html = content.toString('utf-8');
       const backupScripts = (html.includes('src="shop-operations.js"') ? '' : '<script src="/shop-operations.js" defer></script>') + '<script src="/auto-backup.js" defer></script>';
       html = html.replace('</body>', backupScripts + '</body>');
-      if (html.includes('</body>')) {
-        html = html.replace('</body>', LIVE_RELOAD_SCRIPT + '\n</body>');
-      } else {
-        html += LIVE_RELOAD_SCRIPT;
+      if (!DESKTOP) {
+        if (html.includes('</body>')) html = html.replace('</body>', LIVE_RELOAD_SCRIPT + '\n</body>');
+        else html += LIVE_RELOAD_SCRIPT;
       }
       content = Buffer.from(html, 'utf-8');
     }
@@ -146,6 +147,19 @@ function serveFile(res, filePath, contentType) {
 function handleRequest(req, res) {
   const parsedUrl = new URL(req.url, 'http://' + (req.headers.host || 'localhost'));
   let pathname = decodeURIComponent(parsedUrl.pathname);
+
+  if (DESKTOP && pathname === '/api/local/health') {
+    res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
+    res.end(JSON.stringify({ app: 'oraforge-pos', instance: process.env.POS_INSTANCE, build: process.env.POS_BUILD, pid: process.pid }));
+    return;
+  }
+
+  if (DESKTOP && pathname === '/api/local/stop' && req.method === 'POST') {
+    if (req.headers['x-pos-instance'] !== process.env.POS_INSTANCE) { res.writeHead(403); res.end(); return; }
+    res.writeHead(200); res.end('Stopping POS');
+    setTimeout(() => process.exit(0), 100);
+    return;
+  }
 
   if (pathname === '/api/local/daily-backup') {
     require('./auto-backup').handle(req, res);
@@ -243,7 +257,7 @@ function startServer(port, attempts = 0) {
   const server = http.createServer(handleRequest);
 
   server.on('error', (err) => {
-    if (err.code === 'EADDRINUSE' && attempts < 10) {
+    if (err.code === 'EADDRINUSE' && !DESKTOP && attempts < 10) {
       const nextPort = port + 1;
       console.log(`[DevServer] Port ${port} is in use, trying ${nextPort}...`);
       startServer(nextPort, attempts + 1);
@@ -253,8 +267,9 @@ function startServer(port, attempts = 0) {
     }
   });
 
-  server.listen(port, '0.0.0.0', () => {
+  server.listen(port, DESKTOP ? '127.0.0.1' : '0.0.0.0', () => {
     const url = `http://localhost:${port}`;
+    if (DESKTOP) { console.log('Oraforge POS ready: ' + url + '/pos'); return; }
     console.log('\n' + '='.repeat(64));
     console.log('  🚀 Oraforge POS — Local APK Browser Preview Server');
     console.log('='.repeat(64));

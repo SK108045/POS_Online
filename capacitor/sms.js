@@ -2,7 +2,7 @@ const fs = require('fs');
 const path = require('path');
 const https = require('https');
 function config() {
-  const cfg = require('./sozuri-config.json');
+  const cfg = JSON.parse(fs.readFileSync(process.env.POS_DATA_DIR ? path.join(process.env.POS_DATA_DIR, 'sozuri-config.json') : path.join(__dirname, 'sozuri-config.json'), 'utf8'));
   return {...cfg, key:cfg.apiKey, configured:!!(cfg.apiKey && cfg.project && cfg.from)};
 }
 function normalize(phone) {

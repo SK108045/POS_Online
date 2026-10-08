@@ -1,0 +1,40 @@
+ORAFORGE POS - WINDOWS 10/11 (64-BIT)
+
+1. Right-click the ZIP and choose Extract All. Keep the whole extracted folder.
+2. Open OraforgePOS.exe. No separate Node.js or Python installation is needed.
+3. The launcher chooses Microsoft Edge first, or Google Chrome if Edge is absent.
+   It remembers this choice and opens a dedicated POS browser profile.
+4. Register the client's shop, or restore an existing POS JSON backup through
+   Settings > Backup & restore. A fresh profile starts without existing shops.
+   To reach Settings on a replacement PC, first register a temporary shop; restoring
+   replaces it with the shops in the backup. Sign in with the restored credentials.
+5. For a desktop shortcut, right-click OraforgePOS.exe and choose Send to > Desktop
+   (create shortcut). On Windows 11, this may be under Show more options.
+
+DAILY USE
+Open OraforgePOS.exe. Repeated launches reuse the same server and browser profile.
+The local address is always http://localhost:3000/pos.
+Core local sales work offline; eTIMS, SMS and M-Pesa require internet access.
+Allow the POS browser's eTIMS popup when prompted.
+
+YOUR DATA
+Backups: %LOCALAPPDATA%\OraforgePOS\backups
+Browser profile: %LOCALAPPDATA%\OraforgePOS\browser-edge (or browser-chrome)
+Startup log: %LOCALAPPDATA%\OraforgePOS\server.log
+Paste %LOCALAPPDATA%\OraforgePOS into File Explorer to open the data folder.
+Data belongs to the Windows user account running POS. Use the same Windows login.
+Do not delete the profile, clear its site data, or switch to an incognito window.
+Backups update while POS is open, every minute when data changes and after checkout.
+Keep a copy on USB or another computer. A backup on this PC cannot survive drive loss.
+
+UPDATES / STOPPING
+Close POS browser windows and run Stop POS.cmd before replacing the program folder.
+User data and local provider configuration stay in the app-data folder above.
+The server also stops when Windows shuts down; open the EXE after restarting.
+If port 3000 is occupied, close the other local server first; the launcher will
+show an error rather than changing the address and opening an empty workspace.
+If the saved browser is removed, reinstall it; POS won't silently switch browsers.
+
+BEFORE CLIENT HANDOVER
+This package is cross-compiled on Linux. Verify on a Windows PC: startup, login,
+a cash sale, receipt printer, eTIMS login/popup/download, backup restore, and restart.

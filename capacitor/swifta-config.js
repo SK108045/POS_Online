@@ -3,7 +3,7 @@ const fs=require('fs');
 const path=require('path');
 const crypto=require('crypto');
 // The same local file used for STK payments is edited in place.
-const KEY_FILE=path.join(__dirname,'../swifta.txt');
+const KEY_FILE=process.env.POS_DATA_DIR ? path.join(process.env.POS_DATA_DIR,'swifta.txt') : path.join(__dirname,'../swifta.txt');
 function readKey() {
   return fs.readFileSync(KEY_FILE,'utf8').trim();
 }

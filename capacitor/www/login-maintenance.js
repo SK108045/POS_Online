@@ -56,7 +56,7 @@
     try {await refresh()}catch(err){rows.textContent=err.message || 'Could not load shops.'}
   }
   function showSwifta() {
-    const node=shell('Update Swifta API key','<p>Paste the replacement key. Saving will overwrite the existing swifta.txt file on this Ubuntu POS computer and immediately use it for new M-Pesa STK requests.</p>'+
+    const node=shell('Update Swifta API key','<p>Paste the replacement key. Saving will overwrite the existing swifta.txt file on this POS computer and immediately use it for new M-Pesa STK requests.</p>'+
       '<form id="swiftaMaintenanceForm" autocomplete="off">'+
       '<label>New Swifta API key<input type="password" name="apiKey" required minlength="10" maxlength="256" autocomplete="new-password" placeholder="Paste new key"></label>'+
       '<p id="swiftaMaintenanceNote" role="status"></p>'+
