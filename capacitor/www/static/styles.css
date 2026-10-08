@@ -2203,3 +2203,60 @@ button:focus-visible, a:focus-visible { outline: 3px solid #87a857; outline-offs
 .report-stock-status.low { background: var(--danger-bg); color: var(--ink); }
 [data-page="reports"] { --muted: #58675e; }
 [data-theme="dark"] [data-page="reports"] { --muted: #a0b5a9; --info: #8ab4ff; }
+
+/* Green-theme contrast audit — keep control text paired with its actual surface.
+   Shared button styles previously hard-coded white on pale-lime primary colors. */
+.primary,
+.login-panel > button,
+.add-btn,
+.receipt button,
+.tier-toggle-btn.active,
+.sales-row:hover .view-receipt-btn,
+.profile-card.selected .profile-card-check,
+.qty-controls button:hover {
+  color: var(--primary-fg);
+}
+
+/* POS/workspace modals: labels and helper fields stay legible on deep-green panels. */
+.modal-box .form-group > label {
+  color: var(--ink);
+  font-size: 13.5px;
+  font-weight: 700;
+  line-height: 1.4;
+}
+.modal-box .form-group > .field,
+.modal-box .form-group > select,
+.modal-box .form-group > textarea {
+  background: var(--bg);
+  border-color: var(--line-strong);
+  color: var(--ink);
+}
+.modal-box .form-group .field::placeholder,
+.modal-box .form-group textarea::placeholder {
+  color: var(--muted);
+  opacity: 1;
+}
+.modal-box .modal-actions > .primary {
+  background: var(--primary);
+  border: 1px solid var(--primary);
+  color: var(--primary-fg);
+  box-shadow: none;
+}
+.modal-box .modal-actions > .primary:hover {
+  background: var(--primary-dark);
+  border-color: var(--primary-dark);
+  color: var(--primary-fg);
+}
+.modal-box .modal-actions > .secondary {
+  background: var(--bg);
+  border: 1px solid var(--line-strong);
+  color: var(--ink);
+}
+.modal-box .modal-actions > .secondary:hover {
+  background: var(--surface-soft, var(--panel));
+  color: var(--ink);
+}
+.modal-box .modal-actions > button:disabled {
+  opacity: .6;
+  cursor: not-allowed;
+}
