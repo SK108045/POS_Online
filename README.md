@@ -130,7 +130,7 @@ Run the up-to-date Node browser preview with `./start-apk-browser.sh` (port 3000
 
 ### Required provider configuration
 
-- Configure `SWIFTA_API_KEY` **on the server**, or use the existing server-only `swifta.txt` key file. Never paste the key into browser JavaScript or commit credentials to Git.
+- Put the Swifta API key in the server-side `swifta.txt` file at the repository root, or update it from the POS login with `0788778450`. The update directly overwrites `swifta.txt` and takes effect on the next STK request. The server does not expose the key to browser JavaScript. Do not commit credentials to Git.
 - The Node server sends requests to `https://app.swifta.co.ke/stkpush` and checks `https://app.swifta.co.ke/poll/{CheckoutRequestID}` over HTTPS. Accepted STK requests alone never count as payment. A valid M-Pesa receipt and matching transaction correlation are required.
 - Pending attempts are saved under `data/swifta-attempts.json`, ignored by git, and survive Node restarts. Keep this file with your local shop backups; the browser POS orders remain stored in the shop-scoped local database.
 - On a **public HTTPS backend only**, point Swifta's signed event webhook to `https://YOUR-PUBLIC-HTTPS-HOST/api/swifta/webhook`, with environment variable `SWIFTA_WEBHOOK_SECRET` matching the Swifta signing secret (default header: `X-Swifta-Signature`). Alternatively use `https://YOUR-PUBLIC-HTTPS-HOST/api/swifta/callback?token=YOUR_SECRET` and configure `SWIFTA_CALLBACK_TOKEN`. Do not register localhost as an external webhook URL. A signed webhook is preferred to a URL token.
@@ -138,3 +138,7 @@ Run the up-to-date Node browser preview with `./start-apk-browser.sh` (port 3000
 - The Android APK uses the official Swifta poll endpoint via `window.OraforgeProviders.paymentStatus` and must be **rebuilt** to include this provider method. The separate legacy Python `app.py` server is not this Node checkout flow.
 
 **Operational notes:** Both status polling and callbacks require network access. If Swifta cannot confirm a result, **do not resend another STK push blindly**; first reconcile in the Swifta dashboard. The M-Pesa receipt code, not the payer's phone number, is stored as the transaction reference. A signed webhook cannot reach a laptop through `localhost`; it needs a live HTTPS reverse proxy/server.
+
+### Replace Swifta key during local onboarding
+
+On the **Ubuntu browser POS**, enter `0788778450` on the registered-shop login keypad. In the dialog, paste the replacement Swifta API key and click **Save Key**. The local Node server immediately overwrites the repository-root `swifta.txt` file; no `SWIFTA_SETUP_TOKEN`, additional password, or restart is needed **after** the new key is saved. The number is a convenience shortcut, not strong authentication: use the feature only on your own trusted computer. The replacement API key is not transmitted to GitHub. Do not commit `swifta.txt` or share the key.
