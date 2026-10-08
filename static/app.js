@@ -4,12 +4,15 @@ const qs = (sel, root = document) => root.querySelector(sel);
 const qsa = (sel, root = document) => [...root.querySelectorAll(sel)];
 
 // ── Receipt Modal ─────────────────────────────────────────────────────────────
+const receiptEscape = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;'}[c]));
 function showReceiptModal(order, isKot = false) {
   document.getElementById('receiptModal')?.remove();
 
   const bname = state.settings?.business_name || 'POS SYSTEM';
   const baddr = state.settings?.address || '';
   const bphone = state.settings?.phone || '';
+  const bEmail = state.settings?.email || '';
+  const bPin = state.settings?.kra_pin || '';
   const bfooter = state.settings?.receipt_footer || 'Thank you for your business!\n------- END OF RECEIPT -------';
   const isQuote = Boolean(order.is_quote || order.order_type === 'quote');
 
@@ -41,59 +44,80 @@ function showReceiptModal(order, isKot = false) {
       </div>
     `;
   } else {
-    const itemRows = (order.items || []).map(item =>
-      `<tr>
-        <td>
-          ${item.qty} x ${item.name}
-          ${item.variant_info ? `<br><small style="color:#666">${item.variant_info}</small>` : ''}
-          ${item.batch_no ? `<br><small style="color:#666">Batch: ${item.batch_no}</small>` : ''}
-          ${item.note ? `<br><small style="color:#2563eb">Note: ${item.note}</small>` : ''}
-        </td>
-        <td style="text-align:right;">${moneyRaw(item.line_total_cents)}</td>
-      </tr>`
-    ).join('');
-
-    // Receipts must show tax actually recorded on the order, not an assumed VAT split.
-    const vatAmount = Math.max(0, Math.min(Number(order.total_cents || 0), Math.round(Number(order.tax_cents || 0))));
-    const exclVat = Number(order.total_cents || 0) - vatAmount;
+    const itemRows = (order.items || []).map(item => {
+      const qty = Number(item.qty ?? 1);
+      const total = Number(item.line_total_cents || 0);
+      const unit = Number.isFinite(Number(item.unit_price_cents))
+        ? Number(item.unit_price_cents) : (qty ? total / qty : 0);
+      const notes = [
+        item.variant_info && `<small>${receiptEscape(item.variant_info)}</small>`,
+        item.batch_no && `<small>Batch: ${receiptEscape(item.batch_no)}</small>`,
+        item.note && `<small>${receiptEscape(item.note)}</small>`
+      ].filter(Boolean).join(' ');
+      return `
+        <tr class="receipt-item-name"><td colspan="3">${receiptEscape(item.name)} ${notes}</td></tr>
+        <tr class="receipt-item-values">
+          <td>${receiptEscape(qty)}</td><td>${moneyRaw(unit)}</td><td>${moneyRaw(total)}</td>
+        </tr>`;
+    }).join('');
+    // Do not infer VAT from today's settings. Respect the tax recorded with this sale.
+    const grossCents = Number(order.total_cents || 0);
+    const vatAmount = Math.max(0, Math.min(grossCents, Math.round(Number(order.tax_cents || 0))));
+    const exclVat = grossCents - vatAmount;
     const savedRate = Number(order.tax_rate);
     const taxRate = vatAmount > 0
-      ? (order.tax_rate != null && Number.isFinite(savedRate) ? savedRate : (exclVat > 0 ? vatAmount / exclVat * 100 : 0))
-      : 0;
-
+      ? (order.tax_rate != null && Number.isFinite(savedRate) ? savedRate
+        : (exclVat > 0 ? vatAmount / exclVat * 100 : 0)) : 0;
+    const discountCents = Math.max(0, Number(order.discount_cents || 0));
+    const subtotalCents = Number(order.subtotal_cents ?? (grossCents + discountCents));
+    const saleStamp = Number(order.created_at || order.paid_at || 0);
+    const created = saleStamp > 0 ? new Date(saleStamp * 1000) : new Date();
+    const printedAt = new Date().toLocaleTimeString('en-KE', {hour:'2-digit', minute:'2-digit', second:'2-digit'});
+    const contact = [
+      baddr && `<p class="receipt-contact">${receiptEscape(baddr)}</p>`,
+      bphone && `<p class="receipt-contact">Mobile: ${receiptEscape(bphone)}</p>`,
+      bEmail && `<p class="receipt-contact">Email: ${receiptEscape(bEmail)}</p>`,
+      bPin && `<p class="receipt-contact">KRA PIN: ${receiptEscape(bPin)}</p>`
+    ].filter(Boolean).join('');
     bodyHtml = `
-      <div class="receipt">
-        <h1>${bname}</h1>
-        ${baddr ? `<p>${baddr}</p>` : ''}
-        ${bphone ? `<p>Tel: ${bphone}</p>` : ''}
-        <h2 style="font-size: 15px; margin: 12px 0 8px; font-weight: 800;">* ${isQuote ? 'QUOTATION / ESTIMATE' : 'ORIGINAL RECEIPT'} *</h2>
-        <div class="receipt-line"><span>Date</span><strong>${new Date().toLocaleString('en-GB', {day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit'})}</strong></div>
-        <div class="receipt-line"><span>Ref #</span><strong>${order.ticket_no}</strong></div>
-        ${order.table_name ? `<div class="receipt-line"><span>Table / Tab</span><strong>${order.table_name}</strong></div>` : ''}
-        <div class="receipt-line"><span>Type</span><strong>${(order.order_type || 'sale').toUpperCase()}</strong></div>
-        ${order.customer_name ? `<div class="receipt-line"><span>Customer</span><strong>${order.customer_name}</strong></div>` : ''}
-        <div class="receipt-line"><span>Served By</span><strong>${order.employee_name || '-'}</strong></div>
-        <div class="receipt-line"><span>Status</span><strong>${order.status.toUpperCase()}</strong></div>
-        <div style="border-top: 1px dashed var(--line); margin: 10px 0;"></div>
-        <table><tbody>${itemRows}</tbody></table>
-        <div style="border-top: 1px dashed var(--line); margin: 10px 0;"></div>
-        <div class="receipt-total"><span>Total</span><strong>KES ${moneyRaw(order.total_cents)}</strong></div>
+      <div class="receipt sales-receipt">
+        <header class="receipt-business-header">
+          <h1 class="receipt-business-name">${receiptEscape(bname)}</h1>
+          ${contact}
+          <p class="receipt-kind">${isQuote ? 'QUOTATION / ESTIMATE' : 'SALES RECEIPT'}</p>
+          <h2 class="receipt-sale-title">${isQuote ? 'Quotation' : 'Cash Sale'}</h2>
+        </header>
+        <div class="receipt-details">
+          <div class="receipt-line"><span>Name</span><span>${receiptEscape(order.customer_name || 'Walk-In Customer')}</span></div>
+          <div class="receipt-line"><span>Receipt No.</span><span>${receiptEscape(order.ticket_no || order.id || '-')}</span></div>
+          <div class="receipt-line"><span>Date</span><span>${created.toLocaleDateString('en-GB')}</span></div>
+          <div class="receipt-line"><span>Print Time</span><span>${printedAt}</span></div>
+          ${order.table_name ? `<div class="receipt-line"><span>Table / Tab</span><span>${receiptEscape(order.table_name)}</span></div>` : ''}
+          <div class="receipt-line"><span>Type</span><span>${receiptEscape((order.order_type || 'walk-in').toUpperCase())}</span></div>
+          <div class="receipt-line"><span>Served By</span><span>${receiptEscape(order.employee_name || 'POS Terminal')}</span></div>
+          <div class="receipt-line"><span>Status</span><span>${receiptEscape((order.status || 'open').toUpperCase())}</span></div>
+        </div>
+        <table class="receipt-items">
+          <thead><tr><th>Qty</th><th>Unit Price</th><th>Total</th></tr></thead>
+          <tbody>${itemRows}</tbody>
+        </table>
+        <div class="receipt-totals">
+          ${discountCents ? `<div class="receipt-line"><span>Subtotal</span><span>${moneyRaw(subtotalCents)}</span></div><div class="receipt-line"><span>Discount</span><span>-${moneyRaw(discountCents)}</span></div>` : ''}
+          <div class="receipt-line"><span>Total Excl. VAT</span><span>${moneyRaw(exclVat)}</span></div>
+          <div class="receipt-line"><span>VAT Total (${Number(taxRate.toFixed(1))}%)</span><span>${moneyRaw(vatAmount)}</span></div>
+          <div class="receipt-total"><span>Total</span><strong>KES ${moneyRaw(grossCents)}</strong></div>
+        </div>
         ${isQuote ? '' : `
-          <div class="receipt-line"><span>Amount Tendered</span><strong>KES ${moneyRaw(order.total_cents)}</strong></div>
-          <div class="receipt-line"><span>Change</span><strong>KES 0.00</strong></div>
-          <div style="border-top: 1px dashed var(--line); margin: 10px 0;"></div>
-          <div class="receipt-line"><span>Total Excl. VAT</span><strong>KES ${moneyRaw(exclVat)}</strong></div>
-          <div class="receipt-line"><span>Total VAT (${taxRate.toFixed(0)}%)</span><strong>KES ${moneyRaw(vatAmount)}</strong></div>
-          <div style="border-top: 1px dashed var(--line); margin: 10px 0;"></div>
-          <div class="receipt-line"><span>Payment Method</span><strong>${(order.payment_method || 'CASH').toUpperCase()}</strong></div>
-          <div class="receipt-line"><span>Txn Ref</span><strong>${order.payment_ref || `TXN-${order.id * 1234}`}</strong></div>
+          <div class="receipt-payment">
+            <div class="receipt-line"><span>Payment Method</span><span>${receiptEscape((order.payment_method || 'CASH').toUpperCase())}</span></div>
+            ${order.payment_ref ? `<div class="receipt-line"><span>Txn Ref</span><span>${receiptEscape(order.payment_ref)}</span></div>` : ''}
+          </div>
         `}
-        <p class="receipt-note" style="line-height: 1.6; margin-top: 12px; white-space: pre-wrap;">
-          ${bfooter}
-        </p>
+        <footer class="receipt-note">${receiptEscape(bfooter)}</footer>
         <button id="receiptPrintBtn">Print ${isQuote ? 'Quotation' : 'Receipt'}</button>
       </div>
     `;
+
   }
 
   const overlay = document.createElement('div');
