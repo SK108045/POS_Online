@@ -627,10 +627,14 @@ def receipt_page(order, autoprint=False, is_kot=False, settings=None):
         for item in order["items"]
     )
 
-    vat_rate = float(settings.get("tax_rate", 16.0))
-    vat_multiplier = 1.0 + (vat_rate / 100.0) if vat_rate > 0 else 1.0
-    subtotal_no_vat = (order['total_cents'] / vat_multiplier) / 100
-    vat_amount = (order['total_cents'] - (order['total_cents'] / vat_multiplier)) / 100
+    # The recorded order tax is authoritative. Historical sales store 0 tax;
+    # never reclassify part of their gross sales as VAT from a default setting.
+    gross_cents = int(order.get("total_cents") or 0)
+    recorded_vat_cents = min(gross_cents, max(0, int(order.get("tax_cents") or 0)))
+    subtotal_no_vat = (gross_cents - recorded_vat_cents) / 100
+    vat_amount = recorded_vat_cents / 100
+    vat_rate = (100 * recorded_vat_cents / (gross_cents - recorded_vat_cents)
+                if recorded_vat_cents and gross_cents > recorded_vat_cents else 0)
 
     return f"""<!doctype html>
 <html lang="en">
