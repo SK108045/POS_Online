@@ -3359,13 +3359,22 @@ async function renderSettings() {
             <input class="field" name="business_tagline" value="${settingsText(state.settings?.business_tagline || '')}" style="width:100%;">
           </div>
           <div class="form-group">
-            <label style="display:block; font-size:13px; font-weight:600; margin-bottom:6px; color:var(--muted);">Phone Number</label>
+            <label style="display:block; font-size:13px; font-weight:600; margin-bottom:6px; color:var(--muted);">Mobile / Contact Number</label>
             <input class="field" name="phone" value="${settingsText(state.settings?.phone || '')}" style="width:100%;">
           </div>
           <div class="form-group">
             <label style="display:block; font-size:13px; font-weight:600; margin-bottom:6px; color:var(--muted);">Store Address</label>
-            <input class="field" name="address" value="${settingsText(state.settings?.address || '')}" style="width:100%;">
+            <input class="field" name="address" value="${settingsText(state.settings?.address || '')}" autocomplete="street-address" maxlength="180" style="width:100%;">
           </div>
+          <div class="form-group">
+            <label style="display:block; font-size:13px; font-weight:600; margin-bottom:6px; color:var(--muted);">Business Email</label>
+            <input class="field" name="email" type="email" autocomplete="email" maxlength="120" placeholder="e.g. hello@yourshop.co.ke" value="${settingsText(state.settings?.email || '')}" style="width:100%;">
+          </div>
+          <div class="form-group">
+            <label style="display:block; font-size:13px; font-weight:600; margin-bottom:6px; color:var(--muted);">Business KRA PIN (optional)</label>
+            <input class="field" name="kra_pin" maxlength="20" autocapitalize="characters" placeholder="Enter your registered business PIN" value="${settingsText(state.settings?.kra_pin || '')}" style="width:100%;">
+          </div>
+          <p style="grid-column:1/-1; margin:0; font-size:12px; line-height:1.5; color:var(--muted);">These details appear on printed receipts when provided. A PIN does not make a POS receipt an eTIMS tax invoice.</p>
           <div class="form-group">
             <label style="display:block; font-size:13px; font-weight:600; margin-bottom:6px; color:var(--muted);">Currency Code</label>
             <input class="field" name="currency" value="${settingsText(state.settings?.currency || 'KES')}" style="width:100%;">
