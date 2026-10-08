@@ -41,12 +41,12 @@
       const screenWidth = window.screen.availWidth || window.innerWidth || 1280;
       const screenHeight = window.screen.availHeight || window.innerHeight || 800;
       const width = Math.min(820, Math.max(480, Math.round(screenWidth * 0.60)));
-      const height = Math.min(540, Math.max(360, Math.round(screenHeight * 0.66)));
+      const height = Math.min(600, Math.max(400, Math.round(screenHeight * 0.76)));
       const left = Math.max(0, (window.screen.availLeft || 0) + Math.round((screenWidth - width) / 2));
       const top = Math.max(0, (window.screen.availTop || 0) + Math.round((screenHeight - height) / 2));
       const features = `popup=yes,width=${width},height=${height},left=${left},top=${top},scrollbars=yes,resizable=yes`;
       // New name avoids reusing an already-maximized window from the old launcher.
-      const popup = window.open('https://ecitizen.kra.go.ke/individual/etims/sale/create', 'oraforge-etims-compact-v2', features);
+      const popup = window.open('https://ecitizen.kra.go.ke/individual/etims/sale/create', 'oraforge-etims-compact-v3', features);
       if (popup) {
         // Browsers may restore remembered window dimensions on subsequent clicks.
         // These methods are best-effort; the window manager still has final say.
