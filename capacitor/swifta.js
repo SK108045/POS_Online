@@ -5,7 +5,7 @@ const https = require('https');
 const crypto = require('crypto');
 const {validate, normalize} = require('./swifta-contract');
 
-const STORE_PATH = path.join(__dirname, '../data/swifta-attempts.json');
+const STORE_PATH = process.env.SWIFTA_ATTEMPTS_PATH || path.join(__dirname, '../data/swifta-attempts.json');
 const BASE = 'https://app.swifta.co.ke';
 const attempts = new Map();
 try {
@@ -114,7 +114,8 @@ async function handle(req,res) {
     const shopId=String(input.shop_id||'');
     const orderId=String(input.order_id||'');
     if(!shopId || !orderId || shopId.length>100 || !/^\d+$/.test(orderId)) return reply(res,400,{status:false,message:'Missing shop or order identifier.'});
-    const matching=[...attempts.values()].find(a=>a.shopId===shopId&&a.orderId===orderId&&a.state==='pending');
+    const matching=[...attempts.values()].find(a=>a.shopId===shopId&&a.orderId===orderId&&['pending','uncertain'].includes(a.state));
+    if(matching && (!matching.checkoutId || matching.state==='uncertain')) return reply(res,409,{status:false,message:'An earlier STK attempt has an uncertain outcome. Check Swifta before requesting another payment.'});
     if(matching) return reply(res,200,{status:true,message:'Existing M-Pesa request is still pending.',data:{status:'pay_offline',reference:matching.checkoutId,attempt_id:matching.id}});
     const id=crypto.randomBytes(16).toString('hex');
     const entry={id,shopId,orderId,phone:payload.phone,amountCents,accountReference:payload.accountReference,checkoutId:'',state:'pending',receipt:'',createdAt:Date.now(),updatedAt:Date.now()};
@@ -164,7 +165,8 @@ async function callback(req,res,url,signed) {
     if(signed) {
       const secret=process.env.SWIFTA_WEBHOOK_SECRET||'';
       if(!secret) return reply(res,503,{ok:false,message:'Webhook signing secret not configured.'});
-      const supplied=String(req.headers['x-swifta-signature']||'').replace(/^sha256=/i,'').trim().toLowerCase();
+      const headerName=String(process.env.SWIFTA_WEBHOOK_SIGNATURE_HEADER||'x-swifta-signature').toLowerCase();
+      const supplied=String(req.headers[headerName]||'').replace(/^sha256=/i,'').trim().toLowerCase();
       const expected=crypto.createHmac('sha256',secret).update(raw).digest('hex');
       if(!secureEqual(supplied,expected)) return reply(res,401,{ok:false,message:'Invalid webhook signature.'});
     } else {
