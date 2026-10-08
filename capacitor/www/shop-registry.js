@@ -248,16 +248,28 @@
     return shop;
   }
 
-  // Permanently remove only this shop's namespaced records and registry entry.
-  // Do not touch data belonging to any other registered shop.
+  // Password-authenticated deletion for normal owner workflows.
   async function deleteShop(id, username, password) {
-    const shops = await list();
-    const shop = shops.find(row => row.id === id);
+    const shop = await find(id);
     if (!shop) throw new Error('Shop was not found.');
     if (String(shop.owner_username).toLowerCase() !== String(username || '').trim().toLowerCase()
         || !await verifySecret(String(password || ''), shop.owner_password_hash)) {
       throw new Error('Incorrect owner username or password.');
     }
+    return purgeShop(id);
+  }
+
+  // Local device maintenance shortcut: confirmation in the login UI is required,
+  // but a numeric shortcut is NOT secure authentication. Never enable remotely.
+  async function deleteShopMaintenance(id, code) {
+    if (String(code) !== '0713969647') throw new Error('Maintenance mode is not unlocked.');
+    return purgeShop(id);
+  }
+
+  async function purgeShop(id) {
+    const shops = await list();
+    const shop = shops.find(row => row.id === id);
+    if (!shop) throw new Error('Shop was not found.');
 
     await dbReady();
     const db = window.OraforgeDB;
@@ -270,7 +282,6 @@
     const remaining = shops.filter(row => row.id !== id);
     const cleaned = records.filter(([key]) => key !== REGISTRY_KEY && !key.startsWith(prefix));
     cleaned.push([REGISTRY_KEY, remaining]);
-    // replaceRecords writes in a single IndexedDB/SQLite transaction.
     await db.replaceRecords(cleaned);
 
     localStorage.setItem(FALLBACK_KEY, JSON.stringify(remaining));
@@ -300,6 +311,7 @@
     find,
     register,
     deleteShop,
+    deleteShopMaintenance,
     activate,
     clearActiveShop,
     activeShopId,
