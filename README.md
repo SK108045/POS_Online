@@ -123,3 +123,18 @@ Files are written atomically to `backups/daily-YYYY-MM-DD.json` in the project r
 Choose **Garage & Auto Spares** when registering a shop. It includes garage categories, parts stock tracking, quotations and workshop services. In the product editor, choose **Service / Labour (no stock)** for labour or diagnostics; these items can be sold without a stock balance and are excluded from inventory alerts and deductions. Item instructions can record a vehicle registration, model or repair details.
 
 The Garage demo profile includes six sample spare parts and two workshop services, with bundled catalogue photos that work offline. Demo prices and quantities are illustrative. Registered garages start with empty stock and the seven garage categories so demo products do not appear as real inventory.
+
+## Verified M-Pesa STK checkout (Capacitor browser preview)
+
+Run the up-to-date Node browser preview with `./start-apk-browser.sh` (port 3000 by default). The POS M-Pesa checkout now **automatically polls Swifta after the STK prompt** and opens its existing receipt only after a verified successful transaction. There is no manual "Confirmed Payment" button. Cash sales are unchanged. A payment that fails, times out or cannot be verified stays unpaid.
+
+### Required provider configuration
+
+- Configure `SWIFTA_API_KEY` **on the server**, or use the existing server-only `swifta.txt` key file. Never paste the key into browser JavaScript or commit credentials to Git.
+- The Node server sends requests to `https://app.swifta.co.ke/stkpush` and checks `https://app.swifta.co.ke/poll/{CheckoutRequestID}` over HTTPS. Accepted STK requests alone never count as payment. A valid M-Pesa receipt and matching transaction correlation are required.
+- Pending attempts are saved under `data/swifta-attempts.json`, ignored by git, and survive Node restarts. Keep this file with your local shop backups; the browser POS orders remain stored in the shop-scoped local database.
+- On a **public HTTPS backend only**, point Swifta's signed event webhook to `https://YOUR-PUBLIC-HTTPS-HOST/api/swifta/webhook`, with environment variable `SWIFTA_WEBHOOK_SECRET` matching the Swifta signing secret (default header: `X-Swifta-Signature`). Alternatively use `https://YOUR-PUBLIC-HTTPS-HOST/api/swifta/callback?token=YOUR_SECRET` and configure `SWIFTA_CALLBACK_TOKEN`. Do not register localhost as an external webhook URL. A signed webhook is preferred to a URL token.
+- Browser checkout can still auto-verify by polling the **server-side** endpoint `GET /api/swifta/status?attempt=<server-generated-id>` when no inbound webhook is reachable. The browser never trusts its own "success" message or updates inventory before independent verification.
+- The Android APK uses the official Swifta poll endpoint via `window.OraforgeProviders.paymentStatus` and must be **rebuilt** to include this provider method. The separate legacy Python `app.py` server is not this Node checkout flow.
+
+**Operational notes:** Both status polling and callbacks require network access. If Swifta cannot confirm a result, **do not resend another STK push blindly**; first reconcile in the Swifta dashboard. The M-Pesa receipt code, not the payer's phone number, is stored as the transaction reference. A signed webhook cannot reach a laptop through `localhost`; it needs a live HTTPS reverse proxy/server.
