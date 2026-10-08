@@ -44,7 +44,10 @@
         // A deleted active shop must never remain selected for the next login.
         const selected=window.OraforgeShops.activeShopId();
         if(!selected) localStorage.removeItem('pos_logged_in');
-        container.querySelector('#maintenanceNote').textContent=shop.name+' deleted. Reload to update the shop selector.';
+        // Recreate the registered-shop chooser while keeping this maintenance
+        // popup open, so the removed shop disappears from login immediately.
+        if (typeof showLoginScreen === 'function') showLoginScreen();
+        container.querySelector('#maintenanceNote').textContent=shop.name+' deleted. Other shops are unchanged.';
         await refresh();
       } catch(err) {
         container.querySelector('#maintenanceNote').textContent=err.message || 'Could not delete shop.';
