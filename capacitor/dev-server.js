@@ -172,6 +172,18 @@ function handleRequest(req, res) {
     require('./swifta').handle(req, res);
     return;
   }
+  if (pathname === '/api/swifta/status' && req.method === 'GET') {
+    require('./swifta').status(req, res, parsedUrl);
+    return;
+  }
+  if (pathname === '/api/swifta/webhook' && req.method === 'POST') {
+    require('./swifta').callback(req, res, parsedUrl, true);
+    return;
+  }
+  if (pathname === '/api/swifta/callback' && req.method === 'POST') {
+    require('./swifta').callback(req, res, parsedUrl, false);
+    return;
+  }
 
   if (pathname === '/dev-live-reload') {
     res.writeHead(200, {
