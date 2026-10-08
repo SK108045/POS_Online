@@ -15,6 +15,28 @@ export function createNativeProviders(http) {
         data: swifta.validate(payload), readTimeout: 30000
       })));
     },
+    async paymentStatus({reference}) {
+      if (!/^[A-Za-z0-9_-]{5,200}$/.test(String(reference || ''))) throw new Error('Missing Swifta checkout ID.');
+      // Query the official HTTPS gateway directly in native mode; an accepted
+      // STK prompt is never treated as proof of payment.
+      const data = parse(await http.request({
+        url: 'https://app.swifta.co.ke/poll/' + encodeURIComponent(reference),
+        method: 'GET', headers: {Accept: 'application/json'}, readTimeout: 25000
+      }));
+      const txn = data.transaction || data.data || data;
+      const raw = String(txn.status || data.status || '').toLowerCase();
+      const receipt = String(txn.mpesaReceiptNumber || txn.MpesaReceiptNumber ||
+        txn.transactionReceipt || txn.TransactionReceipt || data.mpesaReceiptNumber || '').trim().toUpperCase();
+      if (['failed', 'cancelled', 'canceled', 'timeout'].includes(raw)) return {status:'failed'};
+      if (raw === 'success' || raw === 'completed' || raw === 'paid') {
+        if (!/^[A-Z0-9]{8,30}$/.test(receipt)) return {status:'pending'};
+        const amount = txn.amount ?? txn.TransactionAmount ?? data.amount;
+        const amountCents = amount == null ? null : Math.round(Number(amount) * 100);
+        const phone = String(txn.phone || txn.Msisdn || txn.phoneNumber || data.phone || '');
+        return {status:'success',payment_ref:receipt,checkout_id:String(reference),amount_cents:amountCents,phone};
+      }
+      return {status:'pending'};
+    },
     async sms(path, body = {}) {
       if (path === '/api/admin/sms/config') return {configured: !!config.sozuri?.apiKey, message: 'Configured'};
       if (path !== '/api/admin/sms/send') throw new Error('Unknown SMS endpoint.');
