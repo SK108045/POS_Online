@@ -245,6 +245,39 @@
     return shop;
   }
 
+  // Permanently remove only this shop's namespaced records and registry entry.
+  // Do not touch data belonging to any other registered shop.
+  async function deleteShop(id, username, password) {
+    const shops = await list();
+    const shop = shops.find(row => row.id === id);
+    if (!shop) throw new Error('Shop was not found.');
+    if (String(shop.owner_username).toLowerCase() !== String(username || '').trim().toLowerCase()
+        || !await verifySecret(String(password || ''), shop.owner_password_hash)) {
+      throw new Error('Incorrect owner username or password.');
+    }
+
+    await dbReady();
+    const db = window.OraforgeDB;
+    if (!db || typeof db.exportRecords !== 'function' || typeof db.replaceRecords !== 'function') {
+      throw new Error('Local shop storage is unavailable. Nothing was deleted.');
+    }
+
+    const prefix = `shop:${shop.id}:`;
+    const records = await db.exportRecords();
+    const remaining = shops.filter(row => row.id !== id);
+    const cleaned = records.filter(([key]) => key !== REGISTRY_KEY && !key.startsWith(prefix));
+    cleaned.push([REGISTRY_KEY, remaining]);
+    // replaceRecords writes in a single IndexedDB/SQLite transaction.
+    await db.replaceRecords(cleaned);
+
+    localStorage.setItem(FALLBACK_KEY, JSON.stringify(remaining));
+    for (const key of Object.keys(localStorage)) {
+      if (key.startsWith(`fallback_${prefix}`)) localStorage.removeItem(key);
+    }
+    if (activeShopId() === id) clearActiveShop();
+    return shop;
+  }
+
   async function verifyStaffPin(shopId, pin) {
     const shop = await find(shopId);
     return !!shop && await verifySecret(String(pin || ''), shop.staff_pin_hash);
@@ -263,6 +296,7 @@
     list,
     find,
     register,
+    deleteShop,
     activate,
     clearActiveShop,
     activeShopId,
