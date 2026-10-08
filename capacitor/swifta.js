@@ -177,8 +177,13 @@ async function callback(req,res,url,signed) {
     const payload=JSON.parse(raw),{data,nested}=paymentData(payload);
     const checkout=String(nested.CheckoutRequestID||nested.checkoutRequestId||nested.checkout_request_id||data.CheckoutRequestID||'');
     const reference=String(nested.accountReference||nested.account_reference||nested.reference||nested.external_reference||data.accountReference||'');
-    const entry=[...attempts.values()].find(a=>(checkout&&a.checkoutId===checkout)||(reference&&a.accountReference===reference));
-    if(!entry) return reply(res,200,{ok:true,status:'ignored'}); // May target another configured app.
+    // Never guess which shop was paid when a ticket reference is reused.
+    // Prefer the provider checkout ID; a reference-only callback must be unique.
+    const matches=[...attempts.values()].filter(a=> checkout
+      ? a.checkoutId===checkout
+      : reference && a.accountReference===reference);
+    const entry=matches.length===1 ? matches[0] : null;
+    if(!entry) return reply(res,200,{ok:true,status:'ignored'}); // Unknown or ambiguous callback.
     const applied=verifyAndApply(entry,payload,true);
     return reply(res,200,{ok:true,status:applied});
   } catch(_) {
