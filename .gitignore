@@ -22,3 +22,7 @@ capacitor/src/provider-config.json
 
 # Local daily shop backups
 /backups/
+
+# Local Swifta attempt journal (contains transaction IDs, never commit)
+/data/swifta-attempts.json
+/data/swifta-attempts.json.*.tmp
