@@ -1,4 +1,5 @@
 from http import cookies
+from html import escape as html_escape
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
@@ -612,74 +613,107 @@ def receipt_page(order, autoprint=False, is_kot=False, settings=None):
     is_quote = bool(order.get("is_quote") or order.get("order_type") == "quote")
     title_label = "QUOTATION / ESTIMATE" if is_quote else "ORIGINAL RECEIPT"
 
-    item_rows = "".join(
-        f'''
-        <tr>
-          <td>
-            {item['qty']} x {item['name']}
-            {f"<br><small style='color:#666'>Variant: {item['variant_info']}</small>" if item.get('variant_info') else ""}
-            {f"<br><small style='color:#666'>Batch: {item['batch_no']}</small>" if item.get('batch_no') else ""}
-            {f"<br><small style='color:#666'>Note: {item['note']}</small>" if item.get('note') else ""}
-          </td>
-          <td style="text-align:right;">{money(item['line_total_cents'])}</td>
-        </tr>
-        '''
-        for item in order["items"]
-    )
+    def safe(value):
+        return html_escape(str(value if value is not None else ""))
 
-    # The recorded order tax is authoritative. Historical sales store 0 tax;
-    # never reclassify part of their gross sales as VAT from a default setting.
+    def info_row(label, value):
+        return f'<div class="receipt-line"><span>{safe(label)}</span><span>{safe(value)}</span></div>'
+
+    contact_html = "".join([
+        f'<p class="receipt-contact">{safe(address)}</p>' if address else "",
+        f'<p class="receipt-contact">Mobile: {safe(phone)}</p>' if phone else "",
+        f'<p class="receipt-contact">Email: {safe(settings.get("email"))}</p>' if settings.get("email") else "",
+        f'<p class="receipt-contact">KRA PIN: {safe(settings.get("kra_pin"))}</p>' if settings.get("kra_pin") else "",
+    ])
+
+    item_rows = []
+    for item in order["items"]:
+        qty = float(item.get("qty") or 0)
+        line_cents = int(item.get("line_total_cents") or 0)
+        price_cents = item.get("unit_price_cents")
+        if price_cents is None:
+            price_cents = line_cents / qty if qty else 0
+        notes = "".join([
+            f'<small>{safe(item.get("variant_info"))}</small>' if item.get("variant_info") else "",
+            f'<small>Batch: {safe(item.get("batch_no"))}</small>' if item.get("batch_no") else "",
+            f'<small>{safe(item.get("note"))}</small>' if item.get("note") else "",
+        ])
+        item_rows.append(
+            f'<tr class="receipt-item-name"><td colspan="3">{safe(item.get("name"))}{notes}</td></tr>'
+            f'<tr class="receipt-item-values"><td>{qty:g}</td><td>{money(price_cents)}</td><td>{money(line_cents)}</td></tr>'
+        )
+    item_rows = "".join(item_rows)
+
+    # Printed VAT is the amount already stored with the transaction.
     gross_cents = int(order.get("total_cents") or 0)
-    recorded_vat_cents = min(gross_cents, max(0, int(order.get("tax_cents") or 0)))
-    subtotal_no_vat = (gross_cents - recorded_vat_cents) / 100
-    vat_amount = recorded_vat_cents / 100
-    vat_rate = (100 * recorded_vat_cents / (gross_cents - recorded_vat_cents)
-                if recorded_vat_cents and gross_cents > recorded_vat_cents else 0)
-
+    vat_cents = min(gross_cents, max(0, int(order.get("tax_cents") or 0)))
+    subtotal_no_vat = (gross_cents - vat_cents) / 100
+    vat_amount = vat_cents / 100
+    vat_rate = (100 * vat_cents / (gross_cents - vat_cents)
+                if vat_cents and gross_cents > vat_cents else 0)
+    discount_cents = int(order.get("discount_cents") or 0)
+    subtotal_cents = int(order.get("subtotal_cents") or (gross_cents + discount_cents))
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+    tz = ZoneInfo("Africa/Nairobi")
+    sale_date = datetime.fromtimestamp(int(order.get("created_at") or now()), tz).strftime("%d/%m/%Y")
+    printed_at = datetime.now(tz).strftime("%I:%M:%S %p")
+    receipt_title = "Quotation" if is_quote else "Cash Sale"
+    details_html = "".join([
+        info_row("Name", order.get("customer_name") or "Walk-In Customer"),
+        info_row("Receipt No.", order.get("ticket_no") or order.get("id") or "-"),
+        info_row("Date", sale_date),
+        info_row("Print Time", printed_at),
+        info_row("Table / Tab", order.get("table_name")) if order.get("table_name") else "",
+        info_row("Type", (order.get("order_type") or "walk-in").upper()),
+        info_row("Served By", order.get("employee_name") or "POS Terminal"),
+        info_row("Status", (order.get("status") or "open").upper()),
+    ])
+    discount_html = (
+        info_row("Subtotal", money(subtotal_cents)) +
+        info_row("Discount", "-" + money(discount_cents))
+    ) if discount_cents else ""
+    payment_html = "" if is_quote else (
+        '<div class="receipt-payment">' +
+        info_row("Payment Method", (order.get("payment_method") or "CASH").upper()) +
+        (info_row("Txn Ref", order.get("payment_ref")) if order.get("payment_ref") else "") +
+        '</div>'
+    )
     return f"""<!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>{'Quote' if is_quote else 'Receipt'} #{order['ticket_no']} — {bname}</title>
+  <title>{'Quote' if is_quote else 'Receipt'} #{safe(order.get('ticket_no'))} — {safe(bname)}</title>
   <link rel="stylesheet" href="/static/styles.css">
 </head>
 <body class="receipt-body">
-  <section class="receipt">
-    <h1>{bname}</h1>
-    {f"<p style='font-weight:600;'>{btag}</p>" if btag else ""}
-    {f"<p>{address}</p>" if address else ""}
-    {f"<p>Tel: {phone}</p>" if phone else ""}
-    <h2 style="font-size: 15px; margin: 12px 0 8px; font-weight: 800;">* {title_label} *</h2>
-    <div class="receipt-line"><span>Date</span><strong>{__import__('datetime').datetime.now().strftime('%d/%m/%Y %H:%M')}</strong></div>
-    <div class="receipt-line"><span>Ref #</span><strong>{order['ticket_no']}</strong></div>
-    {f"<div class='receipt-line'><span>Table / Tab</span><strong>{order.get('table_name')}</strong></div>" if order.get('table_name') else ""}
-    <div class="receipt-line"><span>Type</span><strong>{order['order_type'].upper()}</strong></div>
-    <div class="receipt-line"><span>Served By</span><strong>{order.get('employee_name') or '-'}</strong></div>
-    {f"<div class='receipt-line'><span>Customer</span><strong>{order.get('customer_name')}</strong></div>" if order.get('customer_name') else ""}
-    <div class="receipt-line"><span>Status</span><strong>{order['status'].upper()}</strong></div>
-    <div style="border-top: 1px dashed var(--line); margin: 10px 0;"></div>
-    <table>
+  <section class="receipt sales-receipt">
+    <header class="receipt-business-header">
+      <h1 class="receipt-business-name">{safe(bname)}</h1>
+      {contact_html}
+      <p class="receipt-kind">{'QUOTATION / ESTIMATE' if is_quote else 'SALES RECEIPT'}</p>
+      <h2 class="receipt-sale-title">{receipt_title}</h2>
+    </header>
+    <div class="receipt-details">{details_html}</div>
+    <table class="receipt-items">
+      <thead><tr><th>Qty</th><th>Unit Price</th><th>Total</th></tr></thead>
       <tbody>{item_rows}</tbody>
     </table>
-    <div style="border-top: 1px dashed var(--line); margin: 10px 0;"></div>
-    <div class="receipt-total"><span>Total</span><strong>KES {order['total']}</strong></div>
-    {"" if is_quote else f'''
-    <div class="receipt-line"><span>Amount Tendered</span><strong>KES {order['total']}</strong></div>
-    <div class="receipt-line"><span>Change</span><strong>KES 0.00</strong></div>
-    <div style="border-top: 1px dashed var(--line); margin: 10px 0;"></div>
-    <div class="receipt-line"><span>Total Excl. VAT</span><strong>KES {subtotal_no_vat:,.2f}</strong></div>
-    <div class="receipt-line"><span>Total VAT ({vat_rate:.0f}%)</span><strong>KES {vat_amount:,.2f}</strong></div>
-    <div style="border-top: 1px dashed var(--line); margin: 10px 0;"></div>
-    <div class="receipt-line"><span>Payment Method</span><strong>{(order.get('payment_method') or 'CASH').upper()}</strong></div>
-    <div class="receipt-line"><span>Txn Ref</span><strong>{order.get('payment_ref') or f"TXN-{order['id'] * 1234}"}</strong></div>
-    '''}
-    <p class="receipt-note" style="line-height: 1.6; margin-top: 12px; white-space: pre-wrap;">{r_footer}</p>
-    <button onclick="window.print()">Print {'Quote' if is_quote else 'Receipt'}</button>
+    <div class="receipt-totals">
+      {discount_html}
+      {info_row("Total Excl. VAT", f"{subtotal_no_vat:,.2f}")}
+      {info_row(f"VAT Total ({vat_rate:.1f}%)", f"{vat_amount:,.2f}")}
+      <div class="receipt-total"><span>Total</span><strong>KES {money(gross_cents)}</strong></div>
+    </div>
+    {payment_html}
+    <footer class="receipt-note">{safe(r_footer)}</footer>
+    <button onclick="window.print()">Print {'Quotation' if is_quote else 'Receipt'}</button>
   </section>
   {"<script>window.addEventListener('load', () => setTimeout(() => window.print(), 250));</script>" if autoprint else ""}
 </body>
 </html>"""
+
 
 def hidden_admin_page(business_type="retail"):
     profile = PROFILES.get(business_type, PROFILES["retail"])
