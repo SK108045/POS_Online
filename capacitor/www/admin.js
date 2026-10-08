@@ -84,6 +84,20 @@ const LocalAdmin = {
       };
     }
 
+    // Same shop-scoped orders collection used by the POS Sales History page.
+    // This is intentionally read-only: viewing receipts never changes sales data.
+    if (cleanPath === '/api/orders' && method === 'GET') {
+      const status = url.searchParams.get('status');
+      return status ? orders.filter(order => order.status === status) : orders;
+    }
+    if (cleanPath === '/api/order' && method === 'GET') {
+      const orderId = Number(url.searchParams.get('id'));
+      if (!Number.isSafeInteger(orderId) || orderId <= 0) throw new Error('Invalid receipt number.');
+      const order = orders.find(row => Number(row.id) === orderId);
+      if (!order) throw new Error('Receipt could not be found in this shop.');
+      return order;
+    }
+
     if (cleanPath === '/api/admin/summary') {
       const paid = orders.filter(o => o.status === 'paid');
       const now = new Date();
@@ -258,6 +272,7 @@ function navigate(section) {
   if (section === 'dashboard') renderDashboard();
   if (section === 'users') renderUsers();
   if (section === 'menu') renderMenu();
+  if (section === 'sales') renderAdminSales();
   if (section === 'suppliers') renderSuppliers();
   if (section === 'customers') renderCustomers();
   if (section === 'promotions') renderPromotions();
