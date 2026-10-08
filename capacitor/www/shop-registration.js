@@ -194,6 +194,25 @@
           <small id="loginPinHint">Select a registered shop first</small>
           <a href="admin.html" id="registeredAdminLink"><span>👑</span> Owner / admin sign in →</a>
         </div>
+      </div>
+      <div id="shopDeleteOverlay" class="shop-delete-overlay" hidden>
+        <div class="shop-delete-card" role="dialog" aria-modal="true" aria-labelledby="shopDeleteTitle">
+          <h2 id="shopDeleteTitle">Delete shop?</h2>
+          <p>All products, orders, customers and settings for this shop will be permanently removed from this device. Other shops will be kept.</p>
+          <form id="shopDeleteForm">
+            <label>Owner username
+              <input type="text" id="shopDeleteUsername" autocomplete="username" required>
+            </label>
+            <label>Owner password
+              <input type="password" id="shopDeletePassword" autocomplete="current-password" required>
+            </label>
+            <p id="shopDeleteError" class="shop-delete-error" role="alert" hidden></p>
+            <div class="shop-delete-actions">
+              <button type="button" id="shopDeleteCancel" class="shop-delete-cancel">Cancel</button>
+              <button type="submit" id="shopDeleteConfirm" class="shop-delete-confirm">Delete permanently</button>
+            </div>
+          </form>
+        </div>
       </div>`;
     document.body.appendChild(screen);
     setThemeButton(screen.querySelector('#loginThemeToggle'));
@@ -230,11 +249,15 @@
       grid.innerHTML = shopsCache.map(shop => {
         const p = profileForType(shop.business_type, shop.category_name);
         const active = shop.id === selectedShopId;
-        return `<button type="button" class="registered-shop-chip ${active ? 'active' : ''}" data-shop-id="${escapeHtml(shop.id)}">
-          <span class="shop-chip-icon">${p.icon || '🏪'}</span>
-          <span class="shop-chip-copy"><strong>${escapeHtml(shop.name)}</strong><small>${escapeHtml(shop.category_name || p.name)}</small></span>
-          ${active ? '<span class="shop-chip-check">✓</span>' : ''}
-        </button>`;
+        return `<div class="registered-shop-entry">
+          <button type="button" class="registered-shop-chip ${active ? 'active' : ''}" data-shop-id="${escapeHtml(shop.id)}">
+            <span class="shop-chip-icon">${p.icon || '🏪'}</span>
+            <span class="shop-chip-copy"><strong>${escapeHtml(shop.name)}</strong><small>${escapeHtml(shop.category_name || p.name)}</small></span>
+            ${active ? '<span class="shop-chip-check">✓</span>' : ''}
+          </button>
+          <button type="button" class="registered-shop-delete" data-delete-shop-id="${escapeHtml(shop.id)}"
+            aria-label="Delete ${escapeHtml(shop.name)}" title="Delete ${escapeHtml(shop.name)}">✕</button>
+        </div>`;
       }).join('');
       grid.querySelectorAll('[data-shop-id]').forEach(btn => btn.onclick = async () => {
         selectedShopId = btn.dataset.shopId;
@@ -244,6 +267,10 @@
         updateHeader(shop);
         screen.querySelector('#loginErrorMsg').style.display = 'none';
         screen.querySelector('#loginPinInput').focus();
+      });
+      grid.querySelectorAll('[data-delete-shop-id]').forEach(btn => btn.onclick = () => {
+        const shop = shopsCache.find(s => s.id === btn.dataset.deleteShopId);
+        if (shop) openShopDelete(shop);
       });
     };
 
@@ -262,6 +289,69 @@
         updateHeader(null, selectedDemoType);
         screen.querySelector('#loginPinInput').focus();
       });
+    };
+
+    const deleteOverlay = screen.querySelector('#shopDeleteOverlay');
+    const deleteForm = screen.querySelector('#shopDeleteForm');
+    const deleteError = screen.querySelector('#shopDeleteError');
+    let pendingDeleteShop = null;
+
+    function closeShopDelete() {
+      deleteOverlay.hidden = true;
+      pendingDeleteShop = null;
+      deleteForm.reset();
+      deleteError.hidden = true;
+    }
+
+    function openShopDelete(shop) {
+      pendingDeleteShop = shop;
+      deleteForm.reset();
+      deleteError.hidden = true;
+      screen.querySelector('#shopDeleteTitle').textContent = `Delete ${shop.name}?`;
+      screen.querySelector('#shopDeleteUsername').value = shop.owner_username;
+      deleteOverlay.hidden = false;
+      screen.querySelector('#shopDeletePassword').focus();
+    }
+
+    screen.querySelector('#shopDeleteCancel').onclick = closeShopDelete;
+    deleteOverlay.addEventListener('click', event => {
+      if (event.target === deleteOverlay) closeShopDelete();
+    });
+    deleteOverlay.addEventListener('keydown', event => {
+      if (event.key === 'Escape') { event.preventDefault(); closeShopDelete(); }
+    });
+    deleteForm.onsubmit = async event => {
+      event.preventDefault();
+      if (!pendingDeleteShop) return;
+      const shop = pendingDeleteShop;
+      const button = screen.querySelector('#shopDeleteConfirm');
+      button.disabled = true;
+      deleteError.hidden = true;
+      try {
+        await window.OraforgeShops.deleteShop(
+          shop.id,
+          screen.querySelector('#shopDeleteUsername').value,
+          screen.querySelector('#shopDeletePassword').value
+        );
+        shopsCache = await window.OraforgeShops.list();
+        if (selectedShopId === shop.id) {
+          selectedShopId = shopsCache[0]?.id || '';
+          if (!selectedShopId) selectedDemoType = 'retail';
+        }
+        screen.querySelector('#loginPinInput').value = '';
+        renderRegistered();
+        if (selectedShopId) updateHeader(shopsCache.find(s => s.id === selectedShopId));
+        else updateHeader(null, selectedDemoType);
+        closeShopDelete();
+        const notice = screen.querySelector('#loginNotice');
+        notice.textContent = `✓ ${shop.name} was deleted. Other shops were not changed.`;
+        notice.style.display = 'block';
+      } catch (err) {
+        deleteError.textContent = err.message || 'Could not delete shop.';
+        deleteError.hidden = false;
+      } finally {
+        button.disabled = false;
+      }
     };
 
     screen.querySelector('#registerNewShopBtn').onclick = showRegistrationScreen;
