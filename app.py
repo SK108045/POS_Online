@@ -620,7 +620,7 @@ def receipt_page(order, autoprint=False, is_kot=False, settings=None):
         return f'<div class="receipt-line"><span>{safe(label)}</span><span>{safe(value)}</span></div>'
 
     contact_html = "".join([
-        f'<p class="receipt-contact">{safe(address)}</p>' if address else "",
+        f'<p class="receipt-contact">Address: {safe(address)}</p>' if address else "",
         f'<p class="receipt-contact">Mobile: {safe(phone)}</p>' if phone else "",
         f'<p class="receipt-contact">Email: {safe(settings.get("email"))}</p>' if settings.get("email") else "",
         f'<p class="receipt-contact">KRA PIN: {safe(settings.get("kra_pin"))}</p>' if settings.get("kra_pin") else "",
