@@ -168,6 +168,11 @@ function handleRequest(req, res) {
     return;
   }
 
+  if (pathname === '/api/local/swifta-key' && ['GET','POST'].includes(req.method)) {
+    require('./swifta-config').handle(req,res);
+    return;
+  }
+
   if (pathname === '/api/swifta/stkpush' && req.method === 'POST') {
     require('./swifta').handle(req, res);
     return;
