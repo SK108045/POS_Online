@@ -177,9 +177,52 @@
   text-align: center;
 }
 
-.register-shop-link {
-  border-style: dashed;
-  background: var(--bg);
+/* These controls are inside .login-panel, whose broad button rule in styles.css
+   otherwise overrides their foreground and background colors. */
+.registered-login-panel .register-shop-link {
+  min-height: 48px;
+  border: 1px solid var(--primary);
+  border-radius: 10px;
+  background: var(--primary);
+  color: var(--primary-fg);
+  font-size: 14px;
+  font-weight: 800;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, .12);
+  transition: background-color .16s ease, transform .16s ease, box-shadow .16s ease;
+}
+
+.registered-login-panel .register-shop-link:hover {
+  background: var(--primary-dark);
+  border-color: var(--primary-dark);
+  color: var(--primary-fg);
+  box-shadow: 0 5px 16px rgba(0, 0, 0, .18);
+  transform: translateY(-1px);
+}
+
+.registered-login-panel .register-shop-link:active {
+  transform: translateY(0);
+}
+
+/* Keep secondary login buttons legible in both green themes. */
+.registered-login-panel .registered-shop-chip {
+  background: var(--panel);
+  color: var(--ink);
+  border-color: var(--line);
+}
+.registered-login-panel .registered-shop-chip.active {
+  background: var(--primary);
+  color: var(--primary-fg);
+  border-color: var(--primary);
+}
+.registered-login-panel .demo-shop-toggle {
+  background: transparent;
+  color: var(--muted);
+}
+.registration-panel .reg-back-link {
+  background: transparent;
+  color: var(--muted);
+  border: 0;
 }
 
 .demo-shop-toggle {
