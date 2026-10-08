@@ -23,6 +23,9 @@ capacitor/src/provider-config.json
 # Local daily shop backups
 /backups/
 
+# Local per-device Swifta credentials: keep out of Git.
+/.swifta-api-key.local
+/.swifta-api-key.local.*.tmp
 # Local Swifta attempt journal (contains transaction IDs, never commit)
 /data/swifta-attempts.json
 /data/swifta-attempts.json.*.tmp
