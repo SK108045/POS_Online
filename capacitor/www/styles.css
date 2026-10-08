@@ -2785,3 +2785,9 @@ button:focus-visible, a:focus-visible { outline: 3px solid #87a857; outline-offs
   opacity: .6;
   cursor: not-allowed;
 }
+
+/* Some payment confirmation controls deliberately use a brighter inline success
+   green instead of the theme primary. Give those buttons their own dark foreground. */
+.primary[style*="#16a34a"] {
+  color: #071e14;
+}
