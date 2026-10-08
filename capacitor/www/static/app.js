@@ -53,10 +53,13 @@ function showReceiptModal(order, isKot = false) {
       </tr>`
     ).join('');
 
-    const taxRate = parseFloat(state.settings?.tax_rate || 16.0);
-    const multiplier = 1.0 + (taxRate / 100.0);
-    const exclVat = taxRate > 0 ? (order.total_cents / multiplier) : order.total_cents;
-    const vatAmount = taxRate > 0 ? (order.total_cents - exclVat) : 0;
+    // Receipts must show tax actually recorded on the order, not an assumed VAT split.
+    const vatAmount = Math.max(0, Math.min(Number(order.total_cents || 0), Math.round(Number(order.tax_cents || 0))));
+    const exclVat = Number(order.total_cents || 0) - vatAmount;
+    const savedRate = Number(order.tax_rate);
+    const taxRate = vatAmount > 0
+      ? (order.tax_rate != null && Number.isFinite(savedRate) ? savedRate : (exclVat > 0 ? vatAmount / exclVat * 100 : 0))
+      : 0;
 
     bodyHtml = `
       <div class="receipt">
@@ -349,7 +352,8 @@ const LocalPOS = {
       business_name: prof.name + ' POS',
       business_tagline: prof.tagline || '',
       business_type: btype,
-      tax_rate: 16.0,
+      tax_rate: 0,
+      tax_rate_confirmed: false,
       currency: 'KES',
       receipt_header: 'Welcome to ' + prof.name,
       receipt_footer: 'Thank you for your business!\n------- END OF RECEIPT -------'
@@ -371,6 +375,11 @@ const LocalPOS = {
         { id: 1, name: "Walk-In Customer", phone: "+254 700 000 000" }
       ]);
       this.set('seeded', true);
+    }
+    let settings = this.get('settings', {});
+    if (Number(settings.tax_rate) === 16 && settings.tax_rate_confirmed !== true) {
+      settings = { ...settings, tax_rate: 0, tax_rate_confirmed: false };
+      this.set('settings', settings);
     }
   },
   handle(path, options = {}) {
@@ -440,6 +449,11 @@ const LocalPOS = {
       const orders = this.get('orders', []);
       const order = orders.find(o => o.id === Number(body.order_id));
       if (order) {
+        const settings = this.get('settings', {});
+        const configured = Number(settings.tax_rate);
+        const rate = settings.tax_rate_confirmed === true && Number.isFinite(configured) && configured > 0 && configured <= 100 ? configured : 0;
+        order.tax_rate = rate;
+        order.tax_cents = rate > 0 ? Math.round(Number(order.total_cents || 0) * rate / (100 + rate)) : 0;
         order.status = 'paid';
         order.paid_at = Math.floor(Date.now() / 1000);
         order.payment_method = body.method || 'cash';
@@ -482,6 +496,12 @@ const LocalPOS = {
 
     if (cleanPath === '/api/settings' && method === 'POST') {
       const settings = { ...this.get('settings', {}), ...body };
+      if (Object.prototype.hasOwnProperty.call(body, 'tax_rate')) {
+        const rate = Number(body.tax_rate);
+        if (!Number.isFinite(rate) || rate < 0 || rate > 100) throw new Error('VAT rate must be between 0% and 100%.');
+        settings.tax_rate = rate;
+        settings.tax_rate_confirmed = true;
+      }
       this.set('settings', settings);
       return { settings, profile: prof };
     }
@@ -2877,7 +2897,7 @@ async function renderSettings() {
           </div>
           <div class="form-group">
             <label style="display:block; font-size:13px; font-weight:600; margin-bottom:6px; color:var(--muted);">Tax Rate % (VAT)</label>
-            <input class="field" name="tax_rate" type="number" step="0.1" value="${state.settings?.tax_rate || 16.0}" style="width:100%;">
+            <input class="field" name="tax_rate" type="number" step="0.1" value="${state.settings?.tax_rate ?? 0}" style="width:100%;">
           </div>
           <div class="form-group" style="grid-column: 1 / -1;">
             <label style="display:block; font-size:13px; font-weight:600; margin-bottom:6px; color:var(--muted);">Receipt Footer Note</label>
