@@ -416,3 +416,88 @@
   .registered-login-brand { padding-right: 30px; }
   .registered-login-brand h1 { font-size: 20px; }
 }
+
+/* Per-shop deletion control; keep the shop selector and delete action separate. */
+.registered-shop-entry {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 32px;
+  align-items: stretch;
+  gap: 6px;
+  min-width: 0;
+}
+.registered-shop-entry .registered-shop-chip { width: 100%; padding: 9px 7px; }
+.registered-login-panel .registered-shop-delete {
+  min-width: 32px;
+  min-height: 48px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  padding: 0;
+  background: var(--panel);
+  color: var(--muted);
+  font-size: 17px;
+  font-weight: 800;
+  cursor: pointer;
+}
+.registered-login-panel .registered-shop-delete:hover,
+.registered-login-panel .registered-shop-delete:focus-visible {
+  background: var(--danger-bg);
+  border-color: var(--danger);
+  color: var(--danger);
+}
+.shop-delete-overlay[hidden] { display: none; }
+.shop-delete-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000001;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: rgba(0, 0, 0, .76);
+  box-sizing: border-box;
+}
+.shop-delete-card {
+  width: min(430px, 100%);
+  max-height: calc(100dvh - 32px);
+  overflow-y: auto;
+  box-sizing: border-box;
+  border: 1px solid var(--line-strong);
+  border-radius: 16px;
+  padding: 24px;
+  background: var(--panel);
+  color: var(--ink);
+  box-shadow: 0 20px 65px rgba(0, 0, 0, .35);
+}
+.shop-delete-card h2 { color: var(--ink); margin: 0 0 9px; font-size: 21px; }
+.shop-delete-card > p { color: var(--muted); margin: 0 0 20px; font-size: 13px; line-height: 1.55; }
+.shop-delete-card form { display: grid; gap: 14px; }
+.shop-delete-card label { display: grid; gap: 6px; color: var(--ink); font-size: 13px; font-weight: 700; }
+.shop-delete-card input {
+  width: 100%;
+  min-height: 44px;
+  box-sizing: border-box;
+  border: 1px solid var(--line-strong);
+  border-radius: 9px;
+  padding: 10px 12px;
+  background: var(--bg);
+  color: var(--ink);
+  font-size: 14px;
+}
+.shop-delete-error { color: #fca5a5; font-size: 12px; margin: 0; }
+.shop-delete-error[hidden] { display: none; }
+.shop-delete-actions { display: flex; gap: 10px; justify-content: flex-end; }
+.shop-delete-actions button {
+  min-height: 44px;
+  padding: 10px 13px;
+  border-radius: 9px;
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+}
+.shop-delete-cancel { background: var(--surface-soft); border: 1px solid var(--line); color: var(--ink); }
+.shop-delete-confirm { background: #ae302d; border: 1px solid #ae302d; color: #fff; }
+.shop-delete-confirm:hover { background: #8f2421; }
+.shop-delete-confirm:disabled { opacity: .55; cursor: wait; }
+@media (max-width: 560px) {
+  .shop-delete-card { padding: 20px; }
+  .registered-shop-entry { grid-template-columns: minmax(0, 1fr) 36px; }
+}
