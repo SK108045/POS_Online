@@ -43,7 +43,7 @@ def build_desktop_bridge():
     try:
         config_file.write_text(json.dumps(EMPTY_NATIVE) + "\n", encoding="utf-8")
         subprocess.run(
-            ["node", str(esbuild), "src/sqlite-bridge.js", "--bundle", "--format=iife",
+            [str(esbuild), "src/sqlite-bridge.js", "--bundle", "--format=iife",
              "--platform=browser", "--outfile=www/sqlite-bridge.js"],
             cwd=CAP, check=True,
         )
