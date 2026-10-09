@@ -19,7 +19,8 @@ test('Swifta validation and response shapes',()=>{
 
 test('signed Swifta verification automatically confirms the correct order only',async()=>{
   const dir=fs.mkdtempSync(path.join(os.tmpdir(),'oraforge-swifta-test-'));
-  process.env.SWIFTA_API_KEY='test-key';
+  process.env.POS_DATA_DIR=dir;
+  fs.writeFileSync(path.join(dir,'swifta.txt'),'test-key\n');
   process.env.SWIFTA_WEBHOOK_SECRET='test-signing-secret';
   process.env.SWIFTA_ATTEMPTS_PATH=path.join(dir,'attempts.json');
   const swifta=require('../swifta');
@@ -107,7 +108,7 @@ test('signed Swifta verification automatically confirms the correct order only',
   } finally {
     https.request=previous;
     fs.rmSync(dir,{recursive:true,force:true});
-    delete process.env.SWIFTA_API_KEY;
+    delete process.env.POS_DATA_DIR;
     delete process.env.SWIFTA_WEBHOOK_SECRET;
     delete process.env.SWIFTA_ATTEMPTS_PATH;
   }
