@@ -75,7 +75,8 @@ jobs:
         shell: pwsh
         run: |
           python -m pip install --disable-pip-version-check pyinstaller==6.16.0 -r requirements.txt tzdata
-          python -m PyInstaller --noconfirm --clean --onedir --name OraforgePOSPython --distpath dist/windows/OraforgePOS/runtime/python --workpath dist/windows/pybuild --specpath dist/windows/pybuild --add-data "static;static" --collect-all tzdata windows/legacy_backend.py --paths .
+          $assets = (Resolve-Path static).Path
+          python -m PyInstaller --noconfirm --clean --onedir --name OraforgePOSPython --distpath dist/windows/OraforgePOS/runtime/python --workpath dist/windows/pybuild --specpath dist/windows/pybuild --add-data "$assets;static" --collect-all tzdata windows/legacy_backend.py --paths .
           if ($LASTEXITCODE -ne 0) { throw 'Python backend packaging failed' }
           if (!(Test-Path 'dist/windows/OraforgePOS/runtime/python/OraforgePOSPython/OraforgePOSPython.exe')) { throw 'Python EXE missing' }
       - name: Native Windows Node launcher smoke test
