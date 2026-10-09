@@ -115,7 +115,7 @@ jobs:
           $py = "$base/runtime/python/OraforgePOSPython/OraforgePOSPython.exe"
           if (!(Test-Path $py)) { throw 'Python bundled runtime missing' }
           if ((Get-Item $py).Length -lt 100000) { throw 'Frozen Python backend too small' }
-          if ((Get-Content "$base/app/swifta.txt" -Raw).Trim().Length -ne 0) { throw 'Swifta key was packaged' }
+          if ((Get-Item "$base/app/swifta.txt").Length -ne 0) { throw 'Swifta key was packaged' }
           $sms = Get-Content "$base/app/capacitor/sozuri-config.json" -Raw | ConvertFrom-Json
           if ($sms.apiKey) { throw 'SMS key was packaged' }
           Add-Type -AssemblyName System.IO.Compression.FileSystem
