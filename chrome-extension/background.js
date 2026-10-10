@@ -1,0 +1,119 @@
+/* All attempts survive service-worker suspension. No credentials are stored. */
+'use strict';
+const PORTAL = 'https://ecitizen.kra.go.ke';
+const CREATE = PORTAL + '/individual/etims/sale/create';
+const LIST = PORTAL + '/individual/etims/sale';
+const STORE = 'oraforgeJobsV1';
+let serial = Promise.resolve();
+const jobs = async () => (await chrome.storage.local.get(STORE))[STORE] || {};
+const key = (origin, id) => JSON.stringify([origin,id]);
+const isPos = sender => { try { const u = new URL(sender.url); return ['localhost','127.0.0.1'].includes(u.hostname) && u.protocol==='http:' && sender.frameId===0; } catch (_) { return false; } };
+const isPortal = sender => { try { return new URL(sender.url).origin===PORTAL && sender.frameId===0; } catch (_) { return false; } };
+async function validRecord(r) {
+  if (!r || typeof r.id!=='string' || !/^[a-f0-9]{64}$/.test(r.digest) || !r.snapshot || r.snapshot.currency!=='KES' || !Number.isSafeInteger(r.snapshot.total_cents) || r.snapshot.total_cents<0 || !Array.isArray(r.snapshot.items) || r.snapshot.items.length>500) throw Error('Invalid POS invoice request.');
+  const p=r.snapshot, amount=v=>Number.isSafeInteger(v) && v>=0;
+  if (r.id!==JSON.stringify([r.shop_id,Number(r.sale_id),String(r.receipt_no)]) || p.shop_id!==r.shop_id || p.sale_id!==r.sale_id || p.receipt_no!==r.receipt_no || !p.items.length ||
+      !amount(p.subtotal_cents) || !amount(p.discount?.amount_cents) || !amount(p.tax_cents) || p.tax_cents>p.total_cents ||
+      p.items.some(i=>typeof i.name!=='string' || !i.name || !Number.isFinite(i.quantity) || i.quantity<=0 || !amount(i.unit_price_cents) || !amount(i.line_total_cents) || Math.round(i.quantity*i.unit_price_cents)!==i.line_total_cents) ||
+      p.items.reduce((sum,i)=>sum+i.line_total_cents,0)!==p.subtotal_cents || p.subtotal_cents-p.discount.amount_cents!==p.total_cents) throw Error('POS sale amounts or identity do not reconcile.');
+  const bytes=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(JSON.stringify(p)));
+  const digest=Array.from(new Uint8Array(bytes),b=>b.toString(16).padStart(2,'0')).join('');
+  if (digest!==r.digest) throw Error('POS sale snapshot changed.');
+}
+async function open(job, recovery) {
+  if (job.tab_id) {
+    try {
+      const tab = await chrome.tabs.get(job.tab_id);
+      if (tab.url?.startsWith(PORTAL+'/')) {
+        await chrome.windows.update(tab.windowId,{focused:true}); await chrome.tabs.update(tab.id,{active:true});
+        await chrome.tabs.sendMessage(tab.id,{action:'reload_job'}).catch(()=>{});
+        return;
+      }
+    } catch (_) {}
+  }
+  const popup = await chrome.windows.create({url:recovery?LIST:CREATE,type:'popup',width:820,height:600,focused:true});
+  job.tab_id = popup.tabs[0].id; job.window_id = popup.id;
+}
+async function handle(m, sender) {
+  const data = m.data || {}, all = await jobs();
+  if (m.role === 'pos') {
+    if (!isPos(sender)) throw Error('This POS origin is not permitted.');
+    const origin = new URL(sender.url).origin;
+    if (m.action==='ping') return {version:1};
+    if (m.action==='results') return Object.values(all).filter(j=>{
+      const known=data.known?.[j.record.id];
+      return j.origin===origin && j.result && (!Array.isArray(data.ids) || data.ids.includes(j.record.id)) &&
+        (!known || known.cu!==j.result.cu_invoice_number || known.digest!==j.record.digest || known.attempt_id!==j.record.attempt_id);
+    }).slice(0,25).map(j=>({id:j.record.id,attempt_id:j.record.attempt_id,digest:j.record.digest,total_cents:j.record.snapshot.total_cents,fiscal:j.result}));
+    const id = data.record?.id || data.id, k = key(origin,id), previous = all[k];
+    if (['start','recover','recorded'].includes(m.action)) await validRecord(data.record);
+    if (m.action==='start' || m.action==='recover') {
+      const r=data.record;
+      if (!r.attempt_id || r.status!=='review_required') throw Error('POS must claim the invoice before opening KRA.');
+      if (previous?.generated || previous?.result || r.fiscal?.cu_invoice_number) throw Error('An invoice is already recorded. Duplicate generation is blocked; refresh the POS.');
+      if (previous && previous.record.attempt_id !== r.attempt_id && !previous.revoked) throw Error('Check the previous invoice attempt before retrying.');
+      if (m.action==='start' && previous && !previous.revoked) throw Error('This attempt is already open. Use Check existing invoice.');
+      const job = previous && !previous.revoked ? previous : {origin,record:r,created_at:new Date().toISOString()};
+      job.pos_tab_id=sender.tab.id; job.recovery = m.action==='recover';
+      // Save uncertainty BEFORE creating the popup, including if Chrome crashes here.
+      all[k]=job; await chrome.storage.local.set({[STORE]:all});
+      await open(job,job.recovery); await chrome.storage.local.set({[STORE]:all});
+      return {opened:true};
+    }
+    if (m.action==='ack') {
+      if (previous?.record.attempt_id===data.attempt_id) {previous.ack=true; await chrome.storage.local.set({[STORE]:all});}
+      return {saved:true};
+    }
+    if (m.action==='recorded') {
+      if (!data.record.fiscal?.cu_invoice_number) throw Error('Missing CU Invoice Number.');
+      all[k] = {...previous,origin,record:data.record,generated:true,revoked:true};
+      await chrome.storage.local.set({[STORE]:all});
+      if (previous?.tab_id) await chrome.tabs.sendMessage(previous.tab_id,{action:'revoked'}).catch(()=>{});
+      return {saved:true};
+    }
+    if (m.action==='checked_absent') {
+      if (!previous || previous.record.attempt_id!==data.attempt_id || previous.generated || previous.result) throw Error('Cannot reset this attempt. Refresh and check the existing KRA invoice.');
+      if (!String(data.reason||'').trim()) throw Error('Describe the existing invoice check.');
+      // Close the original tab so a stale, already-filled form cannot still issue.
+      if (previous.tab_id) {
+        try { await chrome.tabs.get(previous.tab_id); }
+        catch (_) { previous.tab_id=null; }
+        if (previous.tab_id) await chrome.tabs.remove(previous.tab_id);
+      }
+      previous.revoked=true; previous.checked_absent={at:new Date().toISOString(),reason:String(data.reason).slice(0,500)};
+      await chrome.storage.local.set({[STORE]:all}); return {reset:true};
+    }
+    throw Error('Unsupported POS action.');
+  }
+  if (m.role !== 'portal' || !isPortal(sender)) throw Error('Untrusted portal message.');
+  const job = Object.values(all).find(j=>j.tab_id===sender.tab.id && !j.revoked);
+  if (m.action==='job') {
+    const config=(await chrome.storage.local.get('portalSelectors')).portalSelectors || {};
+    return job ? {record:job.record,recovery:job.recovery,armed:!!job.armed,generated:!!job.result,config} : null;
+  }
+  if (!job || data.attempt_id!==job.record.attempt_id || data.digest!==job.record.digest) throw Error('No matching active POS sale in this popup.');
+  if (m.action==='arm') {
+    if (job.recovery || job.armed || job.result || job.generated) throw Error('Check existing invoices before any new generation.');
+    if (data.total_cents!==job.record.snapshot.total_cents || data.receipt_no!==job.record.receipt_no) throw Error('Portal total or POS reference does not match.');
+    job.armed=true; job.confirmed_at=new Date().toISOString();
+    await chrome.storage.local.set({[STORE]:all}); return {armed:true};
+  }
+  if (m.action==='capture') {
+    const f=data.fiscal;
+    if ((!job.armed && !job.recovery) || !f?.cu_invoice_number || !f.scu_id || !f.receipt_signature || !f.qr_image || !f.invoice_number || !f.invoice_date || data.total_cents!==job.record.snapshot.total_cents || data.receipt_no!==job.record.receipt_no) throw Error('Official invoice is incomplete or does not match the POS sale.');
+    if (['cu_invoice_number','scu_id','receipt_signature','invoice_number','invoice_date'].some(k=>typeof f[k]!=='string' || f[k].length>160 || /[\u0000-\u001f]/.test(f[k])) ||
+        !/^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/.test(f.qr_image) || f.qr_image.length>500000) throw Error('Invalid official invoice fields or QR image.');
+    if (job.result && JSON.stringify(job.result)!==JSON.stringify(f)) throw Error('A different invoice is already captured.');
+    if (Object.values(all).some(j=>j!==job && j.origin===job.origin && (j.result?.cu_invoice_number || j.record.fiscal?.cu_invoice_number)?.toUpperCase()===f.cu_invoice_number.toUpperCase())) throw Error('This CU is already linked to another sale.');
+    job.result=f; job.generated=true; job.ack=false; job.captured_at=new Date().toISOString();
+    await chrome.storage.local.set({[STORE]:all});
+    if (job.pos_tab_id) await chrome.tabs.sendMessage(job.pos_tab_id,{action:'result_available'}).catch(()=>{});
+    return {captured:true};
+  }
+  throw Error('Unsupported portal action.');
+}
+chrome.runtime.onMessage.addListener((message,sender,reply) => {
+  serial=serial.then(()=>handle(message,sender)).then(result=>reply({result})).catch(error=>reply({error:error.message}));
+  return true;
+});
+// Clicking Options never triggers invoice submission or requests authentication.

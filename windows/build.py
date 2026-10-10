@@ -81,6 +81,7 @@ def main():
     app.mkdir(parents=True)
     # In particular, do not ship the tracked www/paystack.txt or development credentials.
     shutil.copytree(CAP / "www", app / "www", ignore=shutil.ignore_patterns("paystack.txt", "*.map"))
+    shutil.copytree(ROOT / "chrome-extension", STAGE / "chrome-extension")
     for name in ("dev-server.js", "auto-backup.js", "sms.js", "swifta.js",
                  "swifta-config.js", "swifta-contract.js"):
         shutil.copy2(CAP / name, app / name)

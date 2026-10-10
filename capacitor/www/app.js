@@ -113,6 +113,7 @@ function showReceiptModal(order, isKot = false) {
             ${order.payment_ref ? `<div class="receipt-line"><span>Txn Ref</span><span>${receiptEscape(order.payment_ref)}</span></div>` : ''}
           </div>
         `}
+        ${isQuote ? '' : '<div data-etims-receipt></div>'}
         <footer class="receipt-note">${receiptEscape(bfooter)}</footer>
         <button id="receiptPrintBtn">Print ${isQuote ? 'Quotation' : 'Receipt'}</button>
       </div>
@@ -134,6 +135,7 @@ function showReceiptModal(order, isKot = false) {
 
   document.body.appendChild(overlay);
   overlay.classList.add('receipt-modal-visible');
+  if (!isKot && !isQuote) window.OraforgeEtims?.mountReceipt(overlay, order);
 
   const close = () => {
     overlay.remove();
@@ -144,6 +146,8 @@ function showReceiptModal(order, isKot = false) {
   document.getElementById('receiptModalClose').addEventListener('click', close);
   document.getElementById('receiptPrintBtn').addEventListener('click', async () => {
     try {
+      await overlay.etimsReady;
+      await Promise.all([...overlay.querySelectorAll('.receipt-kra-qr')].map(img => img.decode()));
       if (window.OraforgeNative) {
         if (!window.OraforgePrinter) throw new Error('Install the latest APK to enable printing.');
         await window.OraforgePrinter.print({name:'Receipt '+(order.ticket_no || order.id)});
@@ -631,6 +635,7 @@ const LocalPOS = {
           id: this.nextId(order.items || []),
           menu_item_id: product.id,
           name: product.name,
+          description: product.description || '',
           qty,
           unit_price_cents: price,
           line_total_cents: Math.round(qty * price),
@@ -708,6 +713,7 @@ const LocalPOS = {
       const order = orders.find(o => o.id === Number(body.order_id));
       if (!order) throw new Error('Sale not found');
       if (order.status === 'paid') return order;
+      if (body.generate_etims && body.etims_shop_id !== (window.OraforgeShops?.activeShopId() || btype)) throw new Error('The active shop changed. Reopen checkout in the original shop.');
       let verifiedMpesa = null;
       if (body.payment_method === 'mpesa') {
         // Never allow cashier taps or an STK acceptance to mark M-Pesa paid.
@@ -746,7 +752,14 @@ const LocalPOS = {
       order.paid_cents = order.total_cents;
       order.paid_at = Math.floor(Date.now() / 1000);
       order.updated_at = order.paid_at;
-      const phone = String(body.customer_phone || '').trim();
+      order.customer_phone = String(body.customer_phone || '').trim();
+      if (body.generate_etims) {
+        order.etims_requested = true;
+        order.etims_customer = window.OraforgeEtimsCore.customer(body.etims_customer || {});
+        order.etims_shop_id = body.etims_shop_id;
+        order.etims_seller_pin = configuredSettings.kra_pin || '';
+      }
+      const phone = order.customer_phone;
       if (phone && !customers.some(c => String(c.phone || '').replace(/\D/g, '') === phone.replace(/\D/g, ''))) {
         customers.push({ id: this.nextId(customers), name: order.customer_name || phone, phone, email: '', notes: '' });
       }
@@ -760,12 +773,14 @@ const LocalPOS = {
     if (cleanPath === '/api/orders' && method === 'GET') {
       const orders = await this.getShop('orders', [], btype);
       const status = url.searchParams.get('status');
-      return status ? orders.filter(o => o.status === status) : orders;
+      const rows = status ? orders.filter(o => o.status === status) : orders;
+      return window.OraforgeEtims ? window.OraforgeEtims.attach(rows) : rows;
     }
 
     if (cleanPath === '/api/order' && method === 'GET') {
       const orders = await this.getShop('orders', [], btype);
-      return orders.find(o => o.id === Number(url.searchParams.get('id'))) || {};
+      const order=orders.find(o => o.id === Number(url.searchParams.get('id')));
+      return order && window.OraforgeEtims ? (await window.OraforgeEtims.attach([order]))[0] : order || {};
     }
 
     if (cleanPath === '/api/payments') {
@@ -1956,7 +1971,9 @@ async function showCheckoutModal(order) {
   overlay.addEventListener('click', e => { if (e.target === overlay) { stopPaymentPoll(); overlay.remove(); } });
 
   let selectedMethod = 'mpesa';
-  let savedPhone = '';
+  let savedPhone = order.customer_phone || '';
+  const checkoutShop = window.OraforgeEtims?.scope();
+  let generateEtims = false, etimsCustomer = {pin:order.customer_kra_pin || '', email:order.customer_email || '',billing_address:order.customer_billing_address || ''};
   let paymentPollTimer = null;
   let paymentPollGeneration = 0;
   function stopPaymentPoll() {
@@ -1973,7 +1990,7 @@ async function showCheckoutModal(order) {
         
         <div style="margin-bottom: 16px;">
           <label style="display:block; margin-bottom: 8px; font-weight: 600;">Customer Phone <span style="font-weight:400;color:var(--muted)">(optional)</span></label>
-          <input type="tel" id="checkoutCustomerPhone" class="field" placeholder="e.g. 0712345678" style="width: 100%; padding: 10px;" autocomplete="tel" value="${savedPhone}">
+          <input type="tel" id="checkoutCustomerPhone" class="field" placeholder="e.g. 0712345678" style="width: 100%; padding: 10px;" autocomplete="tel" value="${receiptEscape(savedPhone)}">
           <small style="display:block;margin-top:6px;color:var(--muted);">If entered, the number is saved to Customers after payment.</small>
         </div>
 
@@ -1987,9 +2004,11 @@ async function showCheckoutModal(order) {
 
         <div id="mpesaRefContainer" style="${selectedMethod === 'mpesa' ? 'display:block;' : 'display:none;'} margin-bottom: 16px;">
           <label style="display:block; margin-bottom: 8px; font-weight: 600;">M-Pesa / STK Phone</label>
-          <input type="tel" id="mpesaRef" class="field" placeholder="e.g. 0712345678" style="width: 100%; padding: 10px;" autocomplete="tel" value="${savedPhone}">
+          <input type="tel" id="mpesaRef" class="field" placeholder="e.g. 0712345678" style="width: 100%; padding: 10px;" autocomplete="tel" value="${receiptEscape(savedPhone)}">
           <small style="display:block;margin-top:4px;color:var(--muted);font-size:12px;">An STK push prompt will be sent to this phone to enter M-Pesa PIN.</small>
         </div>
+
+        ${window.OraforgeEtims?.checkoutMarkup() || ''}
 
         <div id="checkoutMsg" style="margin-top: 10px; font-weight: 600; font-size: 14px; text-align: center;"></div>
 
@@ -2009,6 +2028,19 @@ async function showCheckoutModal(order) {
     const confirmBtn = overlay.querySelector('#chkConfirm');
     const cancelBtn = overlay.querySelector('#chkCancel');
     const msgEl = overlay.querySelector('#checkoutMsg');
+
+    const etimsToggle = overlay.querySelector('#generateEtims');
+    if (etimsToggle) {
+      etimsToggle.checked = generateEtims;
+      overlay.querySelector('#etimsCustomerFields').hidden = !generateEtims;
+      overlay.querySelector('#etimsPin').value = etimsCustomer.pin || '';
+      overlay.querySelector('#etimsEmail').value = etimsCustomer.email || '';
+      overlay.querySelector('#etimsAddress').value = etimsCustomer.billing_address || '';
+      etimsToggle.onchange = () => {
+        generateEtims = etimsToggle.checked;
+        overlay.querySelector('#etimsCustomerFields').hidden = !generateEtims;
+      };
+    }
 
     customerPhoneInput.addEventListener('input', () => {
       savedPhone = customerPhoneInput.value;
@@ -2044,6 +2076,13 @@ async function showCheckoutModal(order) {
 
     confirmBtn.addEventListener('click', async () => {
       msgEl.textContent = '';
+      if (generateEtims) {
+        try {
+          etimsCustomer = window.OraforgeEtimsCore.customer({pin:overlay.querySelector('#etimsPin').value,
+            email:overlay.querySelector('#etimsEmail').value, billing_address:overlay.querySelector('#etimsAddress').value,
+            phone:customerPhoneInput.value.trim() || refInput.value.trim()});
+        } catch (error) { msgEl.textContent = error.message; return; }
+      }
       if (selectedMethod === 'mpesa') {
         const rawPhone = (refInput.value.trim() || customerPhoneInput.value.trim());
         if (!rawPhone) {
@@ -2091,11 +2130,13 @@ async function showCheckoutModal(order) {
               order_id: order.id,
               payment_method: 'cash',
               payment_ref: 'CASH',
-              customer_phone: (customerPhoneInput?.value || '').trim()
+              customer_phone: (customerPhoneInput?.value || '').trim(),
+              generate_etims: generateEtims, etims_customer: etimsCustomer, etims_shop_id:checkoutShop
             }
           });
           overlay.remove();
           showReceiptModal(paidOrder);
+          window.OraforgeEtims?.afterPayment(paidOrder, state.settings);
           state.order = null;
           renderTicket();
           if (typeof toast === 'function') toast('Cash payment confirmed! Receipt generated.', 'success');
@@ -2162,12 +2203,14 @@ async function showCheckoutModal(order) {
           const paidOrder = await api('/api/order/pay', {
             method:'POST',
             body:{order_id:order.id,payment_method:'mpesa',payment_ref:verified.payment_ref,
-              customer_phone:cleanPhone,swifta_attempt_id:attemptId,swifta_checkout_id:checkoutId}
+              customer_phone:cleanPhone,swifta_attempt_id:attemptId,swifta_checkout_id:checkoutId,
+              generate_etims:generateEtims, etims_customer:etimsCustomer, etims_shop_id:checkoutShop}
           });
           if (generation !== paymentPollGeneration) return;
           stopPaymentPoll();
           overlay.remove();
           showReceiptModal(paidOrder);
+          window.OraforgeEtims?.afterPayment(paidOrder, state.settings);
           state.order = null;
           renderTicket();
           toast('M-Pesa verified. Receipt generated automatically!', 'success');

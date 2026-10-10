@@ -102,6 +102,12 @@ MIT License. Open for personal and commercial point of sale deployments.
 
 ## Android APK architecture
 
+### Chrome eTIMS integration
+
+The active browser POS includes an optional **Generate eTIMS Invoice** checkout flow and the **Oraforge eTIMS Companion** extension in `chrome-extension/`. Load that folder unpacked in Chrome, then reload the POS. The extension prepares the existing KRA eCitizen popup for cashier review, captures official invoice details, and adds them to the existing branded receipt. Admin → eTIMS supports pending/generated records, uncertain-attempt recovery, manual CU entry and reprints.
+
+See [installation, recovery rules and the required live KRA testing checklist](docs/ETIMS-INTEGRATION.md). Automated tests use a synthetic portal; authenticated KRA field mappings and printer output still need live verification.
+
 The Android build is offline-first. The Capacitor WebView bundles the POS UI locally and stores operational data on-device using native SQLite (`@capacitor-community/sqlite`) with an IndexedDB fallback for browser testing. Core sales do not require a Python server or internet connection. Network-only integrations such as SMS, cloud sync, remote image search and future M-Pesa integrations should call a remote HTTPS backend so API secrets are never bundled in the APK.
 
 ### Single-machine backups (browser preview)

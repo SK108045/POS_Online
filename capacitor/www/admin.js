@@ -88,14 +88,15 @@ const LocalAdmin = {
     // This is intentionally read-only: viewing receipts never changes sales data.
     if (cleanPath === '/api/orders' && method === 'GET') {
       const status = url.searchParams.get('status');
-      return status ? orders.filter(order => order.status === status) : orders;
+      const rows=status ? orders.filter(order => order.status === status) : orders;
+      return window.OraforgeEtims ? window.OraforgeEtims.attach(rows) : rows;
     }
     if (cleanPath === '/api/order' && method === 'GET') {
       const orderId = Number(url.searchParams.get('id'));
       if (!Number.isSafeInteger(orderId) || orderId <= 0) throw new Error('Invalid receipt number.');
       const order = orders.find(row => Number(row.id) === orderId);
       if (!order) throw new Error('Receipt could not be found in this shop.');
-      return order;
+      return window.OraforgeEtims ? (await window.OraforgeEtims.attach([order]))[0] : order;
     }
 
     if (cleanPath === '/api/admin/summary') {
@@ -491,6 +492,7 @@ function showAdminSalesReceipt(order, isKot = false) {
             ${order.payment_ref ? `<div class="receipt-line"><span>Txn Ref</span><span>${receiptEscape(order.payment_ref)}</span></div>` : ''}
           </div>
         `}
+        ${isQuote ? '' : '<div data-etims-receipt></div>'}
         <footer class="receipt-note">${receiptEscape(bfooter)}</footer>
         <button id="receiptPrintBtn">Print ${isQuote ? 'Quotation' : 'Receipt'}</button>
       </div>
@@ -512,6 +514,7 @@ function showAdminSalesReceipt(order, isKot = false) {
 
   document.body.appendChild(overlay);
   overlay.classList.add('receipt-modal-visible');
+  if (!isKot && !isQuote) window.OraforgeEtims?.mountReceipt(overlay, order);
 
   const close = () => {
     overlay.remove();
@@ -522,6 +525,8 @@ function showAdminSalesReceipt(order, isKot = false) {
   document.getElementById('receiptModalClose').addEventListener('click', close);
   document.getElementById('receiptPrintBtn').addEventListener('click', async () => {
     try {
+      await overlay.etimsReady;
+      await Promise.all([...overlay.querySelectorAll('.receipt-kra-qr')].map(img => img.decode()));
       if (window.OraforgeNative) {
         if (!window.OraforgePrinter) throw new Error('Install the latest APK to enable printing.');
         await window.OraforgePrinter.print({name:'Receipt '+(order.ticket_no || order.id)});

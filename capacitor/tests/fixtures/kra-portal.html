@@ -1,0 +1,45 @@
+<!doctype html><html><body>
+<!-- Synthetic portal fixture. These values are test data, never fiscal records. -->
+<form id="invoice">
+  <label>Customer PIN<input name="customer_pin"></label>
+  <label>Customer name<input name="customer_name" value="KRA-resolved fixture customer"></label>
+  <label>Customer phone<input name="customer_phone"></label>
+  <label>Email<input name="email"></label>
+  <label>Billing address<input name="billing_address"></label>
+  <label>Reference<input name="reference"></label>
+  <label>Payment method<select name="payment_method"><option value="C">Cash</option><option value="M">M-Pesa</option><option value="CR">Card</option></select></label>
+  <label>Discount type<select name="discount_type"><option value="F">Fixed</option><option value="P">Percentage</option></select></label>
+  <label>Discount value<input name="discount_value" value="0"></label>
+  <div data-invoice-item>
+    <input name="items[0][name]" aria-label="Item name">
+    <input name="items[0][description]" aria-label="Description">
+    <input name="items[0][quantity]" aria-label="Quantity">
+    <input name="items[0][unit_price]" aria-label="Unit price">
+  </div>
+  <button type="button" data-action="add-item">Add Item</button>
+  <label>Total<input name="total" value="0.00" readonly></label>
+  <button type="submit" id="generate">Generate Invoice</button>
+</form>
+<dl id="official"></dl>
+<script>
+  // Fixture-only calculator and form renderer, with no real KRA requests.
+  const form=document.getElementById('invoice');
+  window.fixtureSubmissions=0;
+  function recalc(){
+    const subtotal=[...document.querySelectorAll('[data-invoice-item]')].reduce((s,row)=>s+Math.round(Number(row.querySelector('[name$="[quantity]"]').value)*Number(row.querySelector('[name$="[unit_price]"]').value)*100),0);
+    const value=Number(form.elements.discount_value.value);
+    const discount=form.elements.discount_type.value==='P'?Math.round(subtotal*value/100):Math.round(value*100);
+    form.elements.total.value=((subtotal-discount)/100).toFixed(2);
+  }
+  form.addEventListener('input',recalc);form.addEventListener('change',recalc);
+  document.querySelector('[data-action="add-item"]').onclick=()=>{
+    const row=document.querySelector('[data-invoice-item]').cloneNode(true), index=document.querySelectorAll('[data-invoice-item]').length;
+    row.querySelectorAll('input').forEach(input=>{input.name=input.name.replace('[0]','['+index+']');input.value='';});
+    document.querySelector('[data-action="add-item"]').before(row);
+  };
+  form.addEventListener('submit',event=>{
+    event.preventDefault();window.fixtureSubmissions++;
+    document.getElementById('official').innerHTML='<dt>Reference</dt><dd>'+form.elements.reference.value+'</dd><dt>Total</dt><dd>'+form.elements.total.value+'</dd><dt>CU Invoice Number</dt><dd>TEST-CU/0001</dd><dt>SCU ID</dt><dd>TEST-SCU</dd><dt>Receipt Signature</dt><dd>TEST-SIGNATURE</dd><dt>Invoice Number</dt><dd>TEST-INV-1</dd><dt>Invoice Date</dt><dd>2026-10-10 12:00:00</dd><img alt="Official QR test fixture" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jA1kAAAAASUVORK5CYII=">';
+  });
+</script>
+</body></html>

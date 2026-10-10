@@ -28,7 +28,7 @@
   <span class="etims-launch-eyebrow">✦ Digital Invoicing Workspace</span>
   <h2 id="oraforge-etims-title">eTIMS <span>Invoice Workspace.</span></h2>
   <p class="etims-launch-description">Manage your store in Oraforge and access official KRA invoicing from one convenient workspace.</p>
-  <div class="etims-launch-bottom"><button type="button" id="etimsLaunchOpen" class="etims-launch-open">Open eTIMS <span aria-hidden="true">↗</span></button><span class="etims-launch-note">Opens official KRA invoicing in a separate secure window. Automatic submission from Oraforge is not yet connected.</span></div>
+  <div class="etims-launch-bottom"><button type="button" id="etimsLaunchOpen" class="etims-launch-open">Open eTIMS <span aria-hidden="true">↗</span></button><span class="etims-launch-note">Opens official KRA invoicing in a separate secure window. Select a pending POS sale below to prepare an invoice. Review and confirm generation in KRA.</span></div>
 </section>`;
   window.renderEtims = function () {
     const root = document.getElementById('sec-etims');
@@ -57,4 +57,62 @@
       }
     });
   };
+
+  const launch = window.renderEtims;
+  let filter = 'all', rendering = false;
+  async function populate() {
+    const host = document.querySelector('#sec-etims [data-invoice-workspace]');
+    if (!host || rendering) return;
+    rendering = true;
+    const e = window.OraforgeEtimsCore.escape;
+    try {
+      // Recover requests if the browser closed after payment but before queue creation.
+      const orders = await LocalAdmin.get('orders', []);
+      const settings = await LocalAdmin.settings();
+      for (const order of orders.filter(o => o.status === 'paid' && o.etims_requested)) {
+        if (!await window.OraforgeEtims.get(order)) await window.OraforgeEtims.queue(order, order.etims_customer, settings);
+      }
+      const all = await window.OraforgeEtims.list();
+      const rows = all.filter(r => filter === 'all' || r.status === filter);
+      host.innerHTML = `<h2>POS eTIMS invoices</h2><p>${all.filter(r=>r.status==='pending').length} pending · ${all.filter(r=>r.status==='generated').length} generated · ${all.filter(r=>r.status==='review_required').length} require checking</p>
+        <label>Show <select data-filter><option value="all">All invoices</option><option value="pending">Pending</option><option value="generated">Generated</option><option value="review_required">Check existing invoice</option></select></label>
+        <button type="button" data-sync>Refresh from extension</button><p role="status" data-status></p>
+        <table><thead><tr><th>POS receipt</th><th>Total</th><th>Status</th><th>CU Invoice Number</th><th>Actions</th></tr></thead><tbody>${rows.map(r=>`<tr><td>${e(r.receipt_no)}</td><td>KES ${(r.snapshot.total_cents/100).toFixed(2)}</td><td>${r.status==='generated'?'Generated':r.status==='pending'?'Pending':'Check existing invoice'}</td><td>${e(r.fiscal?.cu_invoice_number || '—')}</td><td>
+          ${r.status==='pending'?`<button data-action="start" data-id="${e(r.id)}">Prepare in KRA</button>`:''}
+          ${r.status==='review_required'?`<button data-action="recover" data-id="${e(r.id)}">Check existing in KRA</button><button data-action="absent" data-id="${e(r.id)}">Checked: no invoice issued</button>`:''}
+          <button data-action="manual" data-id="${e(r.id)}">${r.status==='generated'?'Complete KRA details':'Enter CU manually'}</button>
+          <button data-action="reprint" data-id="${e(r.id)}">Reprint receipt</button></td></tr>`).join('') || '<tr><td colspan="5">No invoices in this view. Select Generate eTIMS Invoice at checkout, or manage eTIMS from a paid receipt.</td></tr>'}</tbody></table>`;
+      host.querySelector('[data-filter]').value = filter;
+      host.querySelector('[data-filter]').onchange = event => { filter=event.target.value; populate(); };
+      host.querySelector('[data-sync]').onclick = async () => {
+        try { await window.OraforgeEtims.sync(); await populate(); }
+        catch(error) { host.querySelector('[data-status]').textContent=error.message; }
+      };
+      host.querySelectorAll('[data-action]').forEach(button => button.onclick = async () => {
+        button.disabled = true;
+        const r = all.find(r=>r.id===button.dataset.id);
+        try {
+          if (button.dataset.action === 'start') await window.OraforgeEtims.start(r.id);
+          if (button.dataset.action === 'recover') await window.OraforgeEtims.start(r.id,true);
+          if (button.dataset.action === 'manual') await window.OraforgeEtims.manual(r);
+          if (button.dataset.action === 'absent') await window.OraforgeEtims.checkedAbsent(r);
+          if (button.dataset.action === 'reprint') {
+            const order = orders.find(o=>Number(o.id)===Number(r.sale_id) && o.ticket_no===r.receipt_no);
+            if (!order) throw Error('Original sale is unavailable in this shop.');
+            showAdminSalesReceipt(order);
+          }
+        } catch(error) { host.querySelector('[data-status]').textContent=error.message; }
+        finally { button.disabled=false; }
+      });
+    } catch(error) { host.textContent = error.message; }
+    finally { rendering=false; }
+  }
+  window.renderEtims = function() {
+    launch();
+    const root=document.getElementById('sec-etims');
+    if (!root) return;
+    const host=document.createElement('section'); host.className='etims-workspace'; host.dataset.invoiceWorkspace=''; root.append(host);
+    populate();
+  };
+  window.addEventListener('oraforge-etims-changed', () => { setTimeout(populate,0); });
 })();

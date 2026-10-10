@@ -69,6 +69,30 @@ class OraforgeDB {
     if (!this.native || !this.db) return this.fallback.set(key,value);
     await this.db.run('INSERT OR REPLACE INTO kv_store(key,value) VALUES (?,?);', [key, JSON.stringify(value)]);
   }
+  // A synchronous transform inside one IndexedDB transaction prevents two POS
+  // tabs from claiming the same fiscal sale. Never fall back after a failed write.
+  async update(key, transform, fallback = {}) {
+    if (!this.native || !this.db) {
+      const db = await this.fallback.open();
+      return new Promise((resolve, reject) => {
+        const tx = db.transaction('kv', 'readwrite'), store = tx.objectStore('kv');
+        let value, failure;
+        const request = store.get(key);
+        request.onsuccess = () => {
+          try { value = transform(request.result === undefined ? fallback : request.result); store.put(value, key); }
+          catch (error) { failure = error; tx.abort(); }
+        };
+        tx.oncomplete = () => resolve(value);
+        tx.onerror = tx.onabort = () => reject(failure || tx.error || new Error('Database update failed.'));
+      });
+    }
+    if (!navigator.locks) throw new Error('Atomic fiscal updates are unavailable on this device.');
+    return navigator.locks.request('oraforge-db:' + key, async () => {
+      const value = transform(await this.get(key, fallback));
+      await this.set(key, value);
+      return value;
+    });
+  }
 }
 
 window.OraforgeDB = new OraforgeDB();

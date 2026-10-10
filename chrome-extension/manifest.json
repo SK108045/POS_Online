@@ -1,0 +1,14 @@
+{
+  "manifest_version": 3,
+  "name": "Oraforge eTIMS Companion",
+  "version": "1.0.0",
+  "description": "Prepare KRA eCitizen invoices from Oraforge POS, with cashier review and official receipt capture.",
+  "permissions": ["storage", "unlimitedStorage"],
+  "host_permissions": ["https://ecitizen.kra.go.ke/*"],
+  "background": {"service_worker": "background.js"},
+  "options_page": "options.html",
+  "content_scripts": [
+    {"matches": ["http://localhost/*", "http://127.0.0.1/*"], "js": ["pos-bridge.js"], "run_at": "document_start"},
+    {"matches": ["https://ecitizen.kra.go.ke/*"], "js": ["portal-adapter.js", "portal.js"], "run_at": "document_idle"}
+  ]
+}

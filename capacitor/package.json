@@ -4,6 +4,8 @@
   "description": "Oraforge POS Android wrapper via Capacitor",
   "private": true,
   "scripts": {
+    "test": "node --test tests/*.cjs",
+    "test:etims": "node --test tests/etims.cjs",
     "build": "echo 'Frontend ready in www/'",
     "cap": "cap",
     "build:bridge": "node prepare-provider-config.js && esbuild src/sqlite-bridge.js --bundle --format=iife --platform=browser --outfile=www/sqlite-bridge.js",
@@ -11,12 +13,14 @@
     "start": "node dev-server.js"
   },
   "dependencies": {
+    "@capacitor-community/sqlite": "^6.0.0",
     "@capacitor/android": "6.2.0",
     "@capacitor/cli": "6.2.0",
-    "@capacitor/core": "6.2.0",
-    "@capacitor-community/sqlite": "^6.0.0"
+    "@capacitor/core": "6.2.0"
   },
   "devDependencies": {
-    "esbuild": "^0.25.0"
+    "esbuild": "^0.25.0",
+    "fake-indexeddb": "^6.2.4",
+    "jsdom": "^26.1.0"
   }
 }
