@@ -101,19 +101,79 @@ test('atomic database transform permits only one claim across concurrent tabs',a
   assert.throws(()=>core.transition(record(),{type:'unsupported'},'now'));
 });
 
-function worker(storage={}) {
-  let listener, tabId=40;const tabs=new Map();
+function worker(storage={},tabs=new Map()) {
+  let listener, tabId=Math.max(40,...tabs.keys());const messages=[];
   const chrome={storage:{local:{get:async k=>({[k]:structuredClone(storage[k])}),set:async value=>Object.assign(storage,structuredClone(value))}},
     runtime:{onMessage:{addListener:fn=>listener=fn}},
-    tabs:{get:async id=>{if(!tabs.has(id))throw Error('No tab');return tabs.get(id);},remove:async id=>tabs.delete(id),update:async()=>{},sendMessage:async()=>{}},
+    tabs:{get:async id=>{if(!tabs.has(id))throw Error('No tab');return tabs.get(id);},remove:async id=>tabs.delete(id),update:async(id,options)=>Object.assign(tabs.get(id),options),sendMessage:async(id,message)=>{messages.push({id,...message});}},
     windows:{create:async options=>{const tab={id:++tabId,windowId:10,url:options.url};tabs.set(tab.id,tab);return {id:10,tabs:[tab]};},update:async()=>{}}};
   const context=vm.createContext({chrome,URL,console,crypto:crypto.webcrypto,TextEncoder});
   context.importScripts=name=>vm.runInContext(fs.readFileSync(path.join(__dirname,'../../chrome-extension',name),'utf8'),context);
   vm.runInContext(fs.readFileSync(path.join(__dirname,'../../chrome-extension/background.js'),'utf8'),context);
   const pos={url:'http://localhost:3000/pos',frameId:0,tab:{id:2}};
   const send=(action,data={},sender=pos,role='pos')=>new Promise(resolve=>listener({action,data,role},sender,resolve));
-  return {send,storage,tabs,pos};
+  return {send,storage,tabs,pos,messages};
 }
+function otherRecord(saleId,receipt) {
+  const r=record();r.sale_id=r.snapshot.sale_id=saleId;r.receipt_no=r.snapshot.receipt_no=receipt;
+  r.id=JSON.stringify([r.shop_id,saleId,receipt]);r.attempt_id='attempt-'+saleId;
+  r.digest=crypto.createHash('sha256').update(JSON.stringify(r.snapshot)).digest('hex');return r;
+}
+test('opted checkout opens a fresh KRA popup even when an unarmed sale is already open',async()=>{
+  const w=worker(),first=record(),next=otherRecord(2,'POS-CHECKOUT-2');
+  assert.equal((await w.send('start',{record:first,new_popup:true})).result.opened,true);
+  assert.equal((await w.send('start',{record:next,new_popup:true})).result.opened,true);
+  assert.equal(w.tabs.size,2);
+  for (const [tabId,expected] of [[41,first],[42,next]]) {
+    const portal={url:w.tabs.get(tabId).url,frameId:0,tab:{id:tabId}};
+    const job=(await w.send('job',{},portal,'portal')).result;
+    assert.equal(job.record.id,expected.id);
+    assert.equal(job.record.attempt_id,expected.attempt_id);
+    assert.equal(job.armed,false);
+  }
+  assert.equal(w.messages.filter(m=>m.action==='detached').length,0);
+  assert.match((await w.send('start',{record:next,new_popup:true})).error,/already/);
+  assert.equal(w.tabs.size,2);
+});
+test('reopening unarmed sales reuses their attempt and switches the popup to the selected receipt',async()=>{
+  let w=worker();const live=record(),old=otherRecord(2,'POS-OLDER-2');
+  const portal={url:'https://ecitizen.kra.go.ke/individual/etims/sale/create',frameId:0,tab:{id:41}};
+  await w.send('start',{record:live});
+  await w.send('start',{record:old});
+  assert.equal(w.tabs.size,1);assert.ok(w.messages.some(m=>m.action==='detached'));
+  assert.equal((await w.send('job',{},portal,'portal')).result.record.receipt_no,old.receipt_no);
+  assert.ok((await w.send('arm',{attempt_id:live.attempt_id,digest:live.digest,total_cents:2272,receipt_no:live.receipt_no},portal,'portal')).error);
+  w=worker(w.storage,w.tabs);
+  const resumed=await w.send('resume',{record:live});
+  assert.equal(resumed.result.receipt_no,live.receipt_no);
+  let job=(await w.send('job',{},portal,'portal')).result;
+  assert.equal(job.record.attempt_id,live.attempt_id);assert.equal(job.recovery,false);
+  await w.send('recover',{record:live});
+  assert.equal(w.tabs.get(41).url,'https://ecitizen.kra.go.ke/individual/etims/sale');
+  assert.equal((await w.send('job',{},portal,'portal')).result.recovery,true);
+  assert.equal((await w.send('resume',{record:live})).result.mode,'fill');
+  assert.equal(w.tabs.get(41).url,'https://ecitizen.kra.go.ke/individual/etims/sale/create');
+  assert.equal((await w.send('resume',{record:old})).result.receipt_no,old.receipt_no);
+  job=(await w.send('job',{},portal,'portal')).result;
+  assert.equal(job.record.receipt_no,old.receipt_no);assert.equal(w.tabs.size,1);
+});
+test('armed, generated, missing and mismatched attempts cannot resume filling',async()=>{
+  const w=worker(),r=record(),portal={url:'https://ecitizen.kra.go.ke/individual/etims/sale/create',frameId:0,tab:{id:41}};
+  assert.match((await w.send('resume',{record:r})).error,/cannot safely resume/);
+  await w.send('start',{record:r});
+  assert.ok((await w.send('resume',{record:{...r,attempt_id:'stale'}})).error);
+  const changed=structuredClone(r);changed.snapshot.customer.email='different@example.test';changed.digest=crypto.createHash('sha256').update(JSON.stringify(changed.snapshot)).digest('hex');
+  assert.match((await w.send('resume',{record:changed})).error,/saved POS sale differs/);
+  const data={attempt_id:r.attempt_id,digest:r.digest,total_cents:2272,receipt_no:r.receipt_no};
+  await w.send('arm',data,portal,'portal');
+  assert.match((await w.send('resume',{record:r})).error,/cannot safely resume/);
+  const another=otherRecord(2,'POS-SECOND-2');await w.send('start',{record:another});
+  assert.equal(w.tabs.size,2);assert.equal((await w.send('job',{},portal,'portal')).result.record.id,r.id);
+  await w.send('capture',{...data,fiscal:official()},portal,'portal');
+  assert.match((await w.send('resume',{record:r})).error,/already recorded/);
+  const unknown=worker();await unknown.send('recover',{record:r});
+  assert.match((await unknown.send('resume',{record:r})).error,/cannot safely resume/);
+});
 test('extension job survives worker restart and blocks duplicate attempts',async()=>{
   const w=worker(),r=record();assert.equal((await w.send('start',{record:r})).result.opened,true);
   assert.match((await w.send('start',{record:r})).error,/already/);
@@ -159,6 +219,49 @@ test('portal script never submits automatically and blocks scripted generation',
   const panel=dom.window.document.querySelector('[data-oraforge-companion]').shadowRoot;
   panel.querySelector('[data-review]').checked=true;panel.querySelector('[data-arm]').click();
   await new Promise(resolve=>setTimeout(resolve,10));assert.equal(dom.window.fixtureSubmissions,0);
+  dom.window.close();
+});
+
+async function until(predicate) {
+  const end=Date.now()+5000;
+  while (!predicate()) {if(Date.now()>end)throw Error('Timed out waiting for portal state.');await new Promise(resolve=>setTimeout(resolve,20));}
+}
+test('portal detects accessibility visibility changes and refills after reconnection with the same inputs',async()=>{
+  const dom=new JSDOM(fixture,{url:'https://ecitizen.kra.go.ke/individual/etims/sale/create',runScripts:'dangerously'});
+  const d=dom.window.document,form=d.getElementById('invoice'),r=record();
+  let online=true;
+  Object.defineProperty(dom.window.navigator,'onLine',{get:()=>online});
+  dom.window.OraforgeKraAdapter={adapter};
+  dom.window.chrome={runtime:{onMessage:{addListener(){}},sendMessage:async m=>m.action==='job'?{result:{record:r,config:{}}}:{error:'Unexpected action'}}};
+  form.setAttribute('aria-hidden','true');
+  dom.window.eval(fs.readFileSync(path.join(__dirname,'../../chrome-extension/portal.js'),'utf8'));
+  await until(()=>d.querySelector('[data-oraforge-companion]')?.shadowRoot.querySelector('[role=status]').textContent.includes('Missing:'));
+  form.removeAttribute('aria-hidden');
+  const reference=form.elements.reference,email=form.elements.email;
+  await until(()=>reference.value===r.receipt_no && form.elements.total.value==='22.72');
+  const panel=d.querySelector('[data-oraforge-companion]').shadowRoot;
+  await until(()=>!panel.querySelector('[data-fill]').disabled);
+  online=false;dom.window.dispatchEvent(new dom.window.Event('offline'));
+  assert.match(panel.querySelector('[role=status]').textContent,/Connection lost/);
+  form.reset();assert.equal(reference.value,'');
+  online=true;dom.window.dispatchEvent(new dom.window.Event('online'));
+  await until(()=>reference.value===r.receipt_no && email.value===r.snapshot.customer.email && form.elements.total.value==='22.72' && !panel.querySelector('[data-fill]').disabled);
+  assert.equal(form.elements.email,email);assert.equal(dom.window.fixtureSubmissions,0);
+  dom.window.close();
+});
+test('portal keeps recovery instructions and removes an old panel when its binding disappears',async()=>{
+  const dom=new JSDOM('<html><body><h1>Loading fixture</h1></body></html>',{url:'https://ecitizen.kra.go.ke/individual/etims/sale/create',runScripts:'dangerously'});
+  let listener,next={record:record(),config:{},recovery:true,can_resume:true};
+  dom.window.OraforgeKraAdapter={adapter};
+  dom.window.chrome={runtime:{onMessage:{addListener(fn){listener=fn;}},sendMessage:async()=>({result:next})}};
+  dom.window.eval(fs.readFileSync(path.join(__dirname,'../../chrome-extension/portal.js'),'utf8'));
+  await until(()=>dom.window.document.querySelector('[data-oraforge-companion]'));
+  const panel=dom.window.document.querySelector('[data-oraforge-companion]').shadowRoot;
+  await until(()=>panel.querySelector('[role=status]').textContent.includes('Resume filling in KRA'));
+  assert.equal(panel.querySelector('[data-fill]').disabled,true);
+  assert.ok(!panel.querySelector('[role=status]').textContent.includes('Missing:'));
+  next=null;listener({action:'reload_job'});
+  await until(()=>!dom.window.document.querySelector('[data-oraforge-companion]'));
   dom.window.close();
 });
 
@@ -249,6 +352,24 @@ test('missing item control or unconfirmed Add stops safely and reports specific 
   assert.equal(lost.window.fixtureItemAdds,1);
   await la.fillSale(snap(),{timeout:100});assert.equal(lost.window.fixtureItemAdds,1);assert.equal(lost.window.fixtureItemOpens,1);
   lost.window.close();
+});
+
+test('another receipt cannot overwrite a populated KRA form and late item confirmation is reconciled',async()=>{
+  const dom=vueDom(),d=dom.window.document,a=adapter(d),s=snap();
+  await a.fillSale(s,{timeout:250});
+  const other=structuredClone(s);other.receipt_no='POS-OTHER';other.customer.email='other@example.test';
+  const report=await a.fillSale(other,{timeout:200});
+  assert.ok(report.some(r=>r.field==='POS receipt reference' && r.status==='failed'));
+  assert.equal(d.querySelector('input[type=email]').value,s.customer.email);
+  assert.equal(dom.window.fixtureItemAdds,1);dom.window.close();
+
+  const late=vueDom(),la=adapter(late.window.document);late.window.fixtureLoseAddConfirmation=true;
+  await la.fillSale(s,{timeout:150});assert.equal(late.window.fixtureItemAdds,1);
+  const item=s.items[0],discount=lineDiscounts(s)[0];
+  late.window.fixtureItems.push({name:item.name,description:item.description,quantity:item.quantity,price:item.unit_price_cents,total:item.line_total_cents-discount.amount_cents,discount:discount.amount_cents});
+  late.window.document.querySelector('[role=dialog]').remove();late.window.fixtureTable();
+  assert.deepEqual((await la.fillSale(s,{timeout:250})).filter(r=>r.status==='failed'),[]);
+  assert.equal(late.window.fixtureItemAdds,1);assert.equal(late.window.fixtureSubmissions,0);late.window.close();
 });
 
 test('KRA worker permits official portal redirects and configured URLs but rejects other origins',async()=>{

@@ -62,19 +62,21 @@
     });
     return rows[id];
   }
-  async function start(id, recovery = false) {
+  async function start(id, recovery = false, options = {}) {
+    const action = recovery===true?'recover':recovery==='resume'?'resume':'start';
     let record = (await ledger())[id];
     if (!record || record.shop_id !== scope()) throw Error('Select the original shop before opening this invoice.');
-    if (!recovery) {
+    if (record.fiscal?.cu_invoice_number || record.status==='generated') throw Error('This sale already has a CU Invoice Number. Duplicate generation is blocked.');
+    if (action!=='recover') {
       const orders=await (await db()).get(`shop:${record.shop_id}:orders`, []);
       const sale=orders.find(o=>Number(o.id)===Number(record.sale_id) && o.ticket_no===record.receipt_no);
       if (!sale || JSON.stringify(core.snapshot(sale,record.shop_id,{kra_pin:record.snapshot.seller_pin},record.snapshot.customer))!==JSON.stringify(record.snapshot)) throw Error('The original sale differs from its fiscal snapshot. Check the transaction before invoicing.');
     }
     // Ping first: an absent extension must leave a genuinely pending invoice pending.
     await bridge('ping', {}, 1500);
-    if (!recovery) record = await change(id, {type:'start', attempt_id:crypto.randomUUID()});
-    if (!record.attempt_id && recovery) throw Error('No previous portal attempt to check. Open the official portal and enter the CU manually.');
-    await bridge(recovery ? 'recover' : 'start', {record});
+    if (action==='start') record = await change(id, {type:'start', attempt_id:crypto.randomUUID()});
+    if (action!=='start' && (!record.attempt_id || record.status!=='review_required')) throw Error('No previous portal attempt to resume or check. Prepare the pending sale in KRA first.');
+    await bridge(action, {record, new_popup:action==='start' && options.newPopup===true});
     return record;
   }
   async function sync() {
@@ -105,7 +107,9 @@
     if (!order.etims_requested) return;
     try {
       const record = await queue(order, order.etims_customer, settings);
-      await start(record.id);
+      // A completed checkout must bring up its own KRA window immediately,
+      // even when a previous receipt's companion is still open or minimized.
+      await start(record.id, false, {newPopup:true});
     } catch (error) {
       window.alert('Sale paid successfully. eTIMS: '+error.message+' Your normal receipt is available; continue from Admin → eTIMS.');
     }
@@ -167,12 +171,13 @@
     const settings = await (await db()).get(`shop:${scope()}:settings`, {});
     const record = await get(order) || await queue(order, order.etims_customer, settings);
     const overlay=document.createElement('div'); overlay.className='qty-popup-overlay etims-dialog-overlay';
-    overlay.innerHTML=`<section class="qty-popup etims-dialog"><h3>eTIMS · ${core.escape(record.receipt_no)}</h3><p>${record.status==='generated'?'Generated · '+core.escape(record.fiscal.cu_invoice_number):record.status==='pending'?'Pending':'Check the existing KRA invoice before attempting another.'}</p><p data-msg role="status"></p><div class="qty-popup-actions" style="flex-wrap:wrap">${record.status==='pending'?'<button data-action="start" class="primary">Prepare in KRA</button>':''}${record.status==='review_required'?'<button data-action="recover" class="primary">Check existing in KRA</button><button data-action="absent" class="ghost">Checked: no invoice issued</button>':''}<button data-action="manual" class="ghost">${record.status==='generated'?'Complete KRA details':'Enter CU manually'}</button><button data-action="close" class="ghost">Close</button></div></section>`;
+    overlay.innerHTML=`<section class="qty-popup etims-dialog"><h3>eTIMS · ${core.escape(record.receipt_no)}</h3><p>${record.status==='generated'?'Generated · '+core.escape(record.fiscal.cu_invoice_number):record.status==='pending'?'Pending':'Resume filling if generation was never enabled. Otherwise check the existing KRA invoice before retrying.'}</p><p data-msg role="status"></p><div class="qty-popup-actions" style="flex-wrap:wrap">${record.status==='pending'?'<button data-action="start" class="primary">Prepare in KRA</button>':''}${record.status==='review_required'?'<button data-action="resume" class="primary">Resume filling in KRA</button><button data-action="recover" class="ghost">Check existing in KRA</button><button data-action="absent" class="ghost">Checked: no invoice issued</button>':''}<button data-action="manual" class="ghost">${record.status==='generated'?'Complete KRA details':'Enter CU manually'}</button><button data-action="close" class="ghost">Close</button></div></section>`;
     document.body.append(overlay);
     overlay.querySelectorAll('[data-action]').forEach(button=>button.onclick=async()=>{
       button.disabled=true;
       try {
         if (button.dataset.action==='start') await start(record.id);
+        if (button.dataset.action==='resume') await start(record.id,'resume');
         if (button.dataset.action==='recover') await start(record.id,true);
         if (button.dataset.action==='manual') await manual(record);
         if (button.dataset.action==='absent') await checkedAbsent(record);

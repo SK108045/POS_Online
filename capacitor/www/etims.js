@@ -79,7 +79,7 @@
         <button type="button" data-sync>Refresh from extension</button><p role="status" data-status></p>
         <table><thead><tr><th>POS receipt</th><th>Total</th><th>Status</th><th>CU Invoice Number</th><th>Actions</th></tr></thead><tbody>${rows.map(r=>`<tr><td>${e(r.receipt_no)}</td><td>KES ${(r.snapshot.total_cents/100).toFixed(2)}</td><td>${r.status==='generated'?'Generated':r.status==='pending'?'Pending':'Check existing invoice'}</td><td>${e(r.fiscal?.cu_invoice_number || '—')}</td><td>
           ${r.status==='pending'?`<button data-action="start" data-id="${e(r.id)}">Prepare in KRA</button>`:''}
-          ${r.status==='review_required'?`<button data-action="recover" data-id="${e(r.id)}">Check existing in KRA</button><button data-action="absent" data-id="${e(r.id)}">Checked: no invoice issued</button>`:''}
+          ${r.status==='review_required'?`<button data-action="resume" data-id="${e(r.id)}">Resume filling in KRA</button><button data-action="recover" data-id="${e(r.id)}">Check existing in KRA</button><button data-action="absent" data-id="${e(r.id)}">Checked: no invoice issued</button>`:''}
           <button data-action="manual" data-id="${e(r.id)}">${r.status==='generated'?'Complete KRA details':'Enter CU manually'}</button>
           <button data-action="reprint" data-id="${e(r.id)}">Reprint receipt</button></td></tr>`).join('') || '<tr><td colspan="5">No invoices in this view. Select Generate eTIMS Invoice at checkout, or manage eTIMS from a paid receipt.</td></tr>'}</tbody></table>`;
       host.querySelector('[data-filter]').value = filter;
@@ -93,6 +93,7 @@
         const r = all.find(r=>r.id===button.dataset.id);
         try {
           if (button.dataset.action === 'start') await window.OraforgeEtims.start(r.id);
+          if (button.dataset.action === 'resume') await window.OraforgeEtims.start(r.id,'resume');
           if (button.dataset.action === 'recover') await window.OraforgeEtims.start(r.id,true);
           if (button.dataset.action === 'manual') await window.OraforgeEtims.manual(r);
           if (button.dataset.action === 'absent') await window.OraforgeEtims.checkedAbsent(r);

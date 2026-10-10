@@ -19,22 +19,40 @@ async function validRecord(r) {
   const digest=Array.from(new Uint8Array(bytes),b=>b.toString(16).padStart(2,'0')).join('');
   if (digest!==r.digest) throw Error('POS sale snapshot changed.');
 }
-async function open(job, recovery) {
-  if (job.tab_id) {
-    try {
-      const tab = await chrome.tabs.get(job.tab_id);
-      if (sites.allowed(tab.url)) {
-        await chrome.windows.update(tab.windowId,{focused:true}); await chrome.tabs.update(tab.id,{active:true});
-        await chrome.tabs.sendMessage(tab.id,{action:'reload_job'}).catch(()=>{});
-        return;
-      }
-    } catch (_) {}
-  }
+async function open(job, all, navigate=false, newPopup=false) {
   const settings = await chrome.storage.local.get('portalUrls');
   const urls = settings.portalUrls || {};
-  const url = recovery ? sites.destination(urls.list, sites.list) : sites.destination(urls.create, sites.create);
+  const url = job.recovery ? sites.destination(urls.list, sites.list) : sites.destination(urls.create, sites.create);
+  // Checkout opens a fresh, focused popup. Manual receipt selection can reuse
+  // an unarmed popup, navigating when its receipt changes. Armed windows keep
+  // their binding. Choosing a new window never bypasses attempt validation.
+  const candidates = newPopup ? [] : [job,...Object.values(all).filter(j=>j!==job && j.origin===job.origin && j.tab_id && !j.revoked && !j.armed && !j.generated && !j.result)
+    .sort((a,b)=>String(b.opened_at || b.created_at).localeCompare(String(a.opened_at || a.created_at)))];
+  for (const candidate of candidates) {
+    if (!candidate.tab_id) continue;
+    try {
+      const tab = await chrome.tabs.get(candidate.tab_id);
+      if (!sites.allowed(tab.url)) continue;
+      if (Object.values(all).some(j=>j!==candidate && j!==job && j.tab_id===tab.id && !j.revoked && (j.armed || j.generated || j.result))) continue;
+      const fresh = candidate!==job || navigate || Object.values(all).some(j=>j!==job && j.tab_id===tab.id && !j.revoked);
+      if (fresh) await chrome.tabs.sendMessage(tab.id,{action:'detached'}).catch(()=>{});
+      for (const other of Object.values(all)) if (other!==job && other.tab_id===tab.id) {other.tab_id=null;other.window_id=null;}
+      job.tab_id=tab.id;job.window_id=tab.windowId;
+      await chrome.storage.local.set({[STORE]:all});
+      await chrome.windows.update(tab.windowId,{focused:true});
+      if (fresh) await chrome.tabs.update(tab.id,{url,active:true});
+      else {
+        await chrome.tabs.update(tab.id,{active:true});
+        // An extension reload/network error may leave no live content script.
+        try { await chrome.tabs.sendMessage(tab.id,{action:'reload_job'}); }
+        catch (_) { await chrome.tabs.update(tab.id,{url:tab.url,active:true}); }
+      }
+      return;
+    } catch (_) { /* A closed popup can be reopened from its saved snapshot. */ }
+  }
   const popup = await chrome.windows.create({url,type:'popup',width:820,height:600,focused:true});
   job.tab_id = popup.tabs[0].id; job.window_id = popup.id;
+  for (const other of Object.values(all)) if (other!==job && other.tab_id===job.tab_id) {other.tab_id=null;other.window_id=null;}
 }
 async function handle(m, sender) {
   const data = m.data || {}, all = await jobs();
@@ -48,19 +66,26 @@ async function handle(m, sender) {
         (!known || known.cu!==j.result.cu_invoice_number || known.digest!==j.record.digest || known.attempt_id!==j.record.attempt_id);
     }).slice(0,25).map(j=>({id:j.record.id,attempt_id:j.record.attempt_id,digest:j.record.digest,total_cents:j.record.snapshot.total_cents,fiscal:j.result}));
     const id = data.record?.id || data.id, k = key(origin,id), previous = all[k];
-    if (['start','recover','recorded'].includes(m.action)) await validRecord(data.record);
-    if (m.action==='start' || m.action==='recover') {
+    if (['start','resume','recover','recorded'].includes(m.action)) await validRecord(data.record);
+    if (['start','resume','recover'].includes(m.action)) {
       const r=data.record;
       if (!r.attempt_id || r.status!=='review_required') throw Error('POS must claim the invoice before opening KRA.');
       if (previous?.generated || previous?.result || r.fiscal?.cu_invoice_number) throw Error('An invoice is already recorded. Duplicate generation is blocked; refresh the POS.');
       if (previous && previous.record.attempt_id !== r.attempt_id && !previous.revoked) throw Error('Check the previous invoice attempt before retrying.');
+      if (previous && !previous.revoked && previous.record.digest!==r.digest) throw Error('The saved POS sale differs from this attempt.');
       if (m.action==='start' && previous && !previous.revoked) throw Error('This attempt is already open. Use Check existing invoice.');
+      if (m.action==='resume' && (!previous || previous.revoked || previous.armed || previous.resume_allowed===false)) throw Error('This attempt cannot safely resume filling. Check existing KRA invoices, then use Checked: no invoice issued if none was issued.');
       const job = previous && !previous.revoked ? previous : {origin,record:r,created_at:new Date().toISOString()};
+      const modeChanged=!!job.recovery !== (m.action==='recover');
+      // Existing unarmed jobs from older extension versions remain resumable.
+      // A recovery job created without the original worker record is uncertain.
+      job.resume_allowed=m.action==='start' || (!!previous && !previous.revoked && previous.resume_allowed!==false && !previous.armed);
       job.pos_tab_id=sender.tab.id; job.recovery = m.action==='recover';
+      job.opened_at=new Date().toISOString();
       // Save uncertainty BEFORE creating the popup, including if Chrome crashes here.
       all[k]=job; await chrome.storage.local.set({[STORE]:all});
-      await open(job,job.recovery); await chrome.storage.local.set({[STORE]:all});
-      return {opened:true};
+      await open(job,all,modeChanged,m.action==='start' && data.new_popup===true); await chrome.storage.local.set({[STORE]:all});
+      return {opened:true,receipt_no:r.receipt_no,mode:job.recovery?'recovery':'fill'};
     }
     if (m.action==='ack') {
       if (previous?.record.attempt_id===data.attempt_id) {previous.ack=true; await chrome.storage.local.set({[STORE]:all});}
@@ -88,10 +113,12 @@ async function handle(m, sender) {
     throw Error('Unsupported POS action.');
   }
   if (m.role !== 'portal' || !isPortal(sender)) throw Error('Untrusted portal message.');
-  const job = Object.values(all).find(j=>j.tab_id===sender.tab.id && !j.revoked);
+  const bound = Object.values(all).filter(j=>j.tab_id===sender.tab.id && !j.revoked);
+  if (bound.length>1) throw Error('This popup has conflicting sale bindings. Select the receipt in Oraforge and reopen it.');
+  const job = bound[0];
   if (m.action==='job') {
     const config=(await chrome.storage.local.get('portalSelectors')).portalSelectors || {};
-    return job ? {record:job.record,recovery:job.recovery,armed:!!job.armed,generated:!!job.result,config} : null;
+    return job ? {record:job.record,recovery:job.recovery,can_resume:!!job.resume_allowed && !job.armed,armed:!!job.armed,generated:!!(job.generated || job.result),config} : null;
   }
   if (!job || data.attempt_id!==job.record.attempt_id || data.digest!==job.record.digest) throw Error('No matching active POS sale in this popup.');
   if (m.action==='arm') {

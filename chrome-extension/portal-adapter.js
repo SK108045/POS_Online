@@ -71,7 +71,7 @@
   }
   function adapter(doc, config={}) {
     const win=doc.defaultView, controls='input:not([type="hidden"]):not([type="file"]), textarea, select';
-    let fillActive=false, uncertainItem=false;
+    let fillActive=false, uncertainItem=null;
     const visible = el => {
       if (!el || !el.isConnected || el.closest('[data-oraforge-companion], [hidden], [aria-hidden="true"]')) return false;
       for (let p=el; p && p.nodeType===1; p=p.parentElement) {
@@ -327,12 +327,15 @@
         return null;
       };
       const tick=()=>new Promise(resolve=>win.setTimeout(resolve,0));
+      const checkActive=()=>{if(!active())throw Error('Filling stopped because this sale is no longer active.');};
       const write=async(key,val,context=doc)=>{
-        const ok=set(key,val,context); await tick();const actual=read(key,context);
+        checkActive();
+        const ok=set(key,val,context); await tick();checkActive();const actual=read(key,context);
         const matches=key==='phone'?phoneMatches(actual,val):key==='item_price'?money(actual)===money(val):['item_quantity','discount_value'].includes(key)?Number(actual)===Number(val):actual===String(val);
         return ok && matches;
       };
       try {
+        checkActive();
         const detection=detect();
         if (!detection.ready) {emit('Invoice form',false,'Not detected at '+detection.url+'. Missing: '+detection.missing.join(', '));return report;}
         emit('Invoice form',true,detection.url);
@@ -341,6 +344,16 @@
         }
         if (!invoiceTable() && query('table').some(t=>query('thead th',t).some(h=>/^(quantity|qty|sale price KES)$/i.test(clean(value(h)))))) {
           emit('Products',false,'An existing item table is present but its columns could not be verified. Inspect its headers before adding anything.');return report;
+        }
+        const reference=read('reference'), markers=read('note').split('\n').filter(line=>line.startsWith('POS Receipt: '));
+        if ((reference && reference!==payload.receipt_no) || markers.some(line=>line!=='POS Receipt: '+payload.receipt_no)) {
+          emit('POS receipt reference',false,'This KRA form belongs to another POS receipt. Reopen the selected sale from Oraforge; no fields were changed.');return report;
+        }
+        if (invoiceTable()) {
+          const existing=rows(), discounts=lineDiscounts(payload);
+          if (existing.length>payload.items.length || existing.some((row,i)=>!matchesLine(payload.items[i],row,discounts[i]))) {
+            emit('Products',false,'Existing KRA items differ from this POS sale. Reopen the selected sale from Oraforge; no fields were changed.');return report;
+          }
         }
         const identity=payload.customer.pin || payload.customer.phone;
         if (payload.customer.pin && find('pin') && !find('pin').closest('[role="dialog"]')) {
@@ -428,6 +441,7 @@
             emit('Payment option',channelMatches(paymentState(),payload.payment_method),options.length>1?'Multiple matching KRA payment accounts; choose the account yourself.':options.length===0?'POS payment method is not configured among KRA payment options.':'Selected matching KRA payment option.');
           } else emit('Payment option',false,'Payment dropdown was not found.');
         }
+        if (uncertainItem && !itemDialog() && matchesLine(uncertainItem.item,rows()[uncertainItem.index],uncertainItem.discount)) uncertainItem=null;
         if (uncertainItem) {emit('Products',false,'A previous Add was not confirmed in the table. Inspect the items before retrying; automatic adding is blocked.');return report;}
         // Inline forms remain supported. The real eCitizen screen has a read-only
         // table and a separate role=dialog, so it takes the sequential popup path.
@@ -474,11 +488,12 @@
             if (!good || !typeOk || !discountOk || !totalOk) break;
             const add=config.item_submit?query(config.item_submit,modal)[0]:buttons(modal).find(b=>/^add$/i.test(clean(value(b))));
             if (!add || add.disabled || issuanceControl(add)) {emit(prefix+'added',false,'The popup Add button is missing or disabled. Review KRA validation messages.');break;}
-            uncertainItem=true; add.click();
+            checkActive();
+            uncertainItem={index:i,item,discount}; add.click();
             const confirmed=await wait(()=>!itemDialog() && rows().length===i+1 && matchesLine(item,rows()[i],discount));
             emit(prefix+'added',!!confirmed,confirmed?'Confirmed in the KRA invoice table.':'Add could not be confirmed. Stopped to prevent duplicate lines.');
             if (!confirmed) break;
-            uncertainItem=false;
+            uncertainItem=null;
           }
           existing.forEach((row,i)=>emit('Item '+(i+1)+' · added',true,'Already matches POS; not added again.'));
           emit('Discount',rows().length===payload.items.length && rows().every((row,i)=>matchesLine(payload.items[i],row,discounts[i])),

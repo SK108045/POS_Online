@@ -1,6 +1,6 @@
 (() => {
   const channel = 'oraforge-etims-v1';
-  const actions = new Set(['ping','start','recover','results','ack','recorded','checked_absent']);
+  const actions = new Set(['ping','start','resume','recover','results','ack','recorded','checked_absent']);
   window.addEventListener('message', async event => {
     const m = event.data;
     if (event.source !== window || event.origin !== location.origin || m?.channel !== channel || m.direction !== 'pos' || !actions.has(m.action) || typeof m.request_id !== 'string') return;

@@ -119,7 +119,7 @@ with sync_playwright() as p, tempfile.TemporaryDirectory(prefix='oraforge-full-e
     context.route('https://ecitizen.kra.go.ke/**',lambda route:route.fulfill(status=200,content_type='text/html',body=fixture))
     page=context.pages[0];page.on('pageerror',lambda e:print('POS ERROR',str(e)))
     page.on('dialog',lambda d:(print('DIALOG',d.message),d.dismiss()))
-    page.goto('http://localhost:3099/pos')
+    page.goto(base+'/pos')
     page.evaluate("localStorage.setItem('pos_logged_in','true')");page.reload()
     page.wait_for_function('state.items.length>0')
     print('bridge',page.evaluate("async()=>OraforgeEtims.bridge('ping')"))
