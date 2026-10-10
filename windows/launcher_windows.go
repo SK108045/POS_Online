@@ -253,6 +253,10 @@ func run() error {
 		}
 		_ = cmd.Process.Release()
 	}
+	// CI smoke tests can start and verify the real Windows server without opening a GUI.
+	if len(os.Args) > 1 && os.Args[1] == "--headless" {
+		return nil
+	}
 	cmd := exec.Command(browser, "--user-data-dir="+filepath.Join(dataDir, "browser-"+cfg.Browser), "--no-first-run", "--no-default-browser-check", "--app=http://localhost:3000/pos")
 	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
 	if err = cmd.Start(); err != nil {
