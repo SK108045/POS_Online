@@ -1,14 +1,13 @@
 /* All attempts survive service-worker suspension. No credentials are stored. */
 'use strict';
-const PORTAL = 'https://ecitizen.kra.go.ke';
-const CREATE = PORTAL + '/individual/etims/sale/create';
-const LIST = PORTAL + '/individual/etims/sale';
+importScripts('portal-sites.js');
+const sites = globalThis.OraforgeKraSites;
 const STORE = 'oraforgeJobsV1';
 let serial = Promise.resolve();
 const jobs = async () => (await chrome.storage.local.get(STORE))[STORE] || {};
 const key = (origin, id) => JSON.stringify([origin,id]);
 const isPos = sender => { try { const u = new URL(sender.url); return ['localhost','127.0.0.1'].includes(u.hostname) && u.protocol==='http:' && sender.frameId===0; } catch (_) { return false; } };
-const isPortal = sender => { try { return new URL(sender.url).origin===PORTAL && sender.frameId===0; } catch (_) { return false; } };
+const isPortal = sender => sites.allowed(sender.url) && sender.frameId===0;
 async function validRecord(r) {
   if (!r || typeof r.id!=='string' || !/^[a-f0-9]{64}$/.test(r.digest) || !r.snapshot || r.snapshot.currency!=='KES' || !Number.isSafeInteger(r.snapshot.total_cents) || r.snapshot.total_cents<0 || !Array.isArray(r.snapshot.items) || r.snapshot.items.length>500) throw Error('Invalid POS invoice request.');
   const p=r.snapshot, amount=v=>Number.isSafeInteger(v) && v>=0;
@@ -24,14 +23,17 @@ async function open(job, recovery) {
   if (job.tab_id) {
     try {
       const tab = await chrome.tabs.get(job.tab_id);
-      if (tab.url?.startsWith(PORTAL+'/')) {
+      if (sites.allowed(tab.url)) {
         await chrome.windows.update(tab.windowId,{focused:true}); await chrome.tabs.update(tab.id,{active:true});
         await chrome.tabs.sendMessage(tab.id,{action:'reload_job'}).catch(()=>{});
         return;
       }
     } catch (_) {}
   }
-  const popup = await chrome.windows.create({url:recovery?LIST:CREATE,type:'popup',width:820,height:600,focused:true});
+  const settings = await chrome.storage.local.get('portalUrls');
+  const urls = settings.portalUrls || {};
+  const url = recovery ? sites.destination(urls.list, sites.list) : sites.destination(urls.create, sites.create);
+  const popup = await chrome.windows.create({url,type:'popup',width:820,height:600,focused:true});
   job.tab_id = popup.tabs[0].id; job.window_id = popup.id;
 }
 async function handle(m, sender) {

@@ -107,7 +107,9 @@ function worker(storage={}) {
     runtime:{onMessage:{addListener:fn=>listener=fn}},
     tabs:{get:async id=>{if(!tabs.has(id))throw Error('No tab');return tabs.get(id);},remove:async id=>tabs.delete(id),update:async()=>{},sendMessage:async()=>{}},
     windows:{create:async options=>{const tab={id:++tabId,windowId:10,url:options.url};tabs.set(tab.id,tab);return {id:10,tabs:[tab]};},update:async()=>{}}};
-  vm.runInNewContext(fs.readFileSync(path.join(__dirname,'../../chrome-extension/background.js'),'utf8'),{chrome,URL,console,crypto:crypto.webcrypto,TextEncoder});
+  const context=vm.createContext({chrome,URL,console,crypto:crypto.webcrypto,TextEncoder});
+  context.importScripts=name=>vm.runInContext(fs.readFileSync(path.join(__dirname,'../../chrome-extension',name),'utf8'),context);
+  vm.runInContext(fs.readFileSync(path.join(__dirname,'../../chrome-extension/background.js'),'utf8'),context);
   const pos={url:'http://localhost:3000/pos',frameId:0,tab:{id:2}};
   const send=(action,data={},sender=pos,role='pos')=>new Promise(resolve=>listener({action,data,role},sender,resolve));
   return {send,storage,tabs,pos};
@@ -152,8 +154,129 @@ test('portal script never submits automatically and blocks scripted generation',
   await new Promise(resolve=>setTimeout(resolve,50));
   dom.window.document.getElementById('generate').click();
   assert.equal(dom.window.fixtureSubmissions,0);
+  dom.window.document.getElementById('invoice').dispatchEvent(new dom.window.Event('submit',{bubbles:true,cancelable:true}));
+  assert.equal(dom.window.fixtureSubmissions,0);
   const panel=dom.window.document.querySelector('[data-oraforge-companion]').shadowRoot;
   panel.querySelector('[data-review]').checked=true;panel.querySelector('[data-arm]').click();
   await new Promise(resolve=>setTimeout(resolve,10));assert.equal(dom.window.fixtureSubmissions,0);
+  dom.window.close();
+});
+
+const vueFixture=fs.readFileSync(path.join(__dirname,'fixtures/kra-vue-invoice.html'),'utf8');
+const vueDom=()=>new JSDOM(vueFixture,{url:'https://ecitizen.kra.go.ke/business/fixture/etims/sale/create',runScripts:'dangerously'});
+const {lineDiscounts}=require('../../chrome-extension/portal-adapter');
+
+test('invoice detection uses live controls across routes and excludes login/other documents',()=>{
+  const dom=vueDom(),a=adapter(dom.window.document);
+  assert.equal(a.detect().ready,true);assert.equal(a.detect().kind,'kra-vue');
+  dom.window.history.pushState({},'','/a-new-route#/sales/invoice/new');assert.equal(a.detect().ready,true);
+  dom.window.document.querySelector('h1').textContent='Create Quotation';assert.equal(a.detect().ready,false);
+  dom.window.document.body.innerHTML='<h1>Sign in</h1><input type="email"><input type="password">';assert.equal(a.detect().ready,false);
+  dom.window.close();
+});
+
+test('live-shaped Vue dropdowns and item popup fill every line and repeat without duplicates',async()=>{
+  const dom=vueDom(),d=dom.window.document,a=adapter(d),s=snap();
+  s.items.push({name:'Second fixture',description:'Second description',quantity:2,unit_price_cents:101,line_total_cents:202});
+  s.subtotal_cents=2727;s.discount={type:'percent',value:10,amount_cents:273};s.total_cents=2454;
+  d.querySelector('[name="note "]').value='Existing cashier note';
+  const report=await a.fillSale(s,{timeout:350});
+  assert.deepEqual(report.filter(r=>r.status==='failed'),[]);
+  assert.deepEqual(a.verify(s),[]);assert.equal(a.rows().length,2);
+  assert.equal(dom.window.fixtureItemOpens,2);assert.equal(dom.window.fixtureItemAdds,2);
+  assert.equal(dom.window.fixtureSubmissions,0);assert.equal(dom.window.fixtureCustomerAdds,0);
+  assert.equal(d.querySelector('[aria-label="Country code"]').value,'+254');
+  assert.equal(d.querySelector('[type=email]').value,'test@example.test');
+  assert.match(d.querySelector('#customer-choice').textContent,/KRA-resolved fixture buyer/);
+  assert.equal(d.querySelector('[name="note "]').value,'Existing cashier note\nPOS Receipt: POS-TEST-1');
+  assert.match(d.body.textContent,/Fixture terms retained/);
+  assert.deepEqual((await a.fillSale(s,{timeout:250})).filter(r=>r.status==='failed'),[]);
+  assert.equal(dom.window.fixtureItemAdds,2);assert.equal(dom.window.fixtureSubmissions,0);
+  dom.window.close();
+});
+
+test('fixed discounts and percentage rounding preserve exact invoice cents in item popups',async()=>{
+  const dom=vueDom(),a=adapter(dom.window.document),s=snap();
+  s.items=[1,2].map(i=>({name:'Fixture '+i,description:'',quantity:1,unit_price_cents:105,line_total_cents:105}));
+  s.subtotal_cents=210;s.discount={type:'percent',value:10,amount_cents:21};s.total_cents=189;
+  assert.deepEqual(lineDiscounts(s).map(d=>d.amount_cents),[11,10]);
+  assert.ok(lineDiscounts(s).every(d=>d.type==='fixed'));
+  assert.deepEqual((await a.fillSale(s,{timeout:300})).filter(r=>r.status==='failed'),[]);
+  assert.equal(dom.window.fixtureItems.reduce((sum,i)=>sum+i.total,0),189);
+  assert.equal(dom.window.fixtureItems[0].description,'Fixture 1');
+  s.discount={type:'fixed',value:0.31,amount_cents:31};
+  assert.deepEqual(lineDiscounts(s).map(d=>d.amount_cents),[16,15]);
+  dom.window.close();
+});
+
+test('new PIN uses the real customer validation dialog, never manually supplies a name',async()=>{
+  const dom=vueDom(),a=adapter(dom.window.document),s=snap();s.customer.pin='P222222222D';
+  const report=await a.fillSale(s,{timeout:300});
+  assert.deepEqual(report.filter(r=>r.status==='failed'),[]);
+  assert.equal(dom.window.fixtureValidations,1);assert.equal(dom.window.fixtureCustomerAdds,1);
+  assert.match(dom.window.document.querySelector('#customer-choice').textContent,/KRA-resolved new fixture buyer/);
+  assert.equal(dom.window.fixtureSubmissions,0);assert.deepEqual(a.verify(s),[]);
+  dom.window.close();
+});
+
+test('missing required customer email pauses in validation dialog without invented data',async()=>{
+  const dom=vueDom(),a=adapter(dom.window.document),s=snap();s.customer.pin='A222222222D';s.customer.email='';
+  const report=await a.fillSale(s,{timeout:200});
+  assert.ok(report.some(r=>r.field==='New customer email' && r.status==='failed'));
+  assert.equal(dom.window.fixtureCustomerAdds,0);assert.equal(dom.window.fixtureItemOpens,0);assert.equal(dom.window.fixtureSubmissions,0);
+  assert.ok(dom.window.document.querySelector('[role=dialog]'));dom.window.close();
+});
+
+test('ambiguous or unavailable payment options are reported without guessing accounts',async()=>{
+  for (const method of ['mpesa','cash']) {
+    const dom=vueDom(),a=adapter(dom.window.document),s=snap();s.payment_method=method;
+    dom.window.document.getElementById('selected-payment').textContent='Card';
+    const report=await a.fillSale(s,{timeout:200});
+    assert.ok(report.some(r=>r.field==='Payment option' && r.status==='failed'));
+    assert.equal(dom.window.document.getElementById('selected-payment').textContent,'Card');
+    assert.equal(dom.window.fixtureSubmissions,0);dom.window.close();
+  }
+});
+
+test('missing item control or unconfirmed Add stops safely and reports specific failure',async()=>{
+  const missing=vueDom(),ma=adapter(missing.window.document,{item_price:'#not-present'});
+  const report=await ma.fillSale(snap(),{timeout:150});
+  assert.ok(report.some(r=>r.field.endsWith('price') && r.status==='failed'));
+  assert.equal(missing.window.fixtureItemAdds,0);assert.equal(missing.window.fixtureSubmissions,0);missing.window.close();
+  const lost=vueDom(),la=adapter(lost.window.document);lost.window.fixtureLoseAddConfirmation=true;
+  const result=await la.fillSale(snap(),{timeout:180});
+  assert.ok(result.some(r=>r.field.endsWith('added') && r.status==='failed'));
+  assert.equal(lost.window.fixtureItemAdds,1);
+  await la.fillSale(snap(),{timeout:100});assert.equal(lost.window.fixtureItemAdds,1);assert.equal(lost.window.fixtureItemOpens,1);
+  lost.window.close();
+});
+
+test('KRA worker permits official portal redirects and configured URLs but rejects other origins',async()=>{
+  const sites=require('../../chrome-extension/portal-sites');
+  const manifest=JSON.parse(fs.readFileSync(path.join(__dirname,'../../chrome-extension/manifest.json'),'utf8'));
+  for (const origin of sites.origins) assert.ok(manifest.content_scripts[1].matches.includes(origin+'/*'));
+  assert.equal(sites.allowed('https://etims.kra.go.ke/invoice/new'),true);
+  for (const url of ['http://ecitizen.kra.go.ke/x','https://ecitizen.kra.go.ke.evil.test/x','https://evil.test','https://user:secret@ecitizen.kra.go.ke']) assert.equal(sites.allowed(url),false);
+  const w=worker({portalUrls:{create:'https://etims.kra.go.ke/actual-invoice-route'}}),r=record();
+  assert.equal((await w.send('start',{record:r})).result.opened,true);
+  assert.equal(w.tabs.get(41).url,'https://etims.kra.go.ke/actual-invoice-route');
+  for (const origin of sites.origins) {
+    const sender={url:origin+'/actual/invoice/new',frameId:0,tab:{id:41}};
+    assert.equal((await w.send('job',{},sender,'portal')).result.record.id,r.id);
+    assert.ok((await w.send('job',{}, {...sender,frameId:1},'portal')).error);
+  }
+  assert.ok((await w.send('job',{}, {url:'https://ecitizen.kra.go.ke.evil.test/',frameId:0,tab:{id:41}},'portal')).error);
+  assert.equal((await w.send('job',{}, {url:'https://etims.kra.go.ke/',frameId:0,tab:{id:999}},'portal')).result,null);
+  const bad=worker({portalUrls:{create:'https://evil.test'}});
+  assert.ok((await bad.send('start',{record:r})).error);assert.equal(bad.tabs.size,0);
+});
+
+test('ambiguous customer phone does not select or create an arbitrary customer',async()=>{
+  const dom=vueDom(),a=adapter(dom.window.document),s=snap();s.customer.pin='';
+  dom.window.document.querySelectorAll('#customer-menu button p:nth-child(2)').forEach(p=>p.textContent='+254712345678');
+  const report=await a.fillSale(s,{timeout:200});
+  assert.ok(report.some(r=>r.field==='Customer selection' && r.status==='failed' && /Multiple/.test(r.detail)));
+  assert.ok(dom.window.document.getElementById('customer-toggle'));
+  assert.equal(dom.window.fixtureCustomerAdds,0);assert.equal(dom.window.fixtureSubmissions,0);
   dom.window.close();
 });

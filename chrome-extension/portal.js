@@ -1,6 +1,7 @@
 (() => {
   'use strict';
-  let job, adapter, armed=false, consumed=false, busy=false, captured=false, root, notice, observer, timer;
+  let job, adapter, armed=false, consumed=false, busy=false, captured=false, root, notice, reportList, observer, timer;
+  let lastAutoForm=null, generation=0;
   const send = async (action, data={}) => {
     const response=await chrome.runtime.sendMessage({role:'portal',action,data:{attempt_id:job?.record.attempt_id,digest:job?.record.digest,...data}});
     if (response?.error) throw Error(response.error);
@@ -10,8 +11,11 @@
   function stop(event) { event.preventDefault(); event.stopImmediatePropagation(); }
   function gate(event) {
     // Authentication, PIN validation and invoice-list filters remain usable.
-    if (!location.pathname.includes('/etims/sale/create')) return;
-    if (event.type==='submit' && adapter && !adapter.issuanceControl(event.submitter) && !adapter.rows().some(row=>event.target.contains(row))) return;
+    const issue=adapter?.issuanceControl(event.type==='submit'?event.submitter:event.target);
+    if (!issue && !adapter?.detect().ready) return;
+    const itemModal=adapter?.itemDialog();
+    if (event.type==='submit' && itemModal && !issue && event.target.closest('[role="dialog"]')===itemModal) return;
+    if (event.type==='submit' && adapter && !issue && !adapter.rows().some(row=>event.target.contains(row))) return;
     if (!job || !adapter || captured || job.generated) {
       if (job && (event.type==='submit' || adapter?.issuanceControl(event.target))) {stop(event); message('Invoice already captured. Duplicate generation is blocked.');}
       return;
@@ -38,19 +42,32 @@
   window.addEventListener('click',gate,true);
   window.addEventListener('submit',submitGate,true);
   async function prepare() {
-    if (busy || job.recovery || job.armed || consumed || captured) return;
+    if (busy || !job || job.recovery || job.armed || consumed || captured) return;
     busy=true;
+    const currentGeneration=generation;
+    const fillButton=root?.shadowRoot.querySelector('[data-fill]');
+    if (fillButton) fillButton.disabled=true;
     try {
-      if (!location.pathname.includes('/etims/sale/create')) {message('Sign in, select the correct business, then open Create Sales Invoice.');return;}
-      // Add only recognized item-row controls. Never touch KRA's generate button.
-      for (let i=adapter.rows().length; i<job.record.snapshot.items.length; i++) {
-        if (!adapter.addItem()) break;
-        await new Promise(resolve=>setTimeout(resolve,150));
+      const detection=adapter.detect();
+      if (!detection.ready) {
+        message('Invoice form not detected at '+detection.url+'. Missing: '+detection.missing.join(', ')+'. Open the sales invoice form in this linked popup, then click Fill POS sale.');return;
       }
-      const missing=adapter.fill(job.record.snapshot);
-      message(missing.length ? 'Complete these fields in KRA: '+[...new Set(missing)].join(', ')+'. Then review every line, discount, payment and tax setting.' : 'Sale filled. Validate the PIN in KRA and review every line, discount, payment and tax setting.');
+      message('Filling POS sale. Each item popup will be filled and added to the invoice table. No invoice will be submitted.');
+      const report=await adapter.fillSale(job.record.snapshot,{onProgress:showReport,active:()=>generation===currentGeneration && !job.recovery && !consumed && !captured});
+      const failed=report.filter(r=>r.status==='failed');
+      message(failed.length?'Filling finished with '+failed.length+' field(s) needing attention. Review the details below. No invoice submitted.':'POS data filled and total matched. Review the KRA form. No invoice submitted.');
     } catch(error) {message(error.message);}
-    finally {busy=false;}
+    finally {busy=false;if(fillButton && !job.recovery && !job.armed && !captured && !consumed)fillButton.disabled=false;}
+  }
+  function showReport(report) {
+    if (!reportList) return;
+    reportList.replaceChildren();
+    for (const row of report) {
+      const li=document.createElement('li');li.dataset.status=row.status;
+      const title=document.createElement('strong');title.textContent=(row.status==='filled'?'✓ ':row.status==='failed'?'✕ ':'– ')+row.field;
+      const detail=document.createElement('div');detail.textContent=row.detail;
+      li.append(title,detail);reportList.append(li);
+    }
   }
   async function scan() {
     if (!job || !adapter || busy || captured) return;
@@ -67,9 +84,10 @@
   function panel() {
     root?.remove(); root=document.createElement('aside'); root.dataset.oraforgeCompanion='';
     const shadow=root.attachShadow({mode:'open'});
-    shadow.innerHTML='<style>:host{position:fixed;bottom:12px;right:12px;z-index:2147483647;font:13px/1.5 system-ui;color:#173b29}section{width:320px;max-height:65vh;overflow:auto;padding:16px;background:#f5ffe9;border:2px solid #27523d;border-radius:12px;box-shadow:0 4px 24px #0004}h3{margin:0 0 8px}button{padding:8px;margin:5px 0;width:100%;background:#173b29;color:white;border:0;border-radius:6px;cursor:pointer}button:disabled{opacity:.5}label{display:block;margin:10px 0}</style><section><h3>Oraforge eTIMS</h3><div data-sale></div><p role="status"></p><button data-fill>Fill POS sale</button><label><input type="checkbox" data-review> I checked the seller, customer PIN validation, all items, discounts, payment, tax and total.</label><button data-arm>Enable KRA Generate</button><button data-capture>Read existing official invoice</button></section>';
+    shadow.innerHTML='<style>:host{position:fixed;bottom:12px;right:12px;z-index:2147483647;font:13px/1.5 system-ui;color:#173b29}section{width:320px;max-height:65vh;overflow:auto;padding:16px;background:#f5ffe9;border:2px solid #27523d;border-radius:12px;box-shadow:0 4px 24px #0004}h3{margin:0 0 8px}button{padding:8px;margin:5px 0;width:100%;background:#173b29;color:white;border:0;border-radius:6px;cursor:pointer}button:disabled{opacity:.5}label{display:block;margin:10px 0}ul{padding:0;list-style:none}li{padding:7px 0;border-bottom:1px solid #ccd8bd}li div{font-size:12px}li[data-status=failed]{color:#a32020}li[data-status=skipped]{color:#65705d}</style><section><h3>Oraforge eTIMS</h3><div data-sale></div><p role="status"></p><button data-fill>Fill POS sale</button><ul data-report aria-label="Form filling results"></ul><details><summary>Invoice issuance controls</summary><label><input type="checkbox" data-review> I checked the seller, customer PIN validation, all items, discounts, payment, tax and total.</label><button data-arm>Enable KRA Generate</button></details><button data-capture>Read existing official invoice</button></section>';
     shadow.querySelector('[data-sale]').textContent=job.record.receipt_no+' · KES '+(job.record.snapshot.total_cents/100).toFixed(2);
     notice=shadow.querySelector('[role=status]');
+    reportList=shadow.querySelector('[data-report]');
     shadow.querySelector('[data-fill]').onclick=prepare;
     shadow.querySelector('[data-capture]').onclick=scan;
     shadow.querySelector('[data-arm]').onclick=async event=>{
@@ -92,22 +110,29 @@
     try {
       const next=await send('job');
       if (!next) return;
+      generation++;lastAutoForm=null;
       job=next;adapter=window.OraforgeKraAdapter.adapter(document,job.config);
-      panel(); await prepare(); await scan();
-      observer?.disconnect(); observer=new MutationObserver(()=>{clearTimeout(timer);timer=setTimeout(scan,400);});
-      observer.observe(document.body,{subtree:true,childList:true,characterData:true});
+      panel(); await refresh();
+      observer?.disconnect(); observer=new MutationObserver(records=>{
+        if (records.every(r=>root?.contains(r.target))) return;
+        clearTimeout(timer);timer=setTimeout(refresh,300);
+      });
+      observer.observe(document.body,{subtree:true,childList:true,characterData:true,attributes:true,attributeFilter:['style','hidden','disabled']});
     } catch(error) {message(error.message);}
   }
   chrome.runtime.onMessage.addListener(m=>{
-    if (m.action==='revoked') {armed=false;consumed=true;if(job)job.recovery=true;message('This invoice has been recorded or revoked in Oraforge. Generation is blocked.');}
+    if (m.action==='revoked') {generation++;armed=false;consumed=true;if(job)job.recovery=true;message('This invoice has been recorded or revoked in Oraforge. Generation is blocked.');}
     if (m.action==='reload_job') {armed=false; boot();}
   });
+  async function refresh() {
+    if (!job || !adapter || busy || captured) return;
+    const detection=adapter.detect(), form=adapter.find('email');
+    if (detection.ready && form!==lastAutoForm && !job.recovery && !job.armed && !consumed) {
+      lastAutoForm=form;await prepare();
+    } else if (!detection.ready && !lastAutoForm) message('Waiting for the KRA sales invoice form at '+detection.url+'. Missing: '+detection.missing.join(', ')+'.');
+    await scan();
+  }
+  window.addEventListener('popstate',refresh);
+  window.addEventListener('hashchange',refresh);
   boot();
-  // SPAs may render their form after document_idle; fill it once fields exist.
-  let attempts=0;
-  const ready=setInterval(()=>{
-    if (++attempts>30 || captured || consumed) {clearInterval(ready);return;}
-    if (job && !job.recovery && !job.armed && adapter?.rows().length && !root?.dataset.filled) {root.dataset.filled='yes';prepare();}
-    scan();
-  },1000);
 })();

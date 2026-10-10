@@ -96,6 +96,7 @@ with sync_playwright() as p:
     assert page.evaluate('window.fixtureSubmissions')==0
     page.locator('#generate').click()
     assert page.evaluate('window.fixtureSubmissions')==0
+    page.locator('[data-oraforge-companion] summary').click()
     page.locator('[data-oraforge-companion] [data-review]').check()
     page.locator('[data-oraforge-companion] [data-arm]').click()
     page.wait_for_function("window.testMessages.some(m=>m.action==='arm')")
@@ -136,6 +137,7 @@ with sync_playwright() as p, tempfile.TemporaryDirectory(prefix='oraforge-full-e
     assert popup.evaluate('window.fixtureSubmissions')==0
     print('PASS real extension opened KRA popup and filled exact sale')
     popup.locator('#generate').click();assert popup.evaluate('window.fixtureSubmissions')==0
+    popup.locator('[data-oraforge-companion] summary').click()
     popup.locator('[data-oraforge-companion] [data-review]').check();popup.locator('[data-oraforge-companion] [data-arm]').click()
     popup.wait_for_function("document.querySelector('[data-oraforge-companion]').shadowRoot.querySelector('[role=status]').textContent.includes('Now click')")
     popup.locator('#generate').click()

@@ -1,0 +1,105 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><title>KRA DOM regression fixture</title>
+<style>[hidden]{display:none!important}body{font:14px system-ui;max-width:850px;margin:24px}label{display:block;margin-top:8px}input,textarea,select{padding:6px}table{width:100%;border-collapse:collapse}td,th{padding:6px;border:1px solid #ccc}[role=dialog]{position:fixed;inset:4%;background:white;border:2px solid #444;padding:24px;overflow:auto;z-index:1000}</style></head><body>
+<!-- Anonymized regression fixture derived from supplied DOM and the public KRA
+ InvoiceCreate-526bbef2.js component. State/validation are simulated, not live KRA.
+ No account/session data, tokens, tax identifiers or network calls from the user. -->
+<main id="app">
+<h1 class="title capitalize">create Sales Invoice</h1>
+<button id="issue" disabled>Create Invoice</button><button disabled>Save draft</button>
+<div class="flex flex-col gap-4" id="customer-section">
+  <div class="p-3 bg-gray-100"><p>customer</p></div>
+  <div class="grid grid-cols-12">
+    <div class="col-span-12 space-y-2" id="customer-choice">
+      <div class="flex"><label>Customer Name</label><div><button id="new-customer">Add New</button></div></div>
+      <div class="unset"><button id="customer-toggle"><span>Select...</span></button>
+        <div id="customer-menu" style="display:none"><div class="py-2 px-4"><div><div><input type="search" name="search" placeholder="Search by name or PIN or Phone number..."></div></div></div>
+          <div class="max-h-[220px]">
+            <button type="button"><div><p>KRA-resolved fixture buyer</p><p>A123456789B</p></div></button>
+            <button type="button"><div><p>Another fixture buyer</p><p>A111111111C</p></div></button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="col-span-12"><div><label>email address <span>*</span></label><div class="mt-2"><input type="email" placeholder="Enter email address" step="any"></div></div></div>
+    <div class="col-span-12"><label>Phone number</label><div class="m-phone-number-input">
+      <div class="m-country-selector"><input type="text" aria-label="Country code" value="+254"></div>
+      <div class="m-phone-input"><div><div><input id="MazPhoneNumberInput-17" type="tel" inputmode="tel" aria-label="Example: 0712 123456"></div></div></div>
+    </div></div>
+    <div class="col-span-12"><div><label>Billing address information</label><div class="mt-2"><textarea rows="6" placeholder="Enter full billing address"></textarea></div></div></div>
+  </div>
+</div>
+<div><label for="Type of Tax">Type of Tax</label><select id="Type of Tax" disabled><option selected value="non_vat">Non-VAT</option><option value="vat">VAT</option></select></div>
+<div id="items-section"><div class="p-3"><p>Items</p></div><button id="open-item">add Item</button><div id="items-table"></div></div>
+<div class="flex flex-col gap-4" id="payment-section">
+  <div class="p-3 bg-gray-100"><p>Payment option</p></div><div>
+    <div class="relative"><button id="payment-toggle"><span>Select ...</span></button>
+      <div id="payment-menu" style="display:none"><div><div><div><input type="search" name="search" placeholder="Search by name..."></div></div></div>
+        <div><p>Payment Options</p></div><div id="payment-options">
+          <button type="button"><div><p>Mpesa - Send Money : ["TEST ACCOUNT"]</p></div></button>
+          <button type="button"><div><p>Mpesa - Till Number : ["TEST TILL"]</p></div></button>
+        </div>
+      </div>
+    </div><div class="border"><p><span class="font-semibold" id="selected-payment">Mpesa</span></p><div><p>Default</p></div></div>
+  </div>
+</div>
+<div><label for="note ">add note</label><div><textarea name="note " id="note " rows="4" placeholder="Type"></textarea></div></div>
+<div><label>Terms and Conditions</label><textarea>Fixture terms retained</textarea></div>
+</main>
+<script>
+window.fixtureItems=[];window.fixtureSubmissions=0;window.fixtureItemOpens=0;window.fixtureItemAdds=0;window.fixtureCustomerAdds=0;window.fixtureValidations=0;
+const byId=id=>document.getElementById(id);
+const escapeHtml=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+byId('customer-toggle').onclick=()=>{byId('customer-menu').style.display=byId('customer-menu').style.display==='none'?'block':'none';};
+function selected(pin,name){
+  byId('customer-choice').innerHTML='<div class="rounded-lg"><div><p>'+escapeHtml(name)+'</p><p>'+escapeHtml(pin)+'</p></div><p>Wrong User? <button>Cancel</button></p></div>';
+  document.querySelector('#customer-section input[type=email]').value='KRA-source@example.test';
+  document.querySelector('#customer-section input[type=tel]').value='0700000000';
+}
+document.querySelectorAll('#customer-menu button').forEach(b=>b.onclick=()=>setTimeout(()=>selected(b.querySelectorAll('p')[1].textContent,b.querySelector('p').textContent),30));
+byId('new-customer').onclick=()=>{
+  const modal=document.createElement('div');modal.setAttribute('role','dialog');modal.setAttribute('aria-modal','true');
+  modal.innerHTML='<h3>New Customer</h3><label><input type="radio" name="customer_type" checked>Individual</label><label for="nonindividual">Non Individual</label><input id="nonindividual" type="radio" name="customer_type"><div id="new-customer-fields"><label>Customer PIN</label><input type="text" placeholder="Enter PIN"></div><button type="button" id="customer-cancel">Cancel</button><button id="customer-validate">Validate</button>';
+  document.body.append(modal);byId('customer-cancel').onclick=()=>modal.remove();
+  byId('customer-validate').onclick=()=>{
+    const pin=modal.querySelector('input[placeholder="Enter PIN"]').value;window.fixtureValidations++;
+    setTimeout(()=>{
+      byId('new-customer-fields').innerHTML='<p>KRA-resolved new fixture buyer</p><p>'+escapeHtml(pin)+'</p><label>Phone number</label><div><input type="tel"></div><label>Email</label><div><input type="email"></div>';
+      byId('customer-validate').textContent='Add';
+      byId('customer-validate').onclick=()=>{window.fixtureCustomerAdds++;selected(pin,'KRA-resolved new fixture buyer');modal.remove();};
+    },40);
+  };
+};
+byId('payment-toggle').onclick=()=>{byId('payment-menu').style.display=byId('payment-menu').style.display==='none'?'block':'none';};
+window.fixturePayments=()=>document.querySelectorAll('#payment-options button').forEach(b=>b.onclick=()=>setTimeout(()=>{byId('selected-payment').textContent=b.querySelector('p').textContent.split(' : ')[0];byId('payment-menu').style.display='none';},30));window.fixturePayments();
+function table(){
+  const cents=v=>(v/100).toFixed(2);
+  byId('items-table').innerHTML='<table><thead><tr><th>Name</th><th>description</th><th>quantity</th><th>Sale Price KES</th><th>discount KES</th><th>amount KES</th><th></th></tr></thead><tbody>'+window.fixtureItems.map(i=>'<tr><td>'+escapeHtml(i.name)+'</td><td>'+escapeHtml(i.description)+'</td><td>'+i.quantity+'</td><td>'+cents(i.price)+'</td><td>'+cents(i.discount)+'</td><td>'+cents(i.total)+'</td><td><button>Edit</button><button>Remove</button></td></tr>').join('')+'<tr><td colspan="5">Sub total</td><td>0.00</td></tr><tr><td colspan="5">NON VAT</td><td>0.00</td></tr><tr><td colspan="5">Total</td><td> KES '+cents(window.fixtureItems.reduce((s,i)=>s+i.total,0))+'</td></tr></tbody></table>';
+  byId('issue').disabled=!window.fixtureItems.length;
+}
+window.fixtureTable=table;
+byId('open-item').onclick=()=>{
+  window.fixtureItemOpens++;
+  setTimeout(()=>{
+    const modal=document.createElement('div');modal.setAttribute('role','dialog');modal.setAttribute('aria-modal','true');
+    modal.innerHTML='<div><h3>Add item details</h3><div><label><input type="radio" name="type-item">Service</label><label><input type="radio" name="type-item" checked>Product</label></div><div id="inventory"><label>Search</label><button type="button" id="manual-entry">Add New</button><button type="button">Select...</button></div><div><label>Name of item</label><div><input id="item_name" type="text" placeholder="Enter Name of item"></div></div><div><label>description</label><div><textarea id="desc" placeholder=" A short explanation about the product/ service"></textarea></div></div><div><label>Sale Price</label><div><select id="u_c" name="u_c"><option>KES</option></select><input id="u_c" type="number" value="0"></div></div><div><label>Quantity</label><div><input id="quantity-i" type="number" value="1"></div></div><div><label>Discount</label><div><div><select id="country" name="country"><option value="percentage">Percentage %</option><option value="fixed_amount">Fixed Amount</option></select></div><input id="discount" name="discount" type="text" value="0"></div></div><div><label for="total">Total</label><div><select disabled><option>KES</option></select><input type="text" id="total" name="total" readonly value="0.00"></div></div></div><div><button type="button" id="item-cancel">Cancel</button><button type="submit" id="item-add" disabled>Add</button></div>';
+    document.body.append(modal);
+    byId('manual-entry').onclick=()=>{byId('inventory').innerHTML='<button type="button">Add from Inventory</button>';};
+    byId('item-cancel').onclick=()=>modal.remove();
+    function recalc(){
+      const amount=Math.round(Number(modal.querySelector('input[id="u_c"]').value)*Number(byId('quantity-i').value)*100);
+      const discount=byId('country').value==='percentage'?Math.round(amount*Number(byId('discount').value)/100):Math.round(Number(byId('discount').value)*100);
+      byId('total').value=((amount-discount)/100).toFixed(2);
+      byId('item-add').disabled=!(byId('item_name').value && byId('desc').value && Number(modal.querySelector('input[id="u_c"]').value)>0 && Number(byId('quantity-i').value)>0 && amount-discount>0);
+    }
+    modal.addEventListener('input',()=>setTimeout(recalc,15));modal.addEventListener('change',()=>setTimeout(recalc,15));
+    byId('item-add').onclick=()=>{
+      window.fixtureItemAdds++;
+      const price=Math.round(Number(modal.querySelector('input[id="u_c"]').value)*100),quantity=Number(byId('quantity-i').value),total=Math.round(Number(byId('total').value)*100);
+      const item={name:byId('item_name').value,description:byId('desc').value,quantity,price,total,discount:Math.round(price*quantity)-total};
+      if(window.fixtureLoseAddConfirmation)return;
+      setTimeout(()=>{window.fixtureItems.push(item);modal.remove();table();},30);
+    };
+  },30);
+};
+byId('issue').onclick=()=>window.fixtureSubmissions++;
+</script></body></html>
