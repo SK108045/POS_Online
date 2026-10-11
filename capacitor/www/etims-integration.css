@@ -16,3 +16,7 @@
 .etims-workspace button,.etims-workspace select{padding:8px;margin:3px;border:1px solid var(--line,#ddd);border-radius:6px;cursor:pointer;background:var(--panel,#fff);color:var(--ink,#222)}
 .etims-workspace [role=status]{margin:12px 0}
 @media print{.receipt-etims,.receipt-kra-qr{display:block!important}.receipt-kra-qr{max-width:40mm;max-height:40mm}.etims-manage-receipt{display:none!important}}
+
+/* KRA invoice processing: no premature final POS thermal receipt. */
+.receipt #receiptPrintBtn:disabled{opacity:.56!important;cursor:wait!important;filter:grayscale(.4)}
+.receipt #receiptPrintBtn:disabled:hover{transform:none!important}
