@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Oraforge eTIMS Companion",
-  "version": "1.1.7",
+  "version": "1.1.8",
   "description": "Fill official KRA eTIMS invoice forms from Oraforge POS for cashier review.",
   "permissions": ["storage", "unlimitedStorage", "alarms"],
   "host_permissions": ["https://ecitizen.kra.go.ke/*", "https://kra.ecitizen.go.ke/*", "https://etims.kra.go.ke/*"],
@@ -10,7 +10,7 @@
   "action": {"default_title": "Oraforge eTIMS · Activity experiment", "default_popup": "keepalive.html"},
   "content_scripts": [
     {"matches": ["http://localhost/*", "http://127.0.0.1/*"], "js": ["pos-bridge.js"], "run_at": "document_start"},
-    {"matches": ["https://ecitizen.kra.go.ke/*", "https://kra.ecitizen.go.ke/*", "https://etims.kra.go.ke/*"], "js": ["portal-sites.js", "portal-adapter.js", "portal.js", "scroll-keepalive.js"], "run_at": "document_idle"}
+    {"matches": ["https://ecitizen.kra.go.ke/*", "https://kra.ecitizen.go.ke/*", "https://etims.kra.go.ke/*"], "js": ["portal-sites.js", "invoice-print.js", "portal-adapter.js", "portal.js", "scroll-keepalive.js"], "run_at": "document_idle"}
   ]
 }
 
