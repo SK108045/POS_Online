@@ -136,7 +136,7 @@
       <ul data-report aria-label="Form filling results"></ul>
       <details data-issuance-controls><summary>Invoice issuance controls</summary><label><input type="checkbox" data-review> I checked the seller, customer PIN validation, all items, discounts, payment, tax and total.</label><button data-arm>Enable KRA Generate</button></details>
       <button data-capture>Read existing official invoice</button>
-      <details data-scroll-controls><summary>Scroll keep-alive · Experimental</summary><label><input type="checkbox" data-scroll-toggle disabled> Enable tiny scroll every 60 seconds</label><p data-scroll-status>Loading scroll setting…</p><button type="button" data-scroll-logs>Activity logs and experiment details</button></details>
+      <details data-scroll-controls><summary>Activity keep-alive · Experimental</summary><label><input type="checkbox" data-scroll-toggle disabled> Enable activity every 60 seconds</label><label>Activity mode <select data-activity-mode disabled><option value="mouse">Mouse activity</option><option value="scroll">Scroll</option></select></label><p data-scroll-status>Loading activity setting…</p><button type="button" data-scroll-logs>Activity logs and experiment details</button></details>
     </section>
     <button type="button" data-restore hidden aria-label="Restore Oraforge eTIMS" aria-controls="companion-panel" aria-expanded="false" title="Restore panel">Oraforge eTIMS</button>`;
     const panelSection=shadow.querySelector('section');
@@ -159,7 +159,14 @@
     shadow.querySelector('[data-capture]').onclick=scan;
     const scrollSetting='oraforgeScrollKeepAliveEnabled', scrollToggle=shadow.querySelector('[data-scroll-toggle]');
     if (chrome.storage?.local) {
-      chrome.storage.local.get(scrollSetting).then(data=>renderScrollSetting(data[scrollSetting]===true)).catch(()=>{shadow.querySelector('[data-scroll-status]').textContent='Reload the extension to read the scroll setting.';});
+      chrome.storage.local.get([scrollSetting,'oraforgeKeepAliveMode']).then(data=>{renderScrollSetting(data[scrollSetting]===true);renderActivityMode(data.oraforgeKeepAliveMode);}).catch(()=>{shadow.querySelector('[data-scroll-status]').textContent='Reload the extension to read the scroll setting.';});
+      const modeSelect=shadow.querySelector('[data-activity-mode]');
+      modeSelect.onchange=async()=>{
+        modeSelect.disabled=true;
+        try {await chrome.storage.local.set({oraforgeKeepAliveMode:modeSelect.value});renderActivityMode(modeSelect.value);}
+        catch (_) {shadow.querySelector('[data-scroll-status]').textContent='Could not save activity mode.';}
+        finally {modeSelect.disabled=false;}
+      };
       scrollToggle.onchange=async()=>{
         scrollToggle.disabled=true;
         try {await chrome.storage.local.set({[scrollSetting]:scrollToggle.checked});renderScrollSetting(scrollToggle.checked);}
@@ -196,9 +203,14 @@
     const shadow=root?.shadowRoot, toggle=shadow?.querySelector('[data-scroll-toggle]');
     if(!toggle)return;
     toggle.checked=enabled;toggle.disabled=false;
-    shadow.querySelector('[data-scroll-status]').textContent=enabled?'ON · Scroll only; logout prevention is unverified. Stops on detected login/OTP screens.':'OFF · Enable to test whether scrolling affects inactivity logout.';
+    shadow.querySelector('[data-scroll-status]').textContent=enabled?'ON · Activity experiment; session renewal is unverified. Stops on detected login/OTP screens.':'OFF · Enable to test activity against inactivity logout.';
+  }
+  function renderActivityMode(mode) {
+    const select=root?.shadowRoot?.querySelector('[data-activity-mode]');
+    if(select){select.value=mode==='scroll'?'scroll':'mouse';select.disabled=false;}
   }
   chrome.storage?.onChanged?.addListener((changes,area)=>{
+    if(area==='local' && changes.oraforgeKeepAliveMode)renderActivityMode(changes.oraforgeKeepAliveMode.newValue);
     if(area==='local' && changes.oraforgeScrollKeepAliveEnabled)renderScrollSetting(changes.oraforgeScrollKeepAliveEnabled.newValue===true);
   });
   async function boot() {
@@ -256,3 +268,4 @@
   document.addEventListener('visibilitychange',()=>{if(!document.hidden)scheduleRefresh();});
   boot();
 })();
+

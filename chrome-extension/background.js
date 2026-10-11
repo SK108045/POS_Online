@@ -63,14 +63,19 @@ async function handle(m, sender) {
       return {opened:true};
     }
     if (m.action!=='log') throw Error('Unsupported scroll experiment action.');
-    const events=['enabled','disabled','session_detected','logged_out','waiting_for_login','scroll_cycle','skipped','scroll_error','page_left'];
-    const reasons=['offline','cashier_active','popup_or_dropdown_open','page_not_scrollable','scroll_not_moved','scroll_failed','cashier_moved_scroll'];
+    const events=['enabled','disabled','session_detected','logged_out','waiting_for_login','scroll_cycle','skipped','scroll_error','page_left','mouse_cycle','timer_delayed','activity_error'];
+    const reasons=['offline','cashier_active','popup_or_dropdown_open','page_not_scrollable','scroll_not_moved','scroll_failed','cashier_moved_scroll','page_not_ready','dispatch_failed'];
     if (!events.includes(data.event) || (data.reason && !reasons.includes(data.reason))) throw Error('Invalid scroll experiment event.');
     const count=value=>Number.isSafeInteger(value) && value>=0 ? Math.min(value,Number.MAX_SAFE_INTEGER) : 0;
     // Whitelist metadata only: never retain URL paths, form values or credentials.
     const entry={at:new Date().toISOString(),origin:new URL(sender.url).origin,tab_id:sender.tab.id,
       page_id:/^[a-f0-9-]{36}$/i.test(data.page_id || '')?data.page_id:'',event:data.event,
       enabled:data.enabled===true,visible:data.visible===true,observed_ms:count(data.observed_ms),cycles:count(data.cycles)};
+    entry.mode=data.mode==='scroll'?'scroll':'mouse';
+    entry.session_evidence='page_only';
+    if (['page_timer','background_alarm'].includes(data.source)) entry.source=data.source;
+    if (data.event==='mouse_cycle') entry.synthetic=true;
+    if (data.event==='timer_delayed') entry.gap_ms=count(data.gap_ms);
     if (data.reason) entry.reason=data.reason;
     if (data.event==='scroll_cycle' || data.event==='scroll_error') {entry.delta=Number.isFinite(data.delta)?Math.max(-12,Math.min(12,data.delta)):0;entry.restored=data.restored===true;entry.target=['page','container'].includes(data.target)?data.target:'unknown';entry.event_observed=data.event_observed===true;}
     const logKey='oraforgeScrollKeepAliveLog', saved=(await chrome.storage.local.get(logKey))[logKey];
@@ -168,3 +173,36 @@ chrome.runtime.onMessage.addListener((message,sender,reply) => {
   return true;
 });
 // Clicking Options never triggers invoice submission or requests authentication.
+
+
+// Alarms wake the worker when a background page's JS timer runs late.
+// They cannot wake a sleeping computer or revive a discarded/logged-out tab.
+const ACTIVITY_ALARM='oraforge_activity_tick';
+let alarmSerial=Promise.resolve();
+function syncActivityAlarm() {
+  alarmSerial=alarmSerial.catch(()=>{}).then(async()=>{
+    const settings=await chrome.storage.local.get('oraforgeScrollKeepAliveEnabled');
+    if (settings.oraforgeScrollKeepAliveEnabled!==true) {
+      await chrome.alarms.clear(ACTIVITY_ALARM);return;
+    }
+    if (!await chrome.alarms.get(ACTIVITY_ALARM)) {
+      await chrome.alarms.create(ACTIVITY_ALARM,{periodInMinutes:1});
+    }
+  });
+  return alarmSerial;
+}
+chrome.alarms.onAlarm.addListener(async alarm=>{
+  if (alarm.name!==ACTIVITY_ALARM) return;
+  const settings=await chrome.storage.local.get('oraforgeScrollKeepAliveEnabled');
+  if (settings.oraforgeScrollKeepAliveEnabled!==true) return;
+  const tabs=await chrome.tabs.query({url:[
+    'https://ecitizen.kra.go.ke/*','https://kra.ecitizen.go.ke/*','https://etims.kra.go.ke/*'
+  ]});
+  await Promise.allSettled(tabs.filter(tab=>!tab.discarded && sites.allowed(tab.url)).map(tab=>
+    chrome.tabs.sendMessage(tab.id,{action:ACTIVITY_ALARM},{frameId:0})
+  ));
+});
+chrome.storage.onChanged.addListener((changes,area)=>{
+  if (area==='local' && changes.oraforgeScrollKeepAliveEnabled) syncActivityAlarm().catch(()=>{});
+});
+syncActivityAlarm().catch(()=>{});

@@ -1,17 +1,19 @@
 <!doctype html>
-<html lang="en"><head><meta charset="utf-8"><title>Oraforge scroll experiment</title>
+<html lang="en"><head><meta charset="utf-8"><title>Oraforge activity experiment</title>
 <style>
   body{box-sizing:border-box;width:420px;max-width:100%;margin:0;padding:18px;font:14px/1.5 system-ui;color:#173b29;background:#f5ffe9}
   h1{font-size:18px;margin:0 0 12px}label{display:flex;gap:8px;align-items:center;font-weight:600}
   button,a{font:inherit}button{padding:6px 10px;margin-right:8px}p{margin:10px 0}
   pre{white-space:pre-wrap;overflow-wrap:anywhere;max-height:290px;overflow:auto;background:white;border:1px solid #ccd8bd;padding:10px;font:12px/1.5 monospace}
 </style></head><body>
-<h1>Scroll keep-alive · Experimental</h1>
-<label><input type="checkbox" id="keepalive-toggle" disabled> Enable automatic scroll every 60 seconds</label>
+<h1>Activity keep-alive · Experimental</h1>
+<label><input type="checkbox" id="keepalive-toggle" disabled> Enable automatic activity every 60 seconds</label>
+<p><label>Activity mode <select id="keepalive-mode" disabled><option value="mouse">Mouse activity (new experiment)</option><option value="scroll">Scroll (previous experiment)</option></select></label></p>
 <p id="keepalive-status" role="status">Loading…</p>
-<p>Moves the page or its main scrollable panel by up to 12 px, waits 220 ms, then restores its position. Stops on detected login, OTP or session-expired screens. Pauses during recent cashier activity or open dialogs/dropdowns.</p>
-<p>This is an experiment: scrolling may have no effect on KRA’s timeout. Background or sleeping tabs may run late. No buttons, form values or session credentials are changed.</p>
+<p>Mouse mode sends synthetic mousemove events without moving your physical cursor or requiring a scrollbar. Scroll mode retains the previous 12 px experiment. Both stop on detected login/OTP screens and pause during recent cashier input.</p>
+<p>A background alarm supplements the page timer. Sleeping computers and discarded tabs cannot run activity. Neither mode proves or guarantees session renewal: KRA may ignore synthetic events or expire the session on its server. No clicks, typing, form submissions or credential changes.</p>
 <p><button id="clear-log" type="button">Clear logs</button><button id="download-log" type="button">Download logs</button> <a href="options.html" target="_blank">Invoice settings</a></p>
 <pre id="keepalive-log" aria-label="Scroll experiment activity log" tabindex="0">No activity yet.</pre>
 <script src="keepalive-ui.js"></script>
 </body></html>
+

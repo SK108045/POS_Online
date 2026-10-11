@@ -3,10 +3,11 @@
 <body style="max-width:800px;margin:30px auto;font:15px/1.6 system-ui">
 <h1>KRA invoice form settings</h1>
 <p>The extension detects the invoice form from its controls after login and SPA navigation. The existing compact popup is preserved.</p>
-<h2>Experimental scroll keep-alive</h2>
-<label><input type="checkbox" id="keepalive-toggle" disabled> Enable automatic scroll every 60 seconds</label>
+<h2>Experimental activity keep-alive</h2>
+<label><input type="checkbox" id="keepalive-toggle" disabled> Enable automatic activity every 60 seconds</label>
+<p><label>Activity mode <select id="keepalive-mode" disabled><option value="mouse">Mouse activity (new experiment)</option><option value="scroll">Scroll (previous experiment)</option></select></label></p>
 <p id="keepalive-status" role="status">Loading…</p>
-<p>OFF by default. Scrolling may not affect KRA’s inactivity timeout. Stops on detected login/OTP screens. Use the extension’s toolbar popup for activity logs and test results. <a href="keepalive.html" target="_blank">Open experiment and logs</a></p>
+<p>OFF by default. Mouse mode is selected initially; the previous scroll mode remains available. Activity may not affect KRA’s inactivity timeout. Stops on detected login/OTP screens. Use the extension’s toolbar popup for activity logs and test results. <a href="keepalive.html" target="_blank">Open experiment and logs</a></p>
 <label for="create-url">Invoice page URL (optional)</label><br><input id="create-url" type="url" style="width:100%" placeholder="Existing eCitizen invoice popup by default"><br>
 <label for="list-url">Existing invoices page URL (optional)</label><br><input id="list-url" type="url" style="width:100%" placeholder="Existing eCitizen sales list by default">
 <p>Allowed HTTPS hosts: ecitizen.kra.go.ke, kra.ecitizen.go.ke and etims.kra.go.ke. Copy the actual page URL after selecting your business. Never include login tokens.</p>
@@ -17,3 +18,4 @@
 <p><button id="save">Save settings</button></p><p id="status" role="status"></p>
 <script src="portal-sites.js"></script><script src="options.js"></script><script src="keepalive-ui.js"></script>
 </body></html>
+

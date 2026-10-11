@@ -1,4 +1,4 @@
-/* Scroll-only experiment. No credentials, form writes, clicks or network calls. */
+/* Activity experiment. No credentials, form writes, clicks or network calls. */
 (function (root, factory) {
   const api = factory();
   if (typeof module === 'object' && module.exports) module.exports = api;
@@ -8,7 +8,7 @@
   }
 })(globalThis, function () {
   'use strict';
-  const SETTING = 'oraforgeScrollKeepAliveEnabled', INTERVAL = 60000;
+  const SETTING = 'oraforgeScrollKeepAliveEnabled', MODE = 'oraforgeKeepAliveMode', INTERVAL = 60000;
   function visible(win, el) {
     if (!el?.isConnected) return false;
     for (let node=el; node?.nodeType===1; node=node.parentElement) {
@@ -60,11 +60,11 @@
   }
   function create(win, chrome) {
     let enabled=false, auth='unknown', timer=null, restoreTimer=null, restorePending=null, observer, debounce=null, stopped=false, started=false;
-    let observedAt=0, cycles=0, lastActivity=-Infinity, settingRevision=0;
+    let observedAt=0, cycles=0, lastActivity=-Infinity, lastTick=0, settingRevision=0, mode='mouse';
     const pageId=win.crypto.randomUUID();
     function log(event, detail={}) {
       const data={event, enabled, page_id:pageId, visible:!win.document.hidden,
-        observed_ms:observedAt ? Math.max(0,Date.now()-observedAt) : 0, cycles, ...detail};
+        mode, session_evidence:'page_only', observed_ms:observedAt ? Math.max(0,Date.now()-observedAt) : 0, cycles, ...detail};
       win.console.info('[Oraforge scroll experiment]', event, data);
       try {
         Promise.resolve(chrome.runtime.sendMessage({role:'scroll_keepalive',action:'log',data})).then(response=>{
@@ -87,12 +87,33 @@
       if (!enabled || auth!=='authenticated') cancelTimer();
       else schedule();
     }
-    function tick() {
-      timer=null;
+    function tick(source='page_timer') {
+      cancelTimer();
       checkSession(); // Also schedules the next 60-second check.
       if (stopped || !enabled || auth!=='authenticated') return;
+      const now=Date.now();
+      // Page timer and background alarm may arrive together. Run only once.
+      if (lastTick && now-lastTick<INTERVAL-1000) return;
+      const gap=lastTick ? now-lastTick : 0;
+      lastTick=now;
+      if (gap>INTERVAL*1.5) log('timer_delayed',{gap_ms:gap,source});
       if (win.navigator.onLine===false) {log('skipped',{reason:'offline'});return;}
       if (Date.now()-lastActivity<5000) {log('skipped',{reason:'cashier_active'});return;}
+      if (mode==='mouse') {
+        // Bubble from a neutral element so document/window activity listeners
+        // can observe it, without hovering, clicking or focusing form controls.
+        // These remain synthetic events (isTrusted=false), not physical input.
+        const target=win.document.body;
+        if (!target) {log('skipped',{reason:'page_not_ready'});return;}
+        try {
+          for (const x of [1,2]) target.dispatchEvent(new win.MouseEvent('mousemove',{
+            bubbles:true,composed:true,clientX:x,clientY:1,buttons:0,view:win
+          }));
+          cycles++;
+          log('mouse_cycle',{synthetic:true,source});
+        } catch (_) {log('activity_error',{reason:'dispatch_failed'});}
+        return;
+      }
       const openControls=win.document.querySelectorAll('[role=dialog], dialog[open], [role=listbox], [role=menu], [role=combobox][aria-expanded=true], .absolute input[type=search]');
       if ([...openControls].some(el=>visible(win,el))) {log('skipped',{reason:'popup_or_dropdown_open'});return;}
       const target=scrollTarget(win);
@@ -137,11 +158,17 @@
       },220);
     }
     function activity(event) { if (event.isTrusted) lastActivity=Date.now(); }
-    const activityEvents=['pointerdown','keydown','input','wheel','touchstart'];
+    const activityEvents=['pointerdown','mousemove','keydown','input','wheel','touchstart'];
+    function wake(message,sender,reply) {
+      if (message?.action!=='oraforge_activity_tick' || sender.id!==chrome.runtime.id) return;
+      tick('background_alarm');reply?.({received:true});
+    }
     function changed(changes, area) {
-      if (area!=='local' || !changes[SETTING] || stopped) return;
+      if (area!=='local' || (!changes[SETTING] && !changes[MODE]) || stopped) return;
       settingRevision++;
-      enabled=changes[SETTING].newValue===true;
+      if (changes[SETTING]) enabled=changes[SETTING].newValue===true;
+      if (changes[MODE]) mode=changes[MODE].newValue==='scroll'?'scroll':'mouse';
+      lastTick=0;
       log(enabled?'enabled':'disabled');checkSession();
     }
     function refresh() {
@@ -157,6 +184,7 @@
       const restore=restorePending;restorePending=null;
       restore?.();
       chrome.storage.onChanged.removeListener(changed);
+      chrome.runtime.onMessage?.removeListener(wake);
       activityEvents.forEach(type=>win.removeEventListener(type,activity,true));
       win.removeEventListener('popstate',refresh);win.removeEventListener('hashchange',refresh);
       win.removeEventListener('pagehide',leave);
@@ -165,6 +193,7 @@
       if (started || stopped) return;
       started=true;
       chrome.storage.onChanged.addListener(changed);
+      chrome.runtime.onMessage?.addListener(wake);
       activityEvents.forEach(type=>win.addEventListener(type,activity,{capture:true,passive:true}));
       win.addEventListener('popstate',refresh);win.addEventListener('hashchange',refresh);
       win.addEventListener('pagehide',leave);
@@ -172,13 +201,14 @@
       observer.observe(win.document.documentElement,{subtree:true,childList:true,characterData:true,attributes:true,attributeFilter:['hidden','aria-hidden','inert','style','class']});
       try {
         const revision=settingRevision;
-        const settings=await chrome.storage.local.get(SETTING);
+        const settings=await chrome.storage.local.get([SETTING,MODE]);
         if (stopped) return;
-        if (revision===settingRevision) enabled=settings[SETTING]===true;
+        if (revision===settingRevision) {enabled=settings[SETTING]===true;mode=settings[MODE]==='scroll'?'scroll':'mouse';}
         log(enabled?'enabled':'disabled');checkSession();
       } catch (_) { stop(); }
     }
     return {start,stop};
   }
-  return {create,sessionState,INTERVAL,SETTING};
+  return {create,sessionState,INTERVAL,SETTING,MODE};
 });
+

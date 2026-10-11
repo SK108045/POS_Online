@@ -3,13 +3,13 @@ const assert=require('node:assert/strict');
 const fs=require('node:fs');
 const path=require('node:path');
 const {JSDOM}=require('jsdom');
-const {sessionState,INTERVAL,SETTING}=require('../../chrome-extension/scroll-keepalive');
+const {sessionState,INTERVAL,SETTING,MODE}=require('../../chrome-extension/scroll-keepalive');
 const source=fs.readFileSync(path.join(__dirname,'../../chrome-extension/scroll-keepalive.js'),'utf8');
 const html='<button><span class="sr-only">Open user menu</span></button><h1>Create Sales Invoice</h1><form><input type="email" value="fixture@example.test"><textarea>Retain this description</textarea><button>Add Item</button><button>Create Invoice</button></form>';
 
-async function harness(enabled=false, height=2000) {
+async function harness(enabled=false, height=2000, mode='scroll') {
   const dom=new JSDOM(html,{url:'https://ecitizen.kra.go.ke/individual/etims/sale/create',runScripts:'outside-only'}),win=dom.window;
-  let now=100000,seq=0,change,requests=0,clicks=0,submits=0;
+  let now=100000,seq=0,change,wake,requests=0,clicks=0,submits=0;
   const tasks=new Map(),logs=[],scrolls=[],listeners=new Map();
   win.Date.now=()=>now;
   win.setTimeout=(fn,ms)=>{const id=++seq;tasks.set(id,{at:now+ms,fn});return id;};
@@ -23,7 +23,7 @@ async function harness(enabled=false, height=2000) {
   win.document.addEventListener('click',()=>clicks++);
   win.document.addEventListener('submit',()=>submits++);
   win.console.info=()=>{};
-  const chrome={storage:{local:{get:async()=>({[SETTING]:enabled})},onChanged:{addListener:fn=>change=fn,removeListener:()=>{change=null;}}},runtime:{sendMessage:async m=>{logs.push(m.data);return {result:{logged:true}};}}};
+  const chrome={storage:{local:{get:async()=>({[SETTING]:enabled,[MODE]:mode})},onChanged:{addListener:fn=>change=fn,removeListener:()=>{change=null;}}},runtime:{id:'fixture',onMessage:{addListener:fn=>wake=fn,removeListener:()=>wake=null},sendMessage:async m=>{logs.push(m.data);return {result:{logged:true}};}}};
   win.module={exports:{}};win.eval(source);
   const controller=win.module.exports.create(win,chrome);await controller.start();
   const advance=async ms=>{
@@ -36,6 +36,8 @@ async function harness(enabled=false, height=2000) {
     now=end;await Promise.resolve();
   };
   return {win,logs,scrolls,listeners,advance,enable:value=>change({[SETTING]:{newValue:value}},'local'),
+    jump:ms=>{now+=ms;},wake:()=>wake({action:'oraforge_activity_tick'},{id:'fixture'},()=>{}),
+    mode:value=>change({[MODE]:{newValue:value}},'local'),
     effects:()=>({requests,clicks,submits}),close:()=>{controller.stop();dom.window.close();}};
 }
 test('scroll experiment is off by default and does not run on sign-in, OTP, expired or unknown screens',async()=>{
@@ -117,5 +119,45 @@ test('scrollable SPA container is used when the document cannot scroll',async()=
   assert.equal(logged.delta,12);
   assert.equal(logged.restored,true);
   assert.deepEqual(h.effects(),{requests:0,clicks:0,submits:0});
+  h.close();
+});
+
+
+test('mouse activity bubbles to portal document/window listeners on non-scrollable pages without modifying the form',async()=>{
+  const h=await harness(true,800,'mouse'),w=h.win;
+  const observed=[];
+  w.document.addEventListener('mousemove',e=>observed.push({trusted:e.isTrusted,x:e.clientX}));
+  const form=w.document.querySelector('form').outerHTML;
+  w.document.querySelector('textarea').focus();const focus=w.document.activeElement;
+  // An open item dialog prevents scrolling but should not block neutral mouse activity.
+  w.document.body.insertAdjacentHTML('beforeend','<div role="dialog"><input value="unchanged"></div>');
+  await h.advance(INTERVAL);
+  assert.deepEqual(observed,[{trusted:false,x:1},{trusted:false,x:2}]);
+  assert.equal(h.logs.at(-1).event,'mouse_cycle');
+  assert.equal(h.logs.at(-1).session_evidence,'page_only');
+  assert.equal(w.document.activeElement,focus);assert.equal(w.document.querySelector('form').outerHTML,form);
+  assert.deepEqual(h.scrolls,[]);assert.deepEqual(h.effects(),{requests:0,clicks:0,submits:0});
+  h.wake();assert.equal(observed.length,2,'background alarm must not double-fire the cycle');
+  h.enable(false);await h.advance(INTERVAL);h.wake();assert.equal(observed.length,2);
+  h.close();
+});
+test('mouse mode can be changed to scroll and stops at detected logout',async()=>{
+  const h=await harness(true,2000,'mouse');
+  await h.advance(INTERVAL);assert.equal(h.logs.at(-1).event,'mouse_cycle');
+  h.mode('scroll');await h.advance(INTERVAL+220);assert.equal(h.logs.at(-1).event,'scroll_cycle');
+  h.mode('mouse');h.win.document.body.innerHTML='<h1>Session expired</h1>';
+  h.wake();await h.advance(INTERVAL*2);
+  assert.equal(h.logs.filter(e=>e.event==='mouse_cycle').length,1);
+  h.close();
+});
+
+test('background alarm runs activity when page timers are delayed and reports the gap',async()=>{
+  const h=await harness(true,800,'mouse');
+  await h.advance(INTERVAL);
+  h.jump(180000);h.wake();
+  assert.equal(h.logs.filter(e=>e.event==='mouse_cycle').length,2);
+  assert.equal(h.logs.at(-1).source,'background_alarm');
+  assert.equal(h.logs.find(e=>e.event==='timer_delayed').gap_ms,180000);
+  h.wake();assert.equal(h.logs.filter(e=>e.event==='mouse_cycle').length,2);
   h.close();
 });

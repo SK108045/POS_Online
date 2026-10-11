@@ -43,6 +43,7 @@ with sync_playwright() as p, tempfile.TemporaryDirectory(prefix='oraforge-scroll
     before = page.evaluate('''()=>({x:scrollX,y:scrollY,email:document.querySelector('#email').value,
       description:document.querySelector('#description').value,focus:document.activeElement.id,
       clicks:fixtureClicks,submits:fixtureSubmits,changes:fixtureChanges,scrolls:fixtureScrolls})''')
+    ui.locator('#keepalive-mode').select_option('scroll')
     ui.locator('#keepalive-toggle').check()
     expect(ui.locator('#keepalive-status')).to_contain_text('ON')
     request_count = len(requests)
@@ -89,3 +90,4 @@ with sync_playwright() as p, tempfile.TemporaryDirectory(prefix='oraforge-scroll
     print('PASS detected logout stops subsequent ticks, persisted ON/OFF toggle syncs with Options, local activity logs can be cleared', flush=True)
     print('Live KRA timeout effect remains UNVERIFIED; this is a browser/fixture test only.', flush=True)
     context.close()
+

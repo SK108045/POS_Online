@@ -102,17 +102,17 @@ test('atomic database transform permits only one claim across concurrent tabs',a
 });
 
 function worker(storage={},tabs=new Map()) {
-  let listener, tabId=Math.max(40,...tabs.keys());const messages=[];
-  const chrome={storage:{local:{get:async k=>({[k]:structuredClone(storage[k])}),set:async value=>Object.assign(storage,structuredClone(value))}},
+  let listener, alarmListener, changeListener, tabId=Math.max(40,...tabs.keys());const messages=[],alarms=new Map();
+  const chrome={alarms:{get:async name=>alarms.get(name),create:async(name,config)=>alarms.set(name,config),clear:async name=>alarms.delete(name),onAlarm:{addListener:fn=>alarmListener=fn}},storage:{onChanged:{addListener:fn=>changeListener=fn},local:{get:async k=>({[k]:structuredClone(storage[k])}),set:async value=>Object.assign(storage,structuredClone(value))}},
     runtime:{onMessage:{addListener:fn=>listener=fn}},
-    tabs:{get:async id=>{if(!tabs.has(id))throw Error('No tab');return tabs.get(id);},remove:async id=>tabs.delete(id),update:async(id,options)=>Object.assign(tabs.get(id),options),sendMessage:async(id,message)=>{messages.push({id,...message});}},
+    tabs:{query:async()=>[...tabs.values()],get:async id=>{if(!tabs.has(id))throw Error('No tab');return tabs.get(id);},remove:async id=>tabs.delete(id),update:async(id,options)=>Object.assign(tabs.get(id),options),sendMessage:async(id,message)=>{messages.push({id,...message});}},
     windows:{create:async options=>{const tab={id:++tabId,windowId:10,url:options.url};tabs.set(tab.id,tab);return {id:10,tabs:[tab]};},update:async()=>{}}};
   const context=vm.createContext({chrome,URL,console,crypto:crypto.webcrypto,TextEncoder});
   context.importScripts=name=>vm.runInContext(fs.readFileSync(path.join(__dirname,'../../chrome-extension',name),'utf8'),context);
   vm.runInContext(fs.readFileSync(path.join(__dirname,'../../chrome-extension/background.js'),'utf8'),context);
   const pos={url:'http://localhost:3000/pos',frameId:0,tab:{id:2}};
   const send=(action,data={},sender=pos,role='pos')=>new Promise(resolve=>listener({action,data,role},sender,resolve));
-  return {send,storage,tabs,pos,messages};
+  return {send,storage,tabs,pos,messages,alarms,alarm:()=>alarmListener({name:'oraforge_activity_tick'}),change:value=>{storage.oraforgeScrollKeepAliveEnabled=value;changeListener({oraforgeScrollKeepAliveEnabled:{newValue:value}},'local');}};
 }
 function otherRecord(saleId,receipt) {
   const r=record();r.sale_id=r.snapshot.sale_id=saleId;r.receipt_no=r.snapshot.receipt_no=receipt;
@@ -412,4 +412,20 @@ test('ambiguous customer phone does not select or create an arbitrary customer',
   assert.ok(dom.window.document.getElementById('customer-toggle'));
   assert.equal(dom.window.fixtureCustomerAdds,0);assert.equal(dom.window.fixtureSubmissions,0);
   dom.window.close();
+});
+
+
+test('background activity alarm persists the opt-in, targets only allowed live tabs and stops when disabled',async()=>{
+  const tabs=new Map([
+    [41,{id:41,url:'https://ecitizen.kra.go.ke/individual/etims/sale/create'}],
+    [42,{id:42,url:'https://evil.test/'}],
+    [43,{id:43,url:'https://etims.kra.go.ke/',discarded:true}]
+  ]);
+  const w=worker({oraforgeScrollKeepAliveEnabled:true},tabs);
+  await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(w.alarms.get('oraforge_activity_tick').periodInMinutes,1);
+  await w.alarm();assert.deepEqual(w.messages,[{id:41,action:'oraforge_activity_tick'}]);
+  w.change(false);await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(w.alarms.size,0);await w.alarm();assert.equal(w.messages.length,1);
+  w.change(true);await new Promise(resolve=>setImmediate(resolve));assert.equal(w.alarms.size,1);
 });
