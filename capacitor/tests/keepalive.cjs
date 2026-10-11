@@ -161,3 +161,46 @@ test('background alarm runs activity when page timers are delayed and reports th
   h.wake();assert.equal(h.logs.filter(e=>e.event==='mouse_cycle').length,2);
   h.close();
 });
+
+test('both mode sends mouse activity and scroll in the same tick without touching form data',async()=>{
+  const h=await harness(true,2000,'both'),w=h.win;
+  const mouse=[];
+  w.document.addEventListener('mousemove',e=>mouse.push({trusted:e.isTrusted,x:e.clientX}));
+  w.scrollY=100;
+  const form=w.document.querySelector('form').outerHTML;
+  const focus=w.document.querySelector('textarea');focus.focus();
+  await h.advance(INTERVAL);
+  assert.deepEqual(mouse,[{trusted:false,x:1},{trusted:false,x:2}]);
+  assert.equal(w.scrollY,112);
+  assert.equal(h.logs.filter(e=>e.event==='mouse_cycle').length,1);
+  assert.equal(h.logs.filter(e=>e.event==='scroll_cycle').length,0);
+  h.wake();
+  assert.equal(h.logs.filter(e=>e.event==='mouse_cycle').length,1,'alarm must not repeat the tick');
+  await h.advance(220);
+  assert.equal(w.scrollY,100);
+  assert.equal(h.logs.filter(e=>e.event==='scroll_cycle').length,1);
+  assert.ok(h.logs.filter(e=>['mouse_cycle','scroll_cycle'].includes(e.event)).every(e=>e.mode==='both'));
+  assert.equal(w.document.querySelector('form').outerHTML,form);
+  assert.equal(w.document.activeElement,focus);
+  assert.deepEqual(h.effects(),{requests:0,clicks:0,submits:0});
+  h.enable(false);
+  await h.advance(INTERVAL*2);
+  assert.equal(mouse.length,2);
+  h.close();
+});
+test('both mode still performs mouse experiment on non-scrollable pages and stops at logout',async()=>{
+  const h=await harness(true,800,'both'),w=h.win;
+  let mouse=0;
+  w.document.addEventListener('mousemove',()=>mouse++);
+  await h.advance(INTERVAL);
+  assert.equal(mouse,2);
+  assert.equal(h.logs.filter(e=>e.event==='mouse_cycle').length,1);
+  assert.equal(h.logs.at(-1).reason,'page_not_scrollable');
+  assert.deepEqual(h.scrolls,[]);
+  w.document.body.innerHTML='<h1>Session expired</h1><input autocomplete="one-time-code">';
+  h.wake();await h.advance(INTERVAL*2);
+  assert.equal(mouse,2);
+  assert.equal(h.logs.filter(e=>e.event==='mouse_cycle').length,1);
+  assert.ok(h.logs.some(e=>e.event==='logged_out'));
+  h.close();
+});
