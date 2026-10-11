@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Oraforge eTIMS Companion",
-  "version": "1.1.8",
+  "version": "1.1.9",
   "description": "Fill official KRA eTIMS invoice forms from Oraforge POS for cashier review.",
   "permissions": ["storage", "unlimitedStorage", "alarms"],
   "host_permissions": ["https://ecitizen.kra.go.ke/*", "https://kra.ecitizen.go.ke/*", "https://etims.kra.go.ke/*"],
