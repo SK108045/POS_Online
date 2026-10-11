@@ -9,6 +9,19 @@
     return response?.result;
   };
   const message = text => { if (notice && notice.textContent!==text) notice.textContent=text; };
+  function explainBlocked(reason) {
+    // KRA's native event was intercepted: never leave the cashier wondering
+    // why "Create Invoice" apparently did nothing behind a minimized panel.
+    const shadow=root?.shadowRoot;
+    if (shadow) {
+      if (minimized) shadow.querySelector('[data-restore]')?.click();
+      shadow.querySelector('[data-issuance-controls]').open=true;
+      const current=shadow.querySelector('[data-review]');
+      if (current && !current.checked) current.focus({preventScroll:true});
+    }
+    message('Create Invoice paused: '+reason);
+    console.info('[Oraforge eTIMS] KRA invoice button paused: '+reason);
+  }
   function restriction() {
     if (captured || job?.generated) return 'Official invoice already recorded. Duplicate generation is blocked. Return to Oraforge to reprint the receipt.';
     if (job?.armed || consumed) return 'Generation was enabled for this receipt. Check the existing KRA invoice before retrying; filling and new generation are blocked.';
@@ -35,13 +48,22 @@
     if (event.type==='submit' && itemModal && !issue && event.target.closest('[role="dialog"]')===itemModal) return;
     if (event.type==='submit' && adapter && !issue && !adapter.rows().some(row=>event.target.contains(row))) return;
     if (!job || !adapter || captured || job.generated) {
-      if (job && (event.type==='submit' || adapter?.issuanceControl(event.target))) {stop(event); message('Invoice already captured. Duplicate generation is blocked.');}
+      if (job && (event.type==='submit' || adapter?.issuanceControl(event.target))) {stop(event); explainBlocked('This invoice was already captured. Duplicate generation is blocked.');}
       return;
     }
     if (event.type!=='submit' && !adapter.issuanceControl(event.target)) return;
     const errors=adapter.verify(job.record.snapshot);
     if (loading || navigator.onLine===false || !armed || consumed || job.recovery || !event.isTrusted || errors.length) {
-      stop(event); message(errors.length?errors.join('. '):'Review the invoice and use “Enable KRA Generate” in the Oraforge panel first.'); return;
+      stop(event);
+      const reason=errors.length ? errors.join('. ') :
+        job.recovery ? 'This sale is in recovery mode. Confirm the existing KRA invoice first.' :
+        consumed ? 'A creation attempt is already in progress. Check KRA invoices before retrying.' :
+        loading ? 'The extension is still loading. Wait for the form to finish.' :
+        navigator.onLine===false ? 'Your browser is offline.' :
+        !armed ? 'Open Invoice issuance controls, check the review box and press Enable KRA Generate. Then click KRA Create Invoice again.' :
+        'Only a manual click on KRA Create Invoice can issue an invoice.';
+      explainBlocked(reason);
+      return;
     }
     // Only the cashier's trusted native KRA click/submit can proceed. No scripted
     // click, form.submit(), portal fetch or invoice-creation API is used here.
@@ -50,12 +72,13 @@
     message('Awaiting the official invoice. If confirmation is lost, check existing invoices before retrying.');
     // Permit the default submit produced synchronously by this same trusted click.
     if (event.type==='click') {
-      pendingNativeClick=true; setTimeout(()=>{pendingNativeClick=false;},0);
+      pendingNativeClick=true;
+      setTimeout(()=>{pendingNativeClick=false;},12000); // Vue submit may follow an async click handler
     }
   }
   let pendingNativeClick=false;
   function submitGate(event) {
-    if (pendingNativeClick && event.isTrusted && !adapter.verify(job.record.snapshot).length) { pendingNativeClick=false; return; }
+    if (pendingNativeClick && event.isTrusted && job && adapter && !adapter.verify(job.record.snapshot).length) { pendingNativeClick=false; return; }
     gate(event);
   }
   window.addEventListener('click',gate,true);
@@ -203,7 +226,7 @@
       if (loading || busy || restriction() || navigator.onLine===false) return;
       if (!event.isTrusted || !shadow.querySelector('[data-review]').checked) {message('Check the invoice in KRA, then confirm the review checkbox.');return;}
       const errors=adapter.verify(job.record.snapshot);
-      if (errors.length) {message(errors.join('. '));return;}
+      if (errors.length) {explainBlocked(errors.join('. '));return;}
       const currentGeneration=generation;
       busy=true;syncControls();
       try {
