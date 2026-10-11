@@ -355,7 +355,7 @@
             emit('Products',false,'Existing KRA items differ from this POS sale. Reopen the selected sale from Oraforge; no fields were changed.');return report;
           }
         }
-        const identity=payload.customer.pin || payload.customer.phone;
+        const identity=payload.customer.pin || payload.customer.phone || payload.customer.name;
         if (payload.customer.pin && find('pin') && !find('pin').closest('[role="dialog"]')) {
           emit('Customer PIN',await write('pin',payload.customer.pin),'KRA must resolve the name.');
         } else if (identity) {
@@ -368,7 +368,7 @@
                 setElement(menu.input,identity);
                 menu.input.dispatchEvent(new win.KeyboardEvent('keypress',{key:'Enter',code:'Enter',bubbles:true}));
                 const options=await wait(()=>{
-                  const matches=buttons(menu.container).filter(b=>b!==menu.trigger && query('p',b).some(p=>payload.customer.pin?value(p).toUpperCase()===identity.toUpperCase():phoneMatches(value(p),identity)));
+                  const matches=buttons(menu.container).filter(b=>b!==menu.trigger && query('p',b).some(p=>payload.customer.pin ? value(p).toUpperCase()===identity.toUpperCase() : payload.customer.phone ? phoneMatches(value(p),identity) : norm(value(p))===norm(identity)));
                   return matches.length?matches:null;
                 });
                 ambiguousCustomer=!!options && options.length>1;
@@ -411,11 +411,11 @@
               }
             }
           }
-          emit(payload.customer.pin?'Customer PIN':'Customer selection',customerIdentity(identity),customerIdentity(identity)?'KRA customer selected by '+(payload.customer.pin?'PIN':'phone')+'. Name supplied by KRA.':ambiguousCustomer?'Multiple KRA customers match this PIN/phone. Choose the correct customer yourself.':'Customer was not selected. Review the KRA customer dropdown/dialog; no name was invented.');
+          emit(payload.customer.pin?'Customer PIN':'Customer selection',customerIdentity(identity),customerIdentity(identity)?'KRA customer selected by '+(payload.customer.pin?'PIN':payload.customer.phone?'phone':'name')+'. KRA identity remains authoritative.':ambiguousCustomer?'Multiple KRA customers match this PIN/phone. Choose the correct customer yourself.':'Customer was not selected. Review the KRA customer dropdown/dialog; no name was invented.');
           if (query('[role="dialog"]').some(el=>el!==itemDialog())) {
             emit('Products',false,'Complete or cancel the open KRA customer dialog, then click Fill POS sale again.');return report;
           }
-        } else emit('Customer selection',false,'POS has no PIN or phone to match a saved KRA customer. Select the customer yourself.');
+        } else emit('Customer selection',false,'POS has no name, PIN or phone to match a saved KRA customer. Select the customer yourself.');
         // Selection updates these inputs in Vue; fill contact fields afterwards.
         for (const [key,title] of [['phone','Customer phone'],['email','Customer email'],['billing_address','Billing address']]) {
           if (payload.customer[key]) emit(title,await write(key,payload.customer[key]),'Copied from POS.');
