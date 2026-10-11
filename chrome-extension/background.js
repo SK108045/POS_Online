@@ -64,7 +64,7 @@ async function handle(m, sender) {
     }
     if (m.action!=='log') throw Error('Unsupported scroll experiment action.');
     const events=['enabled','disabled','session_detected','logged_out','waiting_for_login','scroll_cycle','skipped','scroll_error','page_left'];
-    const reasons=['offline','cashier_active','popup_or_dropdown_open','page_not_scrollable','scroll_failed'];
+    const reasons=['offline','cashier_active','popup_or_dropdown_open','page_not_scrollable','scroll_not_moved','scroll_failed','cashier_moved_scroll'];
     if (!events.includes(data.event) || (data.reason && !reasons.includes(data.reason))) throw Error('Invalid scroll experiment event.');
     const count=value=>Number.isSafeInteger(value) && value>=0 ? Math.min(value,Number.MAX_SAFE_INTEGER) : 0;
     // Whitelist metadata only: never retain URL paths, form values or credentials.
@@ -72,7 +72,7 @@ async function handle(m, sender) {
       page_id:/^[a-f0-9-]{36}$/i.test(data.page_id || '')?data.page_id:'',event:data.event,
       enabled:data.enabled===true,visible:data.visible===true,observed_ms:count(data.observed_ms),cycles:count(data.cycles)};
     if (data.reason) entry.reason=data.reason;
-    if (data.event==='scroll_cycle' || data.event==='scroll_error') {entry.delta=Number.isFinite(data.delta)?Math.max(-2,Math.min(2,data.delta)):0;entry.restored=data.restored===true;}
+    if (data.event==='scroll_cycle' || data.event==='scroll_error') {entry.delta=Number.isFinite(data.delta)?Math.max(-12,Math.min(12,data.delta)):0;entry.restored=data.restored===true;entry.target=['page','container'].includes(data.target)?data.target:'unknown';entry.event_observed=data.event_observed===true;}
     const logKey='oraforgeScrollKeepAliveLog', saved=(await chrome.storage.local.get(logKey))[logKey];
     await chrome.storage.local.set({[logKey]:[...(Array.isArray(saved)?saved:[]).slice(-199),entry]});
     return {logged:true};
