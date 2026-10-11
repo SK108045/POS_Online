@@ -4,13 +4,13 @@ const toggle=document.getElementById('keepalive-toggle'), keepaliveStatus=docume
 const logView=document.getElementById('keepalive-log');
 const modeKey='oraforgeKeepAliveMode', modeSelect=document.getElementById('keepalive-mode');
 let logEntries=[];
-function renderActivityStatus() {keepaliveStatus.textContent=toggle.checked?'ON · '+(modeSelect.value==='scroll'?'Scroll':'Mouse activity')+' every 60 seconds. Session renewal is unverified.':'OFF · Automatic activity is disabled.';}
+function renderActivityStatus() {keepaliveStatus.textContent=toggle.checked?'ON · '+(modeSelect.value==='both'?'Mouse + Scroll':modeSelect.value==='scroll'?'Scroll':'Mouse activity')+' every 60 seconds. Session renewal is unverified.':'OFF · Automatic activity is disabled.';}
 function render(data) {
   if (Object.hasOwn(data,setting)) {
     toggle.checked=data[setting]===true;toggle.disabled=false;
     renderActivityStatus();
   }
-  if (Object.hasOwn(data,modeKey)) {modeSelect.value=data[modeKey]==='scroll'?'scroll':'mouse';modeSelect.disabled=false;renderActivityStatus();}
+  if (Object.hasOwn(data,modeKey)) {modeSelect.value=['mouse','scroll','both'].includes(data[modeKey])?data[modeKey]:'mouse';modeSelect.disabled=false;renderActivityStatus();}
   if (Object.hasOwn(data,logKey)) {
     logEntries=Array.isArray(data[logKey])?data[logKey]:[];
     if (logView) logView.textContent=logEntries.slice(-30).reverse().map(entry=>{
