@@ -21,6 +21,28 @@ function record() {
 }
 const official=()=>({cu_invoice_number:'TEST-CU/0001',scu_id:'TEST-SCU',receipt_signature:'TEST-SIGNATURE',invoice_number:'TEST-INV-1',invoice_date:'2026-10-10',qr_image:'data:image/png;base64,AAAA'});
 
+test('optional eTIMS name and phone are stored without changing legacy fiscal snapshot shapes',()=>{
+  const nameOnly=core.customer({name:'  Jane Wanjiku  '});
+  assert.equal(nameOnly.name,'Jane Wanjiku');
+  assert.equal(nameOnly.pin,'');
+  assert.equal(nameOnly.phone,'');
+  const contact=core.customer({name:'Jane Wanjiku',phone:'0712345678'});
+  assert.equal(contact.phone,'0712345678');
+  const oldCustomer=core.customer({pin:'A123456789B',email:'test@example.test'});
+  assert.equal(Object.hasOwn(oldCustomer,'name'),false);
+  assert.equal(Object.hasOwn(core.snapshot({...order(),customer_name:'Legacy Buyer'},'shop-test',{},{}).customer,'name'),false);
+  const newer=core.snapshot(order(),'shop-test',{},contact);
+  assert.equal(newer.customer.name,'Jane Wanjiku');
+  assert.equal(newer.customer.phone,'0712345678');
+  assert.throws(()=>core.customer({name:'x'.repeat(121)}),/Invalid invoice field/);
+  const checkout=fs.readFileSync(path.join(__dirname,'../www/etims-integration.js'),'utf8');
+  assert.match(checkout,/id="etimsName"/);
+  assert.match(checkout,/id="etimsPhone"/);
+  const app=fs.readFileSync(path.join(__dirname,'../www/app.js'),'utf8');
+  assert.match(app,/querySelector\('#etimsName'\)\.value/);
+  assert.match(app,/querySelector\('#etimsPhone'\)\.value/);
+});
+
 test('sale snapshot preserves decimal quantities, exact cents, customer, discounts and payment',()=>{
   const s=snap();assert.equal(s.total_cents,2272);assert.equal(s.items[0].quantity,2.5);assert.equal(s.items[0].unit_price_cents,1010);
   assert.equal(s.discount.amount_cents,253);assert.equal(s.customer.email,'test@example.test');assert.equal(s.payment_method,'mpesa');assert.equal(s.customer.name,undefined);
@@ -323,6 +345,17 @@ test('fixed discounts and percentage rounding preserve exact invoice cents in it
   assert.equal(dom.window.fixtureItems[0].description,'Fixture 1');
   s.discount={type:'fixed',value:0.31,amount_cents:31};
   assert.deepEqual(lineDiscounts(s).map(d=>d.amount_cents),[16,15]);
+  dom.window.close();
+});
+
+test('optional customer name safely selects a unique existing KRA customer without a PIN or phone',async()=>{
+  const dom=vueDom(),a=adapter(dom.window.document),s=snap();
+  s.customer.pin='';s.customer.phone='';s.customer.name='KRA-resolved fixture buyer';
+  const report=await a.fillSale(s,{timeout:350});
+  assert.ok(report.some(r=>r.field==='Customer selection' && r.status==='filled'),JSON.stringify(report));
+  assert.match(dom.window.document.querySelector('#customer-choice').textContent,/KRA-resolved fixture buyer/);
+  assert.equal(dom.window.fixtureCustomerAdds,0);
+  assert.equal(dom.window.fixtureSubmissions,0);
   dom.window.close();
 });
 
