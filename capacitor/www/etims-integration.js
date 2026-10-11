@@ -152,11 +152,31 @@
   async function refreshReceipt() {
     const overlay = document.getElementById('receiptModal');
     if (!overlay?.dataset.etimsId) return;
+    const record = (await ledger())[overlay.dataset.etimsId];
     const target = overlay.querySelector('[data-etims-receipt]');
-    if (target) target.innerHTML = core.receipt((await ledger())[overlay.dataset.etimsId]);
+    if (target) target.innerHTML = core.receipt(record);
+    // A paid sale is NOT a completed KRA invoice. Wait until the actual issued
+    // invoice, all its official fields and original QR are linked to this sale.
+    if (overlay.dataset.etimsRequested === 'true' || record) {
+      const fiscal = record?.fiscal;
+      const ready = record?.status === 'generated' && fiscal?.source === 'portal' &&
+        ['cu_invoice_number','scu_id','receipt_signature','invoice_number','invoice_date','qr_image'].every(key => Boolean(fiscal[key]));
+      overlay.dataset.etimsConfirmed = String(ready);
+      const button = overlay.querySelector('#receiptPrintBtn');
+      if (button) {
+        button.disabled = !ready;
+        button.textContent = ready ? 'Print final KRA receipt' : 'Waiting for KRA invoice…';
+        button.title = ready ? 'Official KRA details and QR captured.' : 'The POS payment is saved. Finish the invoice in KRA first.';
+      }
+    }
   }
   function mountReceipt(overlay, order) {
     overlay.dataset.etimsId = identity(order);
+    overlay.dataset.etimsRequested = String(Boolean(order.etims_requested || order.etims?.status));
+    if (overlay.dataset.etimsRequested === 'true') {
+      const button = overlay.querySelector('#receiptPrintBtn');
+      if (button) { button.disabled = true; button.textContent = 'Waiting for KRA invoice…'; }
+    }
     overlay.etimsReady = refreshReceipt().catch(error => {
       if (order.etims_requested) overlay.querySelector('[data-etims-receipt]').textContent = 'eTIMS details unavailable. Open the eTIMS workspace before reprinting.';
       console.warn(error);
