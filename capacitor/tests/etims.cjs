@@ -359,6 +359,39 @@ test('optional customer name safely selects a unique existing KRA customer witho
   dom.window.close();
 });
 
+test('optional POS name does not override KRA-verified buyer or block creating an invoice',async()=>{
+  const dom=vueDom(),a=adapter(dom.window.document),s=snap();
+  s.customer.name='Customer entered in POS, different from KRA registered name';
+  s.seller_pin='A987654321B'; // KRA create form has no displayed seller PIN
+  const report=await a.fillSale(s,{timeout:500});
+  assert.equal(report.filter(r=>r.status==='failed').length,0,JSON.stringify(report));
+  assert.deepEqual(a.verify(s),[],'A POS alias must not block KRA after PIN-verified buyer selected');
+  assert.equal(a.issuanceControl(dom.window.document.querySelector('#issue')),true);
+  assert.equal(a.issuanceControl(dom.window.document.querySelector('#issue').nextElementSibling),false,'Save draft is not an invoice issue event');
+  assert.equal(dom.window.fixtureSubmissions,0,'A fixture form must never issue during autofill');
+  dom.window.close();
+});
+
+test('blocked KRA Create Invoice clearly expands Oraforge controls rather than silently eating click',async()=>{
+  const dom=new JSDOM(fixture,{url:'https://ecitizen.kra.go.ke/individual/etims/sale/create',runScripts:'dangerously'});
+  const r=record();
+  dom.window.OraforgeKraAdapter={adapter};
+  dom.window.chrome={runtime:{onMessage:{addListener(){}},
+    sendMessage:async m=>m.action==='job'?{result:{record:r,config:{}}}:{error:'Unexpected action: '+m.action}}};
+  dom.window.eval(fs.readFileSync(path.join(__dirname,'../../chrome-extension/portal.js'),'utf8'));
+  await until(()=>dom.window.document.querySelector('[data-oraforge-companion]'));
+  const shadow=dom.window.document.querySelector('[data-oraforge-companion]').shadowRoot;
+  shadow.querySelector('[data-minimize]').click();
+  assert.equal(shadow.querySelector('#companion-panel').hidden,true);
+  dom.window.document.querySelector('#generate').click();
+  assert.equal(shadow.querySelector('#companion-panel').hidden,false);
+  assert.equal(shadow.querySelector('[data-issuance-controls]').open,true);
+  assert.match(shadow.querySelector('[role=status]').textContent,/Create Invoice paused/);
+  assert.match(shadow.querySelector('[role=status]').textContent,/Enable KRA Generate/);
+  assert.equal(dom.window.fixtureSubmissions,0);
+  dom.window.close();
+});
+
 test('new PIN uses the real customer validation dialog, never manually supplies a name',async()=>{
   const dom=vueDom(),a=adapter(dom.window.document),s=snap();s.customer.pin='P222222222D';
   const report=await a.fillSale(s,{timeout:300});
