@@ -12,7 +12,8 @@ fixture = '''<!doctype html><html><head><style>html{scroll-behavior:smooth}body{
 <button><span class="sr-only">Open user menu</span></button><h1>Create Sales Invoice</h1>
 <form><input id="email" type="email" value="fixture@example.test"><textarea id="description">Keep invoice data</textarea><button type="button">Add Item</button><button type="submit">Create Invoice</button></form>
 <script>
-window.fixtureScrolls=0;window.fixtureClicks=0;window.fixtureSubmits=0;window.fixtureChanges=0;
+window.fixtureScrolls=0;window.fixtureClicks=0;window.fixtureSubmits=0;window.fixtureChanges=0;window.fixtureMouseMoves=0;
+document.addEventListener("mousemove",e=>{if(!e.isTrusted)window.fixtureMouseMoves++;});
 document.addEventListener('scroll',()=>window.fixtureScrolls++);
 document.addEventListener('click',()=>window.fixtureClicks++);
 document.addEventListener('submit',e=>{window.fixtureSubmits++;e.preventDefault();});
@@ -43,7 +44,7 @@ with sync_playwright() as p, tempfile.TemporaryDirectory(prefix='oraforge-scroll
     before = page.evaluate('''()=>({x:scrollX,y:scrollY,email:document.querySelector('#email').value,
       description:document.querySelector('#description').value,focus:document.activeElement.id,
       clicks:fixtureClicks,submits:fixtureSubmits,changes:fixtureChanges,scrolls:fixtureScrolls})''')
-    ui.locator('#keepalive-mode').select_option('scroll')
+    ui.locator('#keepalive-mode').select_option('both')
     ui.locator('#keepalive-toggle').check()
     expect(ui.locator('#keepalive-status')).to_contain_text('ON')
     request_count = len(requests)
@@ -51,11 +52,14 @@ with sync_playwright() as p, tempfile.TemporaryDirectory(prefix='oraforge-scroll
     print('Waiting for the actual 60-second content-script timer…', flush=True)
     # No activity or manual scroll in the portal during this wait.
     expect(ui.locator('#keepalive-log')).to_contain_text('scroll_cycle', timeout=75000)
+    expect(ui.locator('#keepalive-log')).to_contain_text('mouse_cycle')
     elapsed = time.monotonic() - started
     assert elapsed >= 58, elapsed
     logs = ui.evaluate("async()=> (await chrome.storage.local.get('oraforgeScrollKeepAliveLog')).oraforgeScrollKeepAliveLog")
     cycles = [entry for entry in logs if entry['event'] == 'scroll_cycle']
     assert len(cycles) == 1 and cycles[0]['delta'] == 12 and cycles[0]['restored'], cycles
+    assert cycles[0]['mode'] == 'both', cycles
+    assert len([entry for entry in logs if entry['event'] == 'mouse_cycle' and entry['mode'] == 'both']) == 1, logs
     assert cycles[0]['target'] == 'page' and cycles[0]['event_observed'], cycles
     assert cycles[0]['observed_ms'] >= 59000
     assert len(requests) == request_count, requests[request_count:]
@@ -63,6 +67,7 @@ with sync_playwright() as p, tempfile.TemporaryDirectory(prefix='oraforge-scroll
       description:document.querySelector('#description').value,focus:document.activeElement.id,
       clicks:fixtureClicks,submits:fixtureSubmits,changes:fixtureChanges,scrolls:fixtureScrolls})''')
     assert actual.pop('scrolls') > before.pop('scrolls')
+    assert page.evaluate('window.fixtureMouseMoves') == 2
     assert actual == before, (actual, before)
     print('PASS real 60-second scroll produces a browser scroll event; position, invoice data and focus restored; no clicks/submissions/network calls', flush=True)
 
@@ -77,6 +82,7 @@ with sync_playwright() as p, tempfile.TemporaryDirectory(prefix='oraforge-scroll
         ui.wait_for_timeout(1000)
     logs = ui.evaluate("async()=> (await chrome.storage.local.get('oraforgeScrollKeepAliveLog')).oraforgeScrollKeepAliveLog")
     assert len([entry for entry in logs if entry['event'] == 'scroll_cycle']) == 1
+    assert len([entry for entry in logs if entry['event'] == 'mouse_cycle']) == 1
     assert ui.locator('#keepalive-toggle').is_checked()
     assert any(entry['event'] == 'logged_out' and entry['cycles'] == 1 for entry in logs)
     ui.locator('#keepalive-toggle').uncheck()
