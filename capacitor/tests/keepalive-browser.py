@@ -54,7 +54,8 @@ with sync_playwright() as p, tempfile.TemporaryDirectory(prefix='oraforge-scroll
     assert elapsed >= 58, elapsed
     logs = ui.evaluate("async()=> (await chrome.storage.local.get('oraforgeScrollKeepAliveLog')).oraforgeScrollKeepAliveLog")
     cycles = [entry for entry in logs if entry['event'] == 'scroll_cycle']
-    assert len(cycles) == 1 and cycles[0]['delta'] == 2 and cycles[0]['restored'], cycles
+    assert len(cycles) == 1 and cycles[0]['delta'] == 12 and cycles[0]['restored'], cycles
+    assert cycles[0]['target'] == 'page' and cycles[0]['event_observed'], cycles
     assert cycles[0]['observed_ms'] >= 59000
     assert len(requests) == request_count, requests[request_count:]
     actual = page.evaluate('''()=>({x:scrollX,y:scrollY,email:document.querySelector('#email').value,
