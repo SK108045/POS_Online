@@ -48,28 +48,30 @@ test('scroll experiment is off by default and does not run on sign-in, OTP, expi
   w.history.replaceState({},'', '/logout');w.document.body.innerHTML=html;assert.equal(sessionState(w),'logged_out');
   h.close();
 });
-test('every 60 seconds scrolls by 2px and restores position without changing form, focus or issuing requests',async()=>{
+test('every 60 seconds scrolls by 12px, holds briefly, and restores position without changing form, focus or issuing requests',async()=>{
   const h=await harness(true),w=h.win;
   w.scrollY=100;w.document.querySelector('textarea').focus();
   const form=w.document.querySelector('form').outerHTML,focused=w.document.activeElement;
   await h.advance(59999);assert.equal(h.scrolls.length,0);
-  await h.advance(1);assert.deepEqual(h.scrolls,[[0,102],[0,100]]);
+  await h.advance(1);assert.deepEqual(h.scrolls,[[0,112]]);
+  await h.advance(220);assert.deepEqual(h.scrolls,[[0,112],[0,100]]);
   assert.equal(w.document.querySelector('form').outerHTML,form);assert.equal(w.document.activeElement,focused);
   assert.deepEqual(h.effects(),{requests:0,clicks:0,submits:0});
-  const log=h.logs.find(l=>l.event==='scroll_cycle');assert.equal(log.delta,2);assert.equal(log.restored,true);assert.equal(log.cycles,1);
+  const log=h.logs.find(l=>l.event==='scroll_cycle');assert.equal(log.delta,12);assert.equal(log.restored,true);assert.equal(log.cycles,1);
+  assert.equal(log.target,'page');assert.equal(log.event_observed,false);
   await h.advance(INTERVAL);assert.equal(h.logs.filter(l=>l.event==='scroll_cycle').length,2);
-  w.scrollY=1200;await h.advance(INTERVAL);assert.deepEqual(h.scrolls.slice(-2),[[0,1198],[0,1200]]);
+  w.scrollY=1200;await h.advance(INTERVAL);assert.deepEqual(h.scrolls.slice(-2),[[0,1188],[0,1200]]);
   h.close();
 });
 test('turning off cancels future ticks and logging out stops even with the toggle still on',async()=>{
   const h=await harness(true);
-  await h.advance(INTERVAL);h.enable(false);await h.advance(INTERVAL*2);
+  await h.advance(INTERVAL+220);h.enable(false);await h.advance(INTERVAL*2);
   assert.equal(h.logs.filter(l=>l.event==='scroll_cycle').length,1);
-  h.enable(true);await h.advance(INTERVAL);assert.equal(h.logs.filter(l=>l.event==='scroll_cycle').length,2);
+  h.enable(true);await h.advance(INTERVAL+220);assert.equal(h.logs.filter(l=>l.event==='scroll_cycle').length,2);
   h.win.document.body.innerHTML='<h1>Verify your OTP</h1><input autocomplete="one-time-code">';
   await Promise.resolve();await h.advance(200);await h.advance(INTERVAL*3);
   assert.equal(h.logs.filter(l=>l.event==='scroll_cycle').length,2);assert.ok(h.logs.some(l=>l.event==='logged_out' && l.enabled));
-  h.win.document.body.innerHTML=html;await Promise.resolve();await h.advance(200);await h.advance(INTERVAL);
+  h.win.document.body.innerHTML=html;await Promise.resolve();await h.advance(200);await h.advance(INTERVAL+220);
   assert.equal(h.logs.filter(l=>l.event==='scroll_cycle').length,3);
   h.close();
 });
@@ -86,7 +88,7 @@ test('scrolling pauses for item dialogs, active dropdowns, recent cashier activi
   Object.defineProperty(w.navigator,'onLine',{value:false,configurable:true});
   await h.advance(INTERVAL);assert.equal(h.logs.at(-1).reason,'offline');
   Object.defineProperty(w.navigator,'onLine',{value:true,configurable:true});
-  await h.advance(INTERVAL);assert.equal(h.logs.at(-1).event,'scroll_cycle');
+  await h.advance(INTERVAL+220);assert.equal(h.logs.at(-1).event,'scroll_cycle');
   w.document.body.insertAdjacentHTML('beforeend','<input type="search" placeholder="Persistent invoice-list search">');
   await h.advance(INTERVAL);assert.equal(h.logs.at(-1).event,'scroll_cycle');
   h.close();
@@ -94,4 +96,26 @@ test('scrolling pauses for item dialogs, active dropdowns, recent cashier activi
 test('a page without a scroll range reports a skipped experiment instead of claiming activity',async()=>{
   const h=await harness(true,800);await h.advance(INTERVAL);
   assert.deepEqual(h.scrolls,[]);assert.equal(h.logs.at(-1).reason,'page_not_scrollable');h.close();
+});
+
+test('scrollable SPA container is used when the document cannot scroll',async()=>{
+  const h=await harness(true,800), w=h.win;
+  const scroller=w.document.createElement('main');
+  scroller.style.overflowY='auto';
+  scroller.innerHTML='<p>Invoice page content</p>';
+  w.document.body.append(scroller);
+  Object.defineProperties(scroller,{
+    clientHeight:{value:400},scrollHeight:{value:900},
+    getBoundingClientRect:{value:()=>({top:0,bottom:400,height:400,width:700})}
+  });
+  await h.advance(INTERVAL);
+  assert.equal(scroller.scrollTop,12);
+  await h.advance(220);
+  assert.equal(scroller.scrollTop,0);
+  const logged=h.logs.find(l=>l.event==='scroll_cycle');
+  assert.equal(logged.target,'container');
+  assert.equal(logged.delta,12);
+  assert.equal(logged.restored,true);
+  assert.deepEqual(h.effects(),{requests:0,clicks:0,submits:0});
+  h.close();
 });
