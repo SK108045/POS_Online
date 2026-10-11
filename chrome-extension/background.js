@@ -71,7 +71,7 @@ async function handle(m, sender) {
     const entry={at:new Date().toISOString(),origin:new URL(sender.url).origin,tab_id:sender.tab.id,
       page_id:/^[a-f0-9-]{36}$/i.test(data.page_id || '')?data.page_id:'',event:data.event,
       enabled:data.enabled===true,visible:data.visible===true,observed_ms:count(data.observed_ms),cycles:count(data.cycles)};
-    entry.mode=data.mode==='scroll'?'scroll':'mouse';
+    entry.mode=['mouse','scroll','both'].includes(data.mode)?data.mode:'mouse';
     entry.session_evidence='page_only';
     if (['page_timer','background_alarm'].includes(data.source)) entry.source=data.source;
     if (data.event==='mouse_cycle') entry.synthetic=true;
