@@ -208,14 +208,16 @@
   window.addEventListener('oraforge-etims-changed', () => { refreshReceipt().catch(console.warn); });
   window.OraforgeEtims = {scope, identity, queue, get, attach, list, start, sync, manual, checkedAbsent, checkoutMarkup, afterPayment, bridge, mountReceipt, manage};
   let syncing = false;
-  const refresh = async () => {
-    if (syncing || document.visibilityState === 'hidden') return;
+  const refresh = async (force = false) => {
+    if (syncing || (!force && document.visibilityState === 'hidden')) return;
     syncing = true; try { await sync(); } catch (_) {} finally { syncing = false; }
   };
-  window.addEventListener('focus', refresh);
+  window.addEventListener('focus', () => refresh());
   window.addEventListener('message', event => {
-    if (event.source===window && event.origin===location.origin && event.data?.channel===channel && event.data?.direction==='extension' && event.data?.action==='result_available') refresh();
+    // The KRA popup is focused when the invoice arrives, so POS may be
+    // backgrounded. Do NOT ignore a trusted extension result notification.
+    if (event.source===window && event.origin===location.origin && event.data?.channel===channel && event.data?.direction==='extension' && event.data?.action==='result_available') refresh(true);
   });
-  setInterval(refresh, 15000);
-  setTimeout(refresh, 1000);
+  setInterval(() => refresh(), 15000);
+  setTimeout(() => refresh(), 1000);
 })();
