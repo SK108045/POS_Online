@@ -74,6 +74,23 @@ To test the real timeout:
 
 **Live timeout effect: UNVERIFIED.** No authenticated KRA browser was available during implementation. The isolated Chrome fixture checks exercise combined activity, browser scroll events, form preservation and logout-stop behavior without calls to live KRA. They cannot establish a server-side keep-alive effect. Unit checks also cover OFF, login/OTP/unknown screens, bottom-of-page scrolling, modal/dropdown/input/offline skips, login resumption and bounded log metadata. Public source inspection on 2026-10-11 found KRA's [main bundle](https://ecitizen.kra.go.ke/assets/itax/main-0198ee80.js) redirects HTTP 401 responses through `expire_session`; the inspected main, Individual layout and TopNav bundles do not establish any scroll-based session refresh. That source inspection cannot establish the authenticated server's timeout policy.
 
+## Offline KRA PDF → original receipt experiment
+
+The repo-root historical `INVXLBRZJX.pdf` can be read **without generating an invoice, logging into KRA, changing a sale or claiming a fiscal result**. The extraction script checks invoice text, amounts, printed receipt signature and the decodable official KRA QR. It fails rather than guessing on unfamiliar PDF layouts. This is a **single-page, known-layout proof of concept**, not a general PDF importer.
+
+On Ubuntu, install the free offline extraction dependencies in a virtual environment:
+
+```bash
+python3 -m venv .venv
+.venv/bin/pip install pymupdf numpy opencv-python-headless
+.venv/bin/python tools/etims_pdf_receipt_demo.py INVXLBRZJX.pdf --out /tmp/oraforge-etims-pdf-demo
+xdg-open /tmp/oraforge-etims-pdf-demo/oraforge-receipt-preview.html
+```
+
+Outputs: `invoice-data.json`, `original-kra-qr.png`, and `oraforge-receipt-preview.html`. The Node renderer executes the repository's **actual** `showReceiptModal()` from `capacitor/www/app.js`, its **actual** `OraforgeEtimsCore.receipt()` from `capacitor/www/etims-core.js`, and embeds the existing POS stylesheets. No cloned receipt template is used. The preview is clearly marked **PDF TEST ONLY**, has a synthetic `PDF-DEMO-ONLY` receipt number, does not access the POS database or portal bridge, and does not issue an invoice.
+
+**Important:** The historical PDF is not proof that any specific POS sale exists or matches. Never import fiscal details into a real sale without exact shop/POS receipt correlation, amount and item verification, and duplicate-CU protection. This experiment proves **PDF extraction and original receipt rendering only**. Keep the generated PDF data and QR files local, as they contain customer and tax information.
+
 ## Live KRA verification still required
 
 **The current eCitizen form mappings were inspected from supplied live HTML and public KRA Vue component source on 2026-10-10. The cashier reported successful live filling. Development verification uses anonymized fixtures; no real invoice was issued during development.** Authenticated portal reconnection, final issuance and official invoice capture still require live testing. The pasted session/account data was not retained in repository files, test fixtures or extension code.
