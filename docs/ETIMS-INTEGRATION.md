@@ -54,6 +54,26 @@ Manual entry requires the actual CU shown by KRA. Optional fields and an officia
 
 The ledger is included in the existing POS backup/restore export. Extension results are retained separately and can repair an older pending POS backup when the sale snapshot still matches. Keep POS backups: deleting both browser databases removes local duplicate history. Duplicate blocking covers the linked workflow on this POS origin/profile; separate machines need a shared fiscal ledger, and invoices issued directly outside the linked workflow cannot be intercepted.
 
+## Experimental scroll keep-alive (1.1.4)
+
+Reload the extension in `chrome://extensions`, then refresh the existing KRA tabs. In the Oraforge companion panel, expand **Scroll keep-alive · Experimental** and enable its checkbox. **Activity logs and experiment details** opens the log viewer. The same switch and logs are available by clicking the extension in Chrome's toolbar; its Options page also has the switch. The setting is **OFF by default**, persists locally, and applies to all permitted KRA tabs in this Chrome profile, including pages without a linked POS sale.
+
+On a recognized authenticated screen, the content script schedules a tiny document scroll every 60 seconds, moves down by at most two pixels, and returns to the exact original horizontal/vertical position in the same task without animation. At the bottom it moves up then returns. It does not focus controls, send keyboard/mouse/wheel events, write form values, click buttons, submit, refresh the page, ping an endpoint, read credentials or change KRA's authentication timers. Existing invoice filling, minimization, review, capture and duplicate protection remain separate.
+
+The experiment skips ticks during the last five seconds of cashier input, an open item/customer dialog or dropdown, an offline connection, or a page with no document scroll range. Login/logout routes, visible password/OTP inputs and sign-in/session-expired headings stop scrolling. A missing authenticated-screen marker also stops scrolling conservatively. It resumes after a recognized authenticated screen returns if the toggle remains ON. This recognizes visible portal state; a session that silently expires on the server cannot be detected until KRA updates the page or redirects. It cannot restore a logged-out session or bypass OTP.
+
+The 60-second interval is best effort: Chrome can delay background-page timers, and suspended/discarded tabs or a sleeping computer cannot scroll. See [Chrome's timer throttling documentation](https://developer.chrome.com/blog/timer-throttling-in-chrome-88/). No alarms, debugger, token or additional host permissions were added.
+
+Logs are printed to the KRA tab's console with `[Oraforge scroll experiment]` and the latest 200 entries are saved locally across tabs. The extension viewer displays the latest 30 and can download all retained entries as JSON or clear them. Entries include time, official origin only, tab/document identifier, ON/OFF, visibility, observed session duration, cycle count, movement/return result and skip/logout reason. They exclude URL paths/query strings, customer/sale information, invoice fields, tokens and cookies. `observed_ms` measures time since that document's authenticated screen was recognized; it is not KRA's session age. `scroll_cycle` confirms a browser operation, not an authenticated heartbeat or successful timeout extension.
+
+To test the real timeout:
+
+1. Keep a single KRA tab open and use the same business, page and visibility for both runs. Close other KRA tabs that might refresh the session. With the switch OFF, sign in freshly, clear logs, leave the page untouched and record when logout/OTP occurs. Save the logs; if navigation loses the observed duration, use the wall-clock timestamps for the same tab.
+2. Sign in freshly again, switch ON, clear logs and leave the page untouched for at least the baseline timeout. Confirm `scroll_cycle`, `restored=true` and the actual timestamps. A run consisting of `skipped` entries does not test scrolling. Save this run's logs before clearing them.
+3. Compare logout times and repeat under the same conditions. The same timeout despite successful cycles means this experiment did not prevent logout in that run. Remaining signed in longer is evidence to investigate, not proof of a universal keep-alive. KRA can still enforce server-side or absolute expiration.
+
+**Live timeout effect: UNVERIFIED.** No authenticated KRA browser was available during implementation. The real Chrome fixture check confirms the actual 60-second timer produces a browser scroll event, returns the exact position with smooth scrolling configured, preserves invoice data/focus, makes no clicks/submissions/network requests, and stops for a further full interval after an SPA session-expired screen appears. Unit checks also cover OFF, login/OTP/unknown screens, bottom-of-page scrolling, modal/dropdown/input/offline skips, login resumption and bounded log metadata. Public source inspection on 2026-10-11 found KRA's [main bundle](https://ecitizen.kra.go.ke/assets/itax/main-0198ee80.js) redirects HTTP 401 responses through `expire_session`; the inspected main, Individual layout and TopNav bundles do not establish any scroll-based session refresh. That source inspection cannot establish the authenticated server's timeout policy.
+
 ## Live KRA verification still required
 
 **The current eCitizen form mappings were inspected from supplied live HTML and public KRA Vue component source on 2026-10-10. The cashier reported successful live filling. Development verification uses anonymized fixtures; no real invoice was issued during development.** Authenticated portal reconnection, final issuance and official invoice capture still require live testing. The pasted session/account data was not retained in repository files, test fixtures or extension code.
@@ -97,6 +117,8 @@ POS_DESKTOP=1 PORT=3099 POS_DATA_DIR=/tmp/oraforge-etims-test POS_BACKUP_DIR=/tm
 # In another:
 python3 capacitor/tests/etims-browser.py
 python3 capacitor/tests/etims-fill-browser.py
+# Independent real 60-second timer and logout-stop test (~2 minutes; no POS server needed):
+python3 capacitor/tests/keepalive-browser.py
 ```
 
 This runner requires Chrome 144 or another Chrome version supporting the experimental `Extensions.loadUnpacked` testing command. It uses a fresh browser profile, synthetic sales and synthetic fiscal identifiers. Its KRA requests are fulfilled by the local HTML fixture. It verifies ordinary checkout, opted checkout, manual capture, generated-state blocking, admin reprint, trusted review, one native generation click and official-detail extraction. It also loads the actual unpacked extension into an isolated Chrome profile and verifies the complete page bridge → background worker → portal → original sale → receipt flow against the fixture. The final extension test blocks real KRA DNS resolution and routes its test navigation to local HTML. Live authenticated KRA testing is still required.

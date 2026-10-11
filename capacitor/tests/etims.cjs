@@ -119,6 +119,18 @@ function otherRecord(saleId,receipt) {
   r.id=JSON.stringify([r.shop_id,saleId,receipt]);r.attempt_id='attempt-'+saleId;
   r.digest=crypto.createHash('sha256').update(JSON.stringify(r.snapshot)).digest('hex');return r;
 }
+test('scroll logs accept only official top-level pages and retain bounded metadata without sale or session data',async()=>{
+  const w=worker(),portal={url:'https://ecitizen.kra.go.ke/individual/etims/sale/create?token=DO-NOT-LOG',frameId:0,tab:{id:41}};
+  const data={event:'scroll_cycle',enabled:true,visible:true,observed_ms:60000,cycles:1,delta:2,restored:true,
+    token:'DO-NOT-LOG',customer_pin:'DO-NOT-LOG',url:portal.url,record:record()};
+  for(let i=0;i<205;i++)assert.equal((await w.send('log',data,portal,'scroll_keepalive')).result.logged,true);
+  const logs=w.storage.oraforgeScrollKeepAliveLog;assert.equal(logs.length,200);
+  assert.equal(logs[0].origin,'https://ecitizen.kra.go.ke');assert.equal(logs[0].restored,true);
+  assert.ok(!JSON.stringify(logs).includes('DO-NOT-LOG'));assert.equal(w.storage.oraforgeJobsV1,undefined);
+  assert.match((await w.send('log',data,{...portal,url:'https://evil.test'},'scroll_keepalive')).error,/Untrusted/);
+  assert.match((await w.send('log',data,{...portal,frameId:1},'scroll_keepalive')).error,/Untrusted/);
+  assert.match((await w.send('log',{event:'INVOICE DATA'},portal,'scroll_keepalive')).error,/Invalid/);
+});
 test('opted checkout opens a fresh KRA popup even when an unarmed sale is already open',async()=>{
   const w=worker(),first=record(),next=otherRecord(2,'POS-CHECKOUT-2');
   assert.equal((await w.send('start',{record:first,new_popup:true})).result.opened,true);

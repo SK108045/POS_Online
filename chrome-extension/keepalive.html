@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Oraforge scroll experiment</title>
+<style>
+  body{box-sizing:border-box;width:420px;max-width:100%;margin:0;padding:18px;font:14px/1.5 system-ui;color:#173b29;background:#f5ffe9}
+  h1{font-size:18px;margin:0 0 12px}label{display:flex;gap:8px;align-items:center;font-weight:600}
+  button,a{font:inherit}button{padding:6px 10px;margin-right:8px}p{margin:10px 0}
+  pre{white-space:pre-wrap;overflow-wrap:anywhere;max-height:290px;overflow:auto;background:white;border:1px solid #ccd8bd;padding:10px;font:12px/1.5 monospace}
+</style></head><body>
+<h1>Scroll keep-alive · Experimental</h1>
+<label><input type="checkbox" id="keepalive-toggle" disabled> Enable automatic scroll every 60 seconds</label>
+<p id="keepalive-status" role="status">Loading…</p>
+<p>Moves the page by up to 2 px and immediately returns. Stops on detected login, OTP or session-expired screens. Pauses during recent cashier activity or open dialogs/dropdowns.</p>
+<p>This is an experiment: scrolling may have no effect on KRA’s timeout. Background or sleeping tabs may run late. No buttons, form values or session credentials are changed.</p>
+<p><button id="clear-log" type="button">Clear logs</button><button id="download-log" type="button">Download logs</button> <a href="options.html" target="_blank">Invoice settings</a></p>
+<pre id="keepalive-log" aria-label="Scroll experiment activity log" tabindex="0">No activity yet.</pre>
+<script src="keepalive-ui.js"></script>
+</body></html>

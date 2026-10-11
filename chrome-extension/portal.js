@@ -134,8 +134,9 @@
       <header><h3>Oraforge eTIMS</h3><button type="button" data-minimize aria-label="Minimize Oraforge eTIMS" aria-controls="companion-panel" title="Minimize panel"><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 8h10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button></header>
       <div data-sale></div><p role="status"></p><button data-fill>Fill POS sale</button>
       <ul data-report aria-label="Form filling results"></ul>
-      <details><summary>Invoice issuance controls</summary><label><input type="checkbox" data-review> I checked the seller, customer PIN validation, all items, discounts, payment, tax and total.</label><button data-arm>Enable KRA Generate</button></details>
+      <details data-issuance-controls><summary>Invoice issuance controls</summary><label><input type="checkbox" data-review> I checked the seller, customer PIN validation, all items, discounts, payment, tax and total.</label><button data-arm>Enable KRA Generate</button></details>
       <button data-capture>Read existing official invoice</button>
+      <details data-scroll-controls><summary>Scroll keep-alive · Experimental</summary><label><input type="checkbox" data-scroll-toggle disabled> Enable tiny scroll every 60 seconds</label><p data-scroll-status>Loading scroll setting…</p><button type="button" data-scroll-logs>Activity logs and experiment details</button></details>
     </section>
     <button type="button" data-restore hidden aria-label="Restore Oraforge eTIMS" aria-controls="companion-panel" aria-expanded="false" title="Restore panel">Oraforge eTIMS</button>`;
     const panelSection=shadow.querySelector('section');
@@ -156,6 +157,22 @@
     reportList=shadow.querySelector('[data-report]');
     shadow.querySelector('[data-fill]').onclick=prepare;
     shadow.querySelector('[data-capture]').onclick=scan;
+    const scrollSetting='oraforgeScrollKeepAliveEnabled', scrollToggle=shadow.querySelector('[data-scroll-toggle]');
+    if (chrome.storage?.local) {
+      chrome.storage.local.get(scrollSetting).then(data=>renderScrollSetting(data[scrollSetting]===true)).catch(()=>{shadow.querySelector('[data-scroll-status]').textContent='Reload the extension to read the scroll setting.';});
+      scrollToggle.onchange=async()=>{
+        scrollToggle.disabled=true;
+        try {await chrome.storage.local.set({[scrollSetting]:scrollToggle.checked});renderScrollSetting(scrollToggle.checked);}
+        catch (_) {shadow.querySelector('[data-scroll-status]').textContent='Could not save. Reload the extension.';}
+        finally {scrollToggle.disabled=false;}
+      };
+      shadow.querySelector('[data-scroll-logs]').onclick=async()=>{
+        try {
+          const response=await chrome.runtime.sendMessage({role:'scroll_keepalive',action:'open_logs'});
+          if(response?.error)throw Error(response.error);
+        } catch (_) {shadow.querySelector('[data-scroll-status]').textContent='Reload the extension to open activity logs.';}
+      };
+    } else shadow.querySelector('[data-scroll-status]').textContent='Scroll settings unavailable. Reload the extension.';
     shadow.querySelector('[data-arm]').onclick=async event=>{
       if (loading || busy || restriction() || navigator.onLine===false) return;
       if (!event.isTrusted || !shadow.querySelector('[data-review]').checked) {message('Check the invoice in KRA, then confirm the review checkbox.');return;}
@@ -175,6 +192,15 @@
     syncControls();
     document.documentElement.append(root);
   }
+  function renderScrollSetting(enabled) {
+    const shadow=root?.shadowRoot, toggle=shadow?.querySelector('[data-scroll-toggle]');
+    if(!toggle)return;
+    toggle.checked=enabled;toggle.disabled=false;
+    shadow.querySelector('[data-scroll-status]').textContent=enabled?'ON · Scroll only; logout prevention is unverified. Stops on detected login/OTP screens.':'OFF · Enable to test whether scrolling affects inactivity logout.';
+  }
+  chrome.storage?.onChanged?.addListener((changes,area)=>{
+    if(area==='local' && changes.oraforgeScrollKeepAliveEnabled)renderScrollSetting(changes.oraforgeScrollKeepAliveEnabled.newValue===true);
+  });
   async function boot() {
     const currentGeneration=++generation, pendingFill=fillTask;
     loading=true;armed=false;pendingNativeClick=false;syncControls();

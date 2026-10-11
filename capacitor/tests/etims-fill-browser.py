@@ -103,6 +103,24 @@ with sync_playwright() as p, tempfile.TemporaryDirectory(prefix='oraforge-fill-e
     assert popup.evaluate('window.fixtureSubmissions') == 0
     assert page.evaluate('async()=> (await OraforgeEtims.list())[0].status') == 'review_required'
 
+    popup.locator('[data-scroll-controls] summary').click()
+    expect(popup.locator('[data-scroll-toggle]')).to_be_enabled()
+    assert not popup.locator('[data-scroll-toggle]').is_checked()
+    popup.locator('[data-scroll-toggle]').check()
+    expect(popup.locator('[data-scroll-status]')).to_contain_text('ON')
+    with context.expect_page() as experiment_page:
+        popup.locator('[data-scroll-logs]').click()
+    experiment = experiment_page.value
+    expect(experiment.locator('#keepalive-toggle')).to_be_checked()
+    expect(experiment.locator('#keepalive-log')).to_contain_text('session_detected')
+    experiment.locator('#keepalive-toggle').uncheck()
+    expect(popup.locator('[data-scroll-toggle]')).not_to_be_checked()
+    experiment.close()
+    popup.locator('[data-scroll-controls] summary').click()
+    assert popup.evaluate('window.fixtureItemAdds') == 2
+    assert popup.evaluate('window.fixtureSubmissions') == 0
+    print('PASS existing invoice panel toggles the scroll experiment, opens activity logs and syncs OFF without changing filled invoice data')
+
     def wait_filled(receipt, count, total):
         expect(popup.locator('[data-oraforge-companion] [data-sale]')).to_contain_text(receipt)
         popup.wait_for_function("document.querySelector('[data-oraforge-companion]').shadowRoot.querySelector('[role=status]').textContent.includes('No invoice submitted.')", timeout=30000)
