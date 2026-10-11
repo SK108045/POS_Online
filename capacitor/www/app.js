@@ -760,6 +760,10 @@ const LocalPOS = {
       if (body.generate_etims) {
         order.etims_requested = true;
         order.etims_customer = window.OraforgeEtimsCore.customer(body.etims_customer || {});
+        // These optional details belong to the buyer, not necessarily the
+        // M-Pesa payer. Preserve independently from the STK payment phone.
+        if (order.etims_customer.name) order.customer_name = order.etims_customer.name;
+        if (order.etims_customer.phone) order.customer_phone = order.etims_customer.phone;
         order.etims_shop_id = body.etims_shop_id;
         order.etims_seller_pin = configuredSettings.kra_pin || '';
       }
@@ -1977,7 +1981,7 @@ async function showCheckoutModal(order) {
   let selectedMethod = 'mpesa';
   let savedPhone = order.customer_phone || '';
   const checkoutShop = window.OraforgeEtims?.scope();
-  let generateEtims = false, etimsCustomer = {pin:order.customer_kra_pin || '', email:order.customer_email || '',billing_address:order.customer_billing_address || ''};
+  let generateEtims = false, etimsCustomer = {name:order.etims_customer?.name || order.customer_name || '', phone:order.etims_customer?.phone || order.customer_phone || '',pin:order.customer_kra_pin || '', email:order.customer_email || '',billing_address:order.customer_billing_address || ''};
   let paymentPollTimer = null;
   let paymentPollGeneration = 0;
   function stopPaymentPoll() {
@@ -2037,6 +2041,8 @@ async function showCheckoutModal(order) {
     if (etimsToggle) {
       etimsToggle.checked = generateEtims;
       overlay.querySelector('#etimsCustomerFields').hidden = !generateEtims;
+      overlay.querySelector('#etimsName').value = etimsCustomer.name || '';
+      overlay.querySelector('#etimsPhone').value = etimsCustomer.phone || '';
       overlay.querySelector('#etimsPin').value = etimsCustomer.pin || '';
       overlay.querySelector('#etimsEmail').value = etimsCustomer.email || '';
       overlay.querySelector('#etimsAddress').value = etimsCustomer.billing_address || '';
@@ -2082,9 +2088,10 @@ async function showCheckoutModal(order) {
       msgEl.textContent = '';
       if (generateEtims) {
         try {
-          etimsCustomer = window.OraforgeEtimsCore.customer({pin:overlay.querySelector('#etimsPin').value,
-            email:overlay.querySelector('#etimsEmail').value, billing_address:overlay.querySelector('#etimsAddress').value,
-            phone:customerPhoneInput.value.trim() || refInput.value.trim()});
+          etimsCustomer = window.OraforgeEtimsCore.customer({name:overlay.querySelector('#etimsName').value,
+            phone:overlay.querySelector('#etimsPhone').value.trim() || customerPhoneInput.value.trim(),
+            pin:overlay.querySelector('#etimsPin').value,
+            email:overlay.querySelector('#etimsEmail').value, billing_address:overlay.querySelector('#etimsAddress').value});
         } catch (error) { msgEl.textContent = error.message; return; }
       }
       if (selectedMethod === 'mpesa') {
