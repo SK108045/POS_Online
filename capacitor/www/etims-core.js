@@ -20,8 +20,12 @@
     if (pin && !/^[A-Z]\d{9}[A-Z]$/.test(pin)) throw Error('Enter a valid customer KRA PIN or leave it blank.');
     const email = text(input.email || input.customer_email, 120);
     if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw Error('Enter a valid customer email.');
+    // The optional POS name is not a KRA-validated identity. Only include it
+    // when entered so older stored fiscal snapshots retain their exact digest.
+    const name = text(input.name || input.customer_name, 120);
     return {pin, phone: text(input.phone || input.customer_phone, 40), email,
-      billing_address: text(input.billing_address || input.customer_billing_address, 240)};
+      billing_address: text(input.billing_address || input.customer_billing_address, 240),
+      ...(name ? {name} : {})};
   }
   function snapshot(order, shopId, settings = {}, details = {}) {
     if (order.status !== 'paid' || order.is_quote || order.order_type === 'quote') throw Error('Only completed sales can be invoiced.');
