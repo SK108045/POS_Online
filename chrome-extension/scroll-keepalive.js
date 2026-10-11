@@ -32,8 +32,34 @@
         [...doc.querySelectorAll('button')].some(el=>visible(win,el) && /^add item$/i.test(el.textContent.trim()))) return 'authenticated';
     return 'unknown';
   }
+  // Prefer the document, but modern SPA pages often scroll inside an overflow container.
+  // Never scroll an input, a modal or the companion controls.
+  function scrollTarget(win) {
+    const doc=win.document, root=doc.scrollingElement;
+    const rootMax=root ? Math.max(0,root.scrollHeight-root.clientHeight) : 0;
+    if (rootMax>=4) return {
+      kind:'page', max:rootMax, read:()=>win.scrollY,
+      move:y=>win.scrollTo({left:win.scrollX,top:y,behavior:'instant'})
+    };
+    let best=null, bestArea=0;
+    for (const el of doc.querySelectorAll('main, [role="main"], section, div')) {
+      if (el.closest('[data-oraforge-companion]') || el.clientHeight<120 ||
+          el.scrollHeight-el.clientHeight<4 || !visible(win,el)) continue;
+      const style=win.getComputedStyle(el);
+      if (!/^(auto|scroll|overlay)$/.test(style.overflowY)) continue;
+      const rect=el.getBoundingClientRect();
+      if (rect.height<100 || rect.width<120 || rect.bottom<=0 || rect.top>=win.innerHeight) continue;
+      const area=Math.min(rect.height,win.innerHeight)*Math.min(rect.width,win.innerWidth);
+      if (area>bestArea) {
+        bestArea=area;
+        best={kind:'container',max:el.scrollHeight-el.clientHeight,
+          read:()=>el.scrollTop,move:y=>{el.scrollTop=y;}};
+      }
+    }
+    return best;
+  }
   function create(win, chrome) {
-    let enabled=false, auth='unknown', timer=null, observer, debounce=null, stopped=false, started=false;
+    let enabled=false, auth='unknown', timer=null, restoreTimer=null, restorePending=null, observer, debounce=null, stopped=false, started=false;
     let observedAt=0, cycles=0, lastActivity=-Infinity, settingRevision=0;
     const pageId=win.crypto.randomUUID();
     function log(event, detail={}) {
@@ -62,25 +88,53 @@
       else schedule();
     }
     function tick() {
-      timer=null;checkSession();
+      timer=null;
+      checkSession(); // Also schedules the next 60-second check.
       if (stopped || !enabled || auth!=='authenticated') return;
       if (win.navigator.onLine===false) {log('skipped',{reason:'offline'});return;}
       if (Date.now()-lastActivity<5000) {log('skipped',{reason:'cashier_active'});return;}
       const openControls=win.document.querySelectorAll('[role=dialog], dialog[open], [role=listbox], [role=menu], [role=combobox][aria-expanded=true], .absolute input[type=search]');
       if ([...openControls].some(el=>visible(win,el))) {log('skipped',{reason:'popup_or_dropdown_open'});return;}
-      const scroller=win.document.scrollingElement;
-      const max=scroller ? scroller.scrollHeight-scroller.clientHeight : 0;
-      if (max<=0) {log('skipped',{reason:'page_not_scrollable'});return;}
-      const x=win.scrollX, y=win.scrollY, target=y<max ? Math.min(y+2,max) : Math.max(y-2,0);
-      let delta=0, restored=false;
+      const target=scrollTarget(win);
+      if (!target) {log('skipped',{reason:'page_not_scrollable'});return;}
+
+      const initial=target.read(), destination=initial<target.max
+        ? Math.min(initial+12,target.max) : Math.max(initial-12,0);
+      let moved=0, eventObserved=false;
+      const onScroll=()=>{eventObserved=true;};
+      win.addEventListener('scroll',onScroll,true);
       try {
-        // Both operations run in the same task, without animation or focus changes.
-        // At the bottom, move up then return instead of attempting a clamped down.
-        try { win.scrollTo({left:x,top:target,behavior:'instant'});delta=win.scrollY-y; }
-        finally { win.scrollTo({left:x,top:y,behavior:'instant'}); }
-        restored=win.scrollX===x && win.scrollY===y;
-        cycles++;log('scroll_cycle',{delta,restored});
-      } catch (_) { log('scroll_error',{reason:'scroll_failed',restored}); }
+        target.move(destination);
+        moved=target.read()-initial;
+        if (!moved) {
+          win.removeEventListener('scroll',onScroll,true);
+          log('skipped',{reason:'scroll_not_moved'});return;
+        }
+      } catch (_) {
+        win.removeEventListener('scroll',onScroll,true);
+        log('scroll_error',{reason:'scroll_failed',restored:false});return;
+      }
+      // IMPORTANT: do not reverse the scroll in the same JS task. Browsers
+      // coalesce scroll events and can discard the down-and-back completely.
+      // Keep the tiny displacement for 220ms so it is observable, then restore.
+      restorePending=()=>{
+        win.removeEventListener('scroll',onScroll,true);
+        let restored=false, reason;
+        try {
+          // If a real user scrolled while waiting, leave their position alone.
+          if (Math.abs(target.read()-(initial+moved))<=1) {
+            target.move(initial);
+            restored=Math.abs(target.read()-initial)<=1;
+          } else reason='cashier_moved_scroll';
+        } catch (_) {reason='scroll_failed';}
+        cycles++;
+        log('scroll_cycle',{delta:moved,restored,target:target.kind,event_observed:eventObserved,...(reason?{reason}:{})});
+      };
+      restoreTimer=win.setTimeout(()=>{
+        restoreTimer=null;
+        const restore=restorePending;restorePending=null;
+        restore?.();
+      },220);
     }
     function activity(event) { if (event.isTrusted) lastActivity=Date.now(); }
     const activityEvents=['pointerdown','keydown','input','wheel','touchstart'];
@@ -98,6 +152,10 @@
     function stop() {
       if (stopped) return;
       stopped=true;cancelTimer();win.clearTimeout(debounce);observer?.disconnect();
+      if (restoreTimer!==null) win.clearTimeout(restoreTimer);
+      restoreTimer=null;
+      const restore=restorePending;restorePending=null;
+      restore?.();
       chrome.storage.onChanged.removeListener(changed);
       activityEvents.forEach(type=>win.removeEventListener(type,activity,true));
       win.removeEventListener('popstate',refresh);win.removeEventListener('hashchange',refresh);
