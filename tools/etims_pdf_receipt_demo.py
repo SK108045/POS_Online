@@ -2,7 +2,7 @@
 """Offline, read-only experiment: extract an existing eTIMS PDF into the real POS receipt renderer.
 
 Usage: python3 tools/etims_pdf_receipt_demo.py INVXLBRZJX.pdf --out /tmp/oraforge-etims-demo
-Dependencies: python -m pip install pymupdf numpy opencv-python-headless
+Dependencies: PyMuPDF only (no NumPy or OpenCV). Uses the PDF's original QR vector artwork.
 No POS sales, cookies or extension data are read or modified.
 """
 import argparse
@@ -11,16 +11,13 @@ import json
 import re
 import subprocess
 from pathlib import Path
-from urllib.parse import urlparse
 
 
 def extract(pdf: Path):
     try:
         import fitz
-        import cv2
-        import numpy as np
     except ImportError as exc:
-        raise SystemExit('Install PDF demo dependencies: python3 -m pip install pymupdf numpy opencv-python-headless') from exc
+        raise SystemExit('PyMuPDF is needed. If not installed already, use: python -m pip install pymupdf') from exc
     if not pdf.is_file() or pdf.stat().st_size > 10_000_000:
         raise ValueError('Provide an existing KRA PDF no larger than 10 MB.')
     document = fitz.open(pdf)
@@ -92,30 +89,39 @@ def extract(pdf: Path):
             raise ValueError('This demo requires undiscounted line totals matching the PDF total.')
         if result['subtotal_cents'] - result['discount_cents'] + result['tax_cents'] != result['total_cents']:
             raise ValueError('Invoice amounts do not reconcile; stop rather than invent totals.')
-        pix = page.get_pixmap(matrix=fitz.Matrix(3, 3), alpha=False)
-        rgb = np.frombuffer(pix.samples, dtype=np.uint8).reshape(pix.height, pix.width, pix.n)
-        gray = cv2.cvtColor(rgb, cv2.COLOR_RGB2GRAY)
-        qr_url, bounds, _ = cv2.QRCodeDetector().detectAndDecode(gray)
-        if not qr_url or bounds is None:
-            raise ValueError('Official QR could not be decoded from the PDF.')
-        parsed = urlparse(qr_url)
-        if parsed.scheme != 'https' or parsed.hostname != 'etims.kra.go.ke' or '/receipt/' not in parsed.path:
-            raise ValueError('PDF QR does not point to an approved KRA eTIMS receipt URL.')
-        if result['receipt_signature'] not in qr_url:
-            raise ValueError('KRA QR payload does not match the printed receipt signature.')
-        p = bounds[0]
-        x0, y0 = np.maximum(np.floor(p.min(axis=0)).astype(int) - 18, 0)
-        x1, y1 = np.minimum(np.ceil(p.max(axis=0)).astype(int) + 19, [pix.width, pix.height])
-        cropped = rgb[y0:y1, x0:x1]
-        qr_rgb = cv2.resize(cropped, None, fx=2, fy=2, interpolation=cv2.INTER_NEAREST)
-        if cv2.QRCodeDetector().detectAndDecode(cv2.cvtColor(qr_rgb, cv2.COLOR_RGB2GRAY))[0] != qr_url:
-            raise ValueError('Extracted QR crop failed scan verification.')
-        success, png = cv2.imencode('.png', cv2.cvtColor(qr_rgb, cv2.COLOR_RGB2BGR))
-        if not success:
-            raise ValueError('Unable to encode extracted QR image.')
-        result['qr_image'] = 'data:image/png;base64,' + base64.b64encode(png.tobytes()).decode('ascii')
-        result['qr_url'] = qr_url
-        return result, png.tobytes()
+        # This particular eCitizen PDF draws its QR as hundreds of tiny,
+        # black vector squares. Find those exact original shapes instead of
+        # generating a QR from the CU number or downloading a 44 MB OpenCV wheel.
+        # This intentionally refuses scanned PDFs and other unfamiliar layouts.
+        black_modules = []
+        for drawing in page.get_drawings():
+            fill, box = drawing.get('fill'), drawing['rect']
+            if (drawing['type'] not in ('f', 'fs')
+                    or not fill or max(fill[:3]) > 0.08
+                    or not 0.5 < box.width < 4
+                    or not 0.5 < box.height < 4
+                    or abs(box.width - box.height) > 0.2
+                    or box.x0 < page.rect.width * 0.65
+                    or box.y0 > page.rect.height * 0.25):
+                continue
+            black_modules.append(box)
+        if len(black_modules) < 250:
+            raise ValueError('This PDF does not expose the expected original vector QR; no QR was invented.')
+        x0=min(box.x0 for box in black_modules)
+        y0=min(box.y0 for box in black_modules)
+        x1=max(box.x1 for box in black_modules)
+        y1=max(box.y1 for box in black_modules)
+        side = x1 - x0
+        if not 40 < side < 130 or abs(side-(y1-y0)) > side*.04:
+            raise ValueError('Original QR geometry is unrecognized; declining to guess its position.')
+        # Five modules of quiet zone around QR for reliable scanning.
+        module = sorted(box.width for box in black_modules)[len(black_modules)//2]
+        padding=module*5
+        clip=fitz.Rect(x0-padding,y0-padding,x1+padding,y1+padding) & page.rect
+        original_png=page.get_pixmap(matrix=fitz.Matrix(5,5),clip=clip,alpha=False).tobytes('png')
+        result['qr_image'] = 'data:image/png;base64,' + base64.b64encode(original_png).decode('ascii')
+        result['qr_validation'] = 'Original PDF vector QR extracted; scan the image to check the verification URL.'
+        return result, original_png
     finally:
         document.close()
 
@@ -126,13 +132,14 @@ def main():
     parser.add_argument('--out', type=Path, default=Path('/tmp/oraforge-etims-pdf-demo'))
     args = parser.parse_args()
     root = Path(__file__).resolve().parents[1]
-    args.out.mkdir(parents=True, exist_ok=True)
     data, qr = extract(args.pdf)
+    args.out.mkdir(parents=True, exist_ok=True)
     (args.out / 'invoice-data.json').write_text(json.dumps(data, indent=2), encoding='utf-8')
     (args.out / 'original-kra-qr.png').write_bytes(qr)
     subprocess.run(['node', str(root / 'tools' / 'etims_pdf_receipt_demo.cjs'), str(args.out / 'invoice-data.json'), str(args.out / 'oraforge-receipt-preview.html')], check=True)
     print(f'PDF extraction successful. Original receipt preview: {args.out / "oraforge-receipt-preview.html"}')
     print(f'CU: {data["cu_invoice_number"]}; SCU: {data["scu_id"]}; signature: {data["receipt_signature"]}')
+    print('Original PDF QR copied (not reconstructed). Scan it to verify the KRA URL.')
     print('DEMO ONLY. No real Oraforge sale was matched or marked generated. No invoice was issued.')
 
 
