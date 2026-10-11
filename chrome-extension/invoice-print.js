@@ -88,13 +88,22 @@
     if(!seller||!buyer)return {reason:'Seller/buyer section missing on official invoice.'};
     if(snapshot.seller_pin&&norm(seller.pin)!==norm(snapshot.seller_pin))
       return {reason:'Seller PIN differs from the selected POS shop.'};
-    if(snapshot.customer?.pin&&norm(buyer.pin)!==norm(snapshot.customer.pin))
-      return {reason:'Buyer PIN differs from the POS customer.'};
-    if(snapshot.customer?.phone&&buyer.phone){
-      const digits=x=>String(x).replace(/\D/g,'').replace(/^(254|0)/,'');
-      if(digits(snapshot.customer.phone)!==digits(buyer.phone))
-        return {reason:'Buyer phone differs from the POS customer.'};
-    }
+    const digits=x=>String(x).replace(/\D/g,'').replace(/^(254|0)/,'');
+    const matchingPhone=Boolean(snapshot.customer?.phone && buyer.phone &&
+      digits(snapshot.customer.phone)===digits(buyer.phone));
+    // KRA sometimes leaves buyer PIN blank on the printable invoice even
+    // after validation. In that case require a matching buyer phone.
+    if(snapshot.customer?.pin && (buyer.pin ? norm(buyer.pin)!==norm(snapshot.customer.pin) : !matchingPhone))
+      return {reason:'Buyer PIN not confirmed; the printed invoice must match the POS customer PIN or phone.'};
+    if(snapshot.customer?.phone && buyer.phone && !matchingPhone)
+      return {reason:'Buyer phone differs from the POS customer.'};
+    const method=label(root,'Payment Method');
+    if(norm(snapshot.payment_method)==='mpesa' && norm(method)!=='mpesa')
+      return {reason:'Issued invoice payment method differs from POS M-Pesa.'};
+    const note=label(root,'Note');
+    const reference=note.match(/POS Receipt:\s*([A-Za-z0-9_-]+)/i);
+    if(reference && reference[1]!==snapshot.receipt_no)
+      return {reason:'Issued invoice note contains a different POS receipt reference.'};
     if(amountRow(root,'Invoice total')!==snapshot.total_cents)
       return {reason:'Official invoice total differs from the POS receipt.'};
     const items=lines(root);
