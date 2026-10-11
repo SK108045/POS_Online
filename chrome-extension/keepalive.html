@@ -9,7 +9,7 @@
 <h1>Scroll keep-alive · Experimental</h1>
 <label><input type="checkbox" id="keepalive-toggle" disabled> Enable automatic scroll every 60 seconds</label>
 <p id="keepalive-status" role="status">Loading…</p>
-<p>Moves the page by up to 2 px and immediately returns. Stops on detected login, OTP or session-expired screens. Pauses during recent cashier activity or open dialogs/dropdowns.</p>
+<p>Moves the page or its main scrollable panel by up to 12 px, waits 220 ms, then restores its position. Stops on detected login, OTP or session-expired screens. Pauses during recent cashier activity or open dialogs/dropdowns.</p>
 <p>This is an experiment: scrolling may have no effect on KRA’s timeout. Background or sleeping tabs may run late. No buttons, form values or session credentials are changed.</p>
 <p><button id="clear-log" type="button">Clear logs</button><button id="download-log" type="button">Download logs</button> <a href="options.html" target="_blank">Invoice settings</a></p>
 <pre id="keepalive-log" aria-label="Scroll experiment activity log" tabindex="0">No activity yet.</pre>
