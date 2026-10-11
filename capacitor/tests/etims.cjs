@@ -8,6 +8,8 @@ const {JSDOM}=require('jsdom');
 const {IDBFactory}=require('fake-indexeddb');
 const core=require('../www/etims-core');
 const {adapter,money}=require('../../chrome-extension/portal-adapter');
+const issuedPrint=require('../../chrome-extension/invoice-print');
+const printFixture=fs.readFileSync(path.join(__dirname,'fixtures/kra-invoice-print.html'),'utf8');
 const fixture=fs.readFileSync(path.join(__dirname,'fixtures/kra-portal.html'),'utf8');
 const order=()=>({id:1,ticket_no:'POS-TEST-1',status:'paid',payment_method:'mpesa',payment_ref:'TEST-PAYMENT',paid_at:1791630000,
   items:[{name:'Fixture item',description:'Fixture description',qty:2.5,unit_price_cents:1010,line_total_cents:2525}],
@@ -428,4 +430,50 @@ test('background activity alarm persists the opt-in, targets only allowed live t
   w.change(false);await new Promise(resolve=>setImmediate(resolve));
   assert.equal(w.alarms.size,0);await w.alarm();assert.equal(w.messages.length,1);
   w.change(true);await new Promise(resolve=>setImmediate(resolve));assert.equal(w.alarms.size,1);
+});
+
+
+test('real KRA invoice-print DOM captures issued IDs and a painted QR only for exact POS sale',async()=>{
+  const url='https://ecitizen.kra.go.ke/individual/etims/sale/TESTISSUED/invoice-print';
+  const dom=new JSDOM(printFixture,{url,runScripts:'outside-only'});
+  const document=dom.window.document, canvas=document.querySelector('canvas');
+  const snapshot={...snap(),seller_pin:'A987654321B'};
+  assert.equal(issuedPrint.pathMatches(url.replace('https://ecitizen.kra.go.ke','')),true);
+  assert.equal(issuedPrint.inspect(document,snapshot).reason,'Waiting for KRA to draw the official QR canvas.');
+  const data=new Uint8ClampedArray(120*120*4);
+  for(let i=0;i<120*120;i++){
+    const v=i%2===0?0:255;
+    data.set([v,v,v,255],i*4);
+  }
+  canvas.getContext=()=>({getImageData:()=>({data})});
+  canvas.toDataURL=()=> 'data:image/png;base64,AAAA';
+  const result=issuedPrint.inspect(document,snapshot);
+  assert.equal(result.reason,'');
+  assert.equal(result.fiscal.cu_invoice_number,'TESTSCU/2');
+  assert.equal(result.fiscal.scu_id,'TESTSCU');
+  assert.equal(result.fiscal.receipt_signature,'TESTSIGNATURE');
+  assert.equal(result.fiscal.invoice_number,'2');
+  assert.equal(result.fiscal.invoice_date,'2026-10-11 18:12:48');
+  assert.equal(result.fiscal.qr_image,'data:image/png;base64,AAAA');
+  dom.window.OraforgeKraInvoicePrint=issuedPrint;
+  assert.deepEqual(await adapter(document).capture(snapshot),result.fiscal);
+  const bad=[{...snapshot,seller_pin:'A123456789B'},{...snapshot,total_cents:2273},
+    {...snapshot,customer:{...snapshot.customer,pin:'A111111111A'}},
+    {...snapshot,items:[{...snapshot.items[0],name:'Different item'}]}];
+  for(const altered of bad)assert.equal(issuedPrint.inspect(document,altered).fiscal,undefined);
+  assert.equal(issuedPrint.inspect(document,{...snapshot,customer:{...snapshot.customer,phone:'0711000000'}}).fiscal,undefined);
+  document.querySelector('canvas').width=120;
+  canvas.getContext=()=>({getImageData:()=>({data:new Uint8ClampedArray(120*120*4)})});
+  assert.equal(issuedPrint.inspect(document,snapshot).fiscal,undefined);
+  dom.window.close();
+});
+
+test('KRA capture cannot read unissued create pages or mismatched printed line values',()=>{
+  const dom=new JSDOM(printFixture,{url:'https://ecitizen.kra.go.ke/individual/etims/sale/create',runScripts:'outside-only'});
+  assert.equal(issuedPrint.inspect(dom.window.document,{...snap(),seller_pin:'A987654321B'}).fiscal,undefined);
+  dom.reconfigure({url:'https://ecitizen.kra.go.ke/individual/etims/sale/TEST/invoice-print'});
+  const cell=[...dom.window.document.querySelectorAll('td')].find(e=>e.textContent.trim()==='2.53');
+  assert.ok(cell);cell.querySelector('p').textContent='0.00';
+  assert.match(issuedPrint.inspect(dom.window.document,{...snap(),seller_pin:'A987654321B'}).reason,/differs|reconcile/);
+  dom.window.close();
 });
