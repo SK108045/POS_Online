@@ -78,14 +78,19 @@ To test the real timeout:
 
 The repo-root historical `INVXLBRZJX.pdf` can be read **without generating an invoice, logging into KRA, changing a sale or claiming a fiscal result**. The extraction script checks invoice text, amounts, printed receipt signature and the decodable official KRA QR. It fails rather than guessing on unfamiliar PDF layouts. This is a **single-page, known-layout proof of concept**, not a general PDF importer.
 
-On Ubuntu, install the free offline extraction dependencies in a virtual environment:
+**Windows PowerShell** — use your existing `python`, with PyMuPDF already installed. No OpenCV, NumPy, `py` launcher, or new virtual environment needed. Node.js is used to render the existing POS receipt.
 
-```bash
-python3 -m venv .venv
-.venv/bin/pip install pymupdf numpy opencv-python-headless
-.venv/bin/python tools/etims_pdf_receipt_demo.py INVXLBRZJX.pdf --out /tmp/oraforge-etims-pdf-demo
-xdg-open /tmp/oraforge-etims-pdf-demo/oraforge-receipt-preview.html
+```powershell
+python -c "import fitz; print('PyMuPDF ready')"
+python .\tools\etims_pdf_receipt_demo.py .\INVXLBRZJX.pdf --out .\etims-pdf-demo
+Start-Process .\etims-pdf-demo\oraforge-receipt-preview.html
 ```
+
+If the `import fitz` check fails, install **only** PyMuPDF for this Python interpreter: `python -m pip install pymupdf`.
+
+**Ubuntu:** `python3 tools/etims_pdf_receipt_demo.py INVXLBRZJX.pdf --out /tmp/oraforge-etims-pdf-demo`; then open `/tmp/oraforge-etims-pdf-demo/oraforge-receipt-preview.html`.
+
+The tool extracts the original QR vector artwork in this PDF without OpenCV; it does not reconstruct a new QR. The extracted QR should still be scanned against KRA when reviewing other invoice samples.
 
 Outputs: `invoice-data.json`, `original-kra-qr.png`, and `oraforge-receipt-preview.html`. The Node renderer executes the repository's **actual** `showReceiptModal()` from `capacitor/www/app.js`, its **actual** `OraforgeEtimsCore.receipt()` from `capacitor/www/etims-core.js`, and embeds the existing POS stylesheets. No cloned receipt template is used. The preview is clearly marked **PDF TEST ONLY**, has a synthetic `PDF-DEMO-ONLY` receipt number, does not access the POS database or portal bridge, and does not issue an invoice.
 
