@@ -2,7 +2,7 @@
   'use strict';
   let job, adapter, armed=false, consumed=false, busy=false, captured=false, root, notice, reportList, observer, timer;
   let lastAutoForm=null, generation=0, minimized=false, loading=false, networkGeneration=0, reconnectPending=false;
-  let fillTask=Promise.resolve();
+  let fillTask=Promise.resolve(), printScanTimer=null, printScanRetries=0;
   const send = async (action, data={}) => {
     const response=await chrome.runtime.sendMessage({role:'portal',action,data:{attempt_id:job?.record.attempt_id,digest:job?.record.digest,...data}});
     if (response?.error) throw Error(response.error);
@@ -102,7 +102,11 @@
     const currentGeneration=generation, currentJob=job, currentAdapter=adapter;
     syncControls();
     try {
-      const fiscal=await currentAdapter.capture(currentJob.record.snapshot);
+      const print=window.OraforgeKraInvoicePrint;
+      const printPage=print?.pathMatches(location.pathname);
+      const inspection=printPage ? print.inspect(document,currentJob.record.snapshot) : null;
+      if (inspection?.reason) message(inspection.reason);
+      const fiscal=inspection?.fiscal || (printPage ? null : await currentAdapter.capture(currentJob.record.snapshot));
       if (generation!==currentGeneration || job!==currentJob) return;
       if (fiscal) {
         await send('capture',{fiscal,total_cents:currentJob.record.snapshot.total_cents,receipt_no:currentJob.record.receipt_no,attempt_id:currentJob.record.attempt_id,digest:currentJob.record.digest});
@@ -110,7 +114,22 @@
         captured=true; armed=false; message('Official KRA invoice captured. Return to Oraforge to print the updated receipt.');
       }
     } catch(error) {if(generation===currentGeneration)message(error.message);}
-    finally {if(generation===currentGeneration){busy=false;syncControls();}}
+    finally {
+      if(generation===currentGeneration){
+        busy=false;syncControls();
+        const print=window.OraforgeKraInvoicePrint;
+        if(!captured && print?.pathMatches(location.pathname) && printScanRetries<24){
+          // Canvas drawing does not produce DOM mutations; poll until KRA
+          // paints its QR rather than expecting a MutationObserver update.
+          const state=print.inspect(document,currentJob.record.snapshot);
+          if(state.reason?.startsWith('Waiting')){
+            printScanRetries++;
+            clearTimeout(printScanTimer);
+            printScanTimer=setTimeout(scan,1000);
+          }
+        }
+      }
+    }
   }
   function panel() {
     root?.remove(); root=document.createElement('aside'); root.dataset.oraforgeCompanion='';
@@ -216,7 +235,7 @@
   async function boot() {
     const currentGeneration=++generation, pendingFill=fillTask;
     loading=true;armed=false;pendingNativeClick=false;syncControls();
-    observer?.disconnect();clearTimeout(timer);
+    observer?.disconnect();clearTimeout(timer);clearTimeout(printScanTimer);printScanRetries=0;
     try {
       const next=await send('job');
       await pendingFill;
@@ -254,7 +273,8 @@
     const detection=adapter.detect(), form=adapter.find('email');
     if (detection.ready && form!==lastAutoForm && !job.recovery && !job.armed && !consumed) {
       lastAutoForm=form;await prepare();
-    } else if (!detection.ready && !lastAutoForm) message('Waiting for the KRA sales invoice form at '+detection.url+'. Missing: '+detection.missing.join(', ')+'.');
+    } else if (!detection.ready && !lastAutoForm && !window.OraforgeKraInvoicePrint?.pathMatches(location.pathname))
+      message('Waiting for the KRA sales invoice form at '+detection.url+'. Missing: '+detection.missing.join(', ')+'.');
     await scan();
   }
   window.addEventListener('popstate',refresh);
