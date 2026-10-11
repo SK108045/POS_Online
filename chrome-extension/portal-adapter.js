@@ -543,6 +543,11 @@
       } catch (_) { return ''; }
     }
     async function capture(payload) {
+      // KRA's real /invoice-print view uses labelled paragraphs, nested tables
+      // and a QR canvas. It omits the POS note, so match the bound sale by
+      // seller PIN, customer where supplied, exact item details and total.
+      if (win.OraforgeKraInvoicePrint?.pathMatches(doc.location.pathname))
+        return win.OraforgeKraInvoicePrint.inspect(doc,payload).fiscal || null;
       // A complete official invoice must echo both the POS reference and total.
       // Read them from the issued invoice, never from the stale creation form.
       const cu=find('cu_invoice_number');
