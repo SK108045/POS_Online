@@ -387,7 +387,8 @@ test('blocked KRA Create Invoice clearly expands Oraforge controls rather than s
   assert.equal(shadow.querySelector('#companion-panel').hidden,false);
   assert.equal(shadow.querySelector('[data-issuance-controls]').open,true);
   assert.match(shadow.querySelector('[role=status]').textContent,/Create Invoice paused/);
-  assert.match(shadow.querySelector('[role=status]').textContent,/Enable KRA Generate/);
+  assert.match(shadow.querySelector('[role=status]').textContent,/KRA total must match/);
+  assert.match(shadow.querySelector('[role=status]').textContent,/POS receipt reference/);
   assert.equal(dom.window.fixtureSubmissions,0);
   dom.window.close();
 });
