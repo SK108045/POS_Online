@@ -99,20 +99,20 @@
       if (gap>INTERVAL*1.5) log('timer_delayed',{gap_ms:gap,source});
       if (win.navigator.onLine===false) {log('skipped',{reason:'offline'});return;}
       if (Date.now()-lastActivity<5000) {log('skipped',{reason:'cashier_active'});return;}
-      if (mode==='mouse') {
+      if (mode==='mouse' || mode==='both') {
+        // In Both mode, send mouse activity first, then attempt a scroll.
         // Bubble from a neutral element so document/window activity listeners
         // can observe it, without hovering, clicking or focusing form controls.
         // These remain synthetic events (isTrusted=false), not physical input.
         const target=win.document.body;
-        if (!target) {log('skipped',{reason:'page_not_ready'});return;}
+        if (!target) {log('skipped',{reason:'page_not_ready'});if(mode==='mouse')return;}
         try {
-          for (const x of [1,2]) target.dispatchEvent(new win.MouseEvent('mousemove',{
+          if (target) for (const x of [1,2]) target.dispatchEvent(new win.MouseEvent('mousemove',{
             bubbles:true,composed:true,clientX:x,clientY:1,buttons:0,view:win
           }));
-          cycles++;
-          log('mouse_cycle',{synthetic:true,source});
+          if (target) {cycles++;log('mouse_cycle',{synthetic:true,source});}
         } catch (_) {log('activity_error',{reason:'dispatch_failed'});}
-        return;
+        if (mode==='mouse') return;
       }
       const openControls=win.document.querySelectorAll('[role=dialog], dialog[open], [role=listbox], [role=menu], [role=combobox][aria-expanded=true], .absolute input[type=search]');
       if ([...openControls].some(el=>visible(win,el))) {log('skipped',{reason:'popup_or_dropdown_open'});return;}
@@ -167,7 +167,7 @@
       if (area!=='local' || (!changes[SETTING] && !changes[MODE]) || stopped) return;
       settingRevision++;
       if (changes[SETTING]) enabled=changes[SETTING].newValue===true;
-      if (changes[MODE]) mode=changes[MODE].newValue==='scroll'?'scroll':'mouse';
+      if (changes[MODE]) mode=['mouse','scroll','both'].includes(changes[MODE].newValue)?changes[MODE].newValue:'mouse';
       lastTick=0;
       log(enabled?'enabled':'disabled');checkSession();
     }
@@ -203,7 +203,7 @@
         const revision=settingRevision;
         const settings=await chrome.storage.local.get([SETTING,MODE]);
         if (stopped) return;
-        if (revision===settingRevision) {enabled=settings[SETTING]===true;mode=settings[MODE]==='scroll'?'scroll':'mouse';}
+        if (revision===settingRevision) {enabled=settings[SETTING]===true;mode=['mouse','scroll','both'].includes(settings[MODE])?settings[MODE]:'mouse';}
         log(enabled?'enabled':'disabled');checkSession();
       } catch (_) { stop(); }
     }
