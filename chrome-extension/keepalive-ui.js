@@ -11,7 +11,7 @@ function render(data) {
   if (Object.hasOwn(data,logKey)) {
     logEntries=Array.isArray(data[logKey])?data[logKey]:[];
     if (logView) logView.textContent=logEntries.slice(-30).reverse().map(entry=>{
-      const details=[entry.reason,entry.event==='scroll_cycle'?`delta=${entry.delta}px; restored=${entry.restored}`:'',`observed=${Math.round(entry.observed_ms/1000)}s; cycles=${entry.cycles}`,`toggle=${entry.enabled?'ON':'OFF'}; ${entry.visible?'visible':'background'}`].filter(Boolean).join(' · ');
+      const details=[entry.reason,entry.event==='scroll_cycle'?`target=${entry.target||'unknown'}; delta=${entry.delta}px; event seen=${entry.event_observed===true}; restored=${entry.restored}`:'',`observed=${Math.round(entry.observed_ms/1000)}s; cycles=${entry.cycles}`,`toggle=${entry.enabled?'ON':'OFF'}; ${entry.visible?'visible':'background'}`].filter(Boolean).join(' · ');
       return `${entry.at} · tab ${entry.tab_id} · ${entry.origin}\n${entry.event} · ${details}`;
     }).join('\n\n') || 'No activity yet.';
   }
