@@ -253,7 +253,7 @@
       // Add inside the verified item dialog only inserts a local invoice line.
       if (el.closest('[role="dialog"]')===itemDialog() && /^(add|update|cancel|add new|add from inventory)$/i.test(clean(value(el)))) return false;
       if (config.generate) { try { if (el.matches(config.generate)) return true; } catch (_) {} }
-      return /\b(generate|issue|submit|finali[sz]e|create invoice|save invoice|confirm invoice|save draft)\b/i.test(clean(el.textContent || el.value));
+      return /\b(generate|issue|submit|finali[sz]e|create invoice|save invoice|confirm invoice)\b/i.test(clean(el.textContent || el.value));
     }
     function fill(payload) {
       // Synchronous compatibility for the older inline-row form.
@@ -288,13 +288,23 @@
       if (totalValue()!==payload.total_cents) errors.push('KRA total must match KES '+(payload.total_cents/100).toFixed(2));
       if (!referenceMatches(payload)) errors.push('POS receipt reference is missing or different');
       const seller=read('seller_pin');
-      if (payload.seller_pin && seller.toUpperCase()!==payload.seller_pin) errors.push('Confirm that the KRA seller PIN matches your shop');
+      if (payload.seller_pin && seller && seller.toUpperCase()!==payload.seller_pin) errors.push('The displayed KRA seller PIN differs from the POS shop.');
+      // The creation page does not always display seller PIN; the cashier must
+      // confirm the shop/account in the separate review checkbox before arming.
       if (!invoice) {
         const elements=rows(), isTable=!!invoiceTable(), discounts=isTable?lineDiscounts(payload):null;
         if (elements.length!==payload.items.length) errors.push('Item count differs from the POS sale');
         payload.items.forEach((item,i)=>{if (!matchesLine(item,elements[i],discounts?.[i])) errors.push('Item '+(i+1)+' differs from the POS sale');});
         for (const [key,val] of Object.entries(payload.customer)) {
           if (!val) continue;
+          if (key==='name') {
+            // The optional POS name is NOT the registered KRA name. When the
+            // buyer was matched by PIN/phone, trust KRA's selected identity.
+            // Only enforce a name match for a name-only customer selection.
+            if (!payload.customer.pin && !payload.customer.phone && !customerIdentity(val))
+              errors.push('Select the POS customer by name in KRA.');
+            continue;
+          }
           const actual=read(key);
           const matches=key==='pin'?(actual.toUpperCase()===val || customerIdentity(val)):key==='phone'?phoneMatches(actual,val):actual===val;
           if (!matches) errors.push('Customer '+key+' is missing or different');
