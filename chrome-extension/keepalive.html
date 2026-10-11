@@ -8,9 +8,9 @@
 </style></head><body>
 <h1>Activity keep-alive · Experimental</h1>
 <label><input type="checkbox" id="keepalive-toggle" disabled> Enable automatic activity every 60 seconds</label>
-<p><label>Activity mode <select id="keepalive-mode" disabled><option value="mouse">Mouse activity (new experiment)</option><option value="scroll">Scroll (previous experiment)</option></select></label></p>
+<p><label>Activity mode <select id="keepalive-mode" disabled><option value="mouse">Mouse activity (new experiment)</option><option value="scroll">Scroll (previous experiment)</option><option value="both">Mouse + Scroll (both together)</option></select></label></p>
 <p id="keepalive-status" role="status">Loading…</p>
-<p>Mouse mode sends synthetic mousemove events without moving your physical cursor or requiring a scrollbar. Scroll mode retains the previous 12 px experiment. Both stop on detected login/OTP screens and pause during recent cashier input.</p>
+<p>Mouse mode sends synthetic mousemove events without moving the cursor. Scroll mode makes the previous 12 px movement. Mouse + Scroll runs both on the same 60-second tick; mouse activity still runs when the page cannot scroll. All modes stop on detected login/OTP screens and pause during recent cashier input.</p>
 <p>A background alarm supplements the page timer. Sleeping computers and discarded tabs cannot run activity. Neither mode proves or guarantees session renewal: KRA may ignore synthetic events or expire the session on its server. No clicks, typing, form submissions or credential changes.</p>
 <p><button id="clear-log" type="button">Clear logs</button><button id="download-log" type="button">Download logs</button> <a href="options.html" target="_blank">Invoice settings</a></p>
 <pre id="keepalive-log" aria-label="Scroll experiment activity log" tabindex="0">No activity yet.</pre>
