@@ -147,6 +147,10 @@ function showReceiptModal(order, isKot = false) {
   document.getElementById('receiptPrintBtn').addEventListener('click', async () => {
     try {
       await overlay.etimsReady;
+      if (!isKot && !isQuote && overlay.dataset.etimsRequested === 'true' && overlay.dataset.etimsConfirmed !== 'true') {
+        toast('The payment is saved. Finish issuing the KRA invoice before printing the final receipt.', 'info');
+        return;
+      }
       await Promise.all([...overlay.querySelectorAll('.receipt-kra-qr')].map(img => img.decode()));
       if (window.OraforgeNative) {
         if (!window.OraforgePrinter) throw new Error('Install the latest APK to enable printing.');
