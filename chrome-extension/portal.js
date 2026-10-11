@@ -136,7 +136,7 @@
       <ul data-report aria-label="Form filling results"></ul>
       <details data-issuance-controls><summary>Invoice issuance controls</summary><label><input type="checkbox" data-review> I checked the seller, customer PIN validation, all items, discounts, payment, tax and total.</label><button data-arm>Enable KRA Generate</button></details>
       <button data-capture>Read existing official invoice</button>
-      <details data-scroll-controls><summary>Activity keep-alive · Experimental</summary><label><input type="checkbox" data-scroll-toggle disabled> Enable activity every 60 seconds</label><label>Activity mode <select data-activity-mode disabled><option value="mouse">Mouse activity</option><option value="scroll">Scroll</option></select></label><p data-scroll-status>Loading activity setting…</p><button type="button" data-scroll-logs>Activity logs and experiment details</button></details>
+      <details data-scroll-controls><summary>Activity keep-alive · Experimental</summary><label><input type="checkbox" data-scroll-toggle disabled> Enable activity every 60 seconds</label><label>Activity mode <select data-activity-mode disabled><option value="mouse">Mouse activity</option><option value="scroll">Scroll</option><option value="both">Mouse + Scroll (both)</option></select></label><p data-scroll-status>Loading activity setting…</p><button type="button" data-scroll-logs>Activity logs and experiment details</button></details>
     </section>
     <button type="button" data-restore hidden aria-label="Restore Oraforge eTIMS" aria-controls="companion-panel" aria-expanded="false" title="Restore panel">Oraforge eTIMS</button>`;
     const panelSection=shadow.querySelector('section');
@@ -207,7 +207,7 @@
   }
   function renderActivityMode(mode) {
     const select=root?.shadowRoot?.querySelector('[data-activity-mode]');
-    if(select){select.value=mode==='scroll'?'scroll':'mouse';select.disabled=false;}
+    if(select){select.value=['mouse','scroll','both'].includes(mode)?mode:'mouse';select.disabled=false;}
   }
   chrome.storage?.onChanged?.addListener((changes,area)=>{
     if(area==='local' && changes.oraforgeKeepAliveMode)renderActivityMode(changes.oraforgeKeepAliveMode.newValue);
