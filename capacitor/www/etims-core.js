@@ -22,7 +22,7 @@
     if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw Error('Enter a valid customer email.');
     // The optional POS name is not a KRA-validated identity. Only include it
     // when entered so older stored fiscal snapshots retain their exact digest.
-    const name = text(input.name || input.customer_name, 120);
+    const name = text(input.name, 120);
     return {pin, phone: text(input.phone || input.customer_phone, 40), email,
       billing_address: text(input.billing_address || input.customer_billing_address, 240),
       ...(name ? {name} : {})};
