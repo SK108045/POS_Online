@@ -6,7 +6,7 @@ from PIL import Image, ImageChops
 from workflow import Ui, BASE, ps, read_state
 from offline import require_offline
 
-DIALOGS = {'close-confirm','stock-confirm','customer-confirm','new-customer','new-confirm','approve-confirm','saved','import-success'}
+DIALOGS = {'close-confirm','stock-confirm','customer-confirm','new-customer','new-confirm','approve-confirm','saved','printed','import-success'}
 REGIONS = {'menu':[10,110,270,440]}
 
 class Client(Ui):
@@ -81,6 +81,11 @@ class Client(Ui):
     def finish_invoice(self,invoice):
         # Only close read-only views whose displayed invoice identity is verified.
         screen=self.detect()
+        if screen=='printed':
+            # This is an informational print acknowledgement, not an approval.
+            # Its overlay hides the underlying edit controls from hit testing.
+            # Verify the invoice immediately after dismissing this exact message.
+            self.click('printed',885,530);screen=self.detect()
         if screen=='print':
             self.expect('print',330,324,str(invoice))
             self.close_owned('print');screen=self.detect()

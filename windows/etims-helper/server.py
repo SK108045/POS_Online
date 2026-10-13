@@ -12,7 +12,7 @@ from urllib.parse import urlparse
 from engine import Engine
 from settings import HOME, settings
 
-BUILD = '20261013.9'
+BUILD = '20261013.10'
 
 
 class LocalServer(ThreadingHTTPServer):
@@ -84,12 +84,13 @@ def serve():
                     if body.get('confirmed_new_sale') is not True:raise ValueError('A confirmed new POS sale is required')
                     return self.send(202,engine.submit(body['sale'],body.get('details')))
                 import re
-                match=re.fullmatch(r'/jobs/([0-9a-f]{64})(/recover|/details)?',route)
+                match=re.fullmatch(r'/jobs/([0-9a-f]{64})(/recover|/details|/finish)?',route)
                 if match:
                     key,action=match.groups();job=engine.store.get(key)
                     if not job:return self.send(404,{'error':'Unknown POS invoice request'})
                     if self.command=='GET' and not action:return self.send(200,engine.public(job))
                     if self.command=='POST' and action=='/recover':return self.send(202,engine.recover(key))
+                    if self.command=='POST' and action=='/finish':return self.send(200,engine.finish(key))
                     if self.command=='POST' and action=='/details':
                         if job['state']!='needs_details':raise ValueError('Registration details can only complete a blocked preflight')
                         return self.send(202,engine.submit(job['payload'],body.get('details',{})))

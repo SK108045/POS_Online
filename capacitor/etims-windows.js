@@ -4,7 +4,7 @@ const fs=require('node:fs'),path=require('node:path'),http=require('node:http');
 const {spawn}=require('node:child_process');
 const home=()=>process.env.ORAFORGE_ETIMS_HOME || path.join(process.env.LOCALAPPDATA || process.env.HOME || '.', 'OraforgePOS','etims');
 let starting=null;
-const HELPER_BUILD='20261013.9';
+const HELPER_BUILD='20261013.10';
 function config(){try{return JSON.parse(fs.readFileSync(path.join(home(),'config.json'),'utf8').replace(/^\uFEFF/,''));}catch{return {};}}
 function launchTarget(){
   const exe=process.env.ORAFORGE_ETIMS_EXE || config().helper_exe || path.resolve(__dirname,'../../runtime/etims/OraforgeEtims/OraforgeEtims.exe');
@@ -73,7 +73,7 @@ async function handle(req,res){
   if(!local(req))return send(403,{error:'Use Oraforge on this Windows computer.'});
   if(req.method==='OPTIONS')return send(403,{error:'Same-origin Windows IPC only.'});
   const route=new URL(req.url,'http://localhost').pathname.replace(/^\/api\/etims/,'');
-  if(!['/health','/preflight','/jobs'].includes(route) && !/^\/jobs\/[0-9a-f]{64}(\/recover|\/details)?$/.test(route))return send(404,{error:'Unknown eTIMS operation'});
+  if(!['/health','/preflight','/jobs'].includes(route) && !/^\/jobs\/[0-9a-f]{64}(\/recover|\/details|\/finish)?$/.test(route))return send(404,{error:'Unknown eTIMS operation'});
   try{
     let body;
     if(req.method==='POST'){

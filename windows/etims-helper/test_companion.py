@@ -222,6 +222,18 @@ class CompanionTests(unittest.TestCase):
         with patch.object(Client,'detect',return_value='print'),patch.object(Client,'expect',side_effect=ValueError('Wrong invoice')),patch.object(Client,'close_owned') as close:
             with self.assertRaisesRegex(ValueError,'Wrong invoice'):Client(123).finish_invoice(5)
             close.assert_not_called()
+        with patch.object(Client,'detect',side_effect=['printed','detail','sales']),patch.object(Client,'expect') as expect,patch.object(Client,'click') as click,patch.object(Client,'close_owned') as close:
+            Client(123).finish_invoice(5)
+            self.assertEqual(expect.call_args_list[0].args,('detail',240,216,'5'))
+            click.assert_called_once_with('printed',885,530)
+            close.assert_called_once_with('detail')
+    def test_finishing_pending_invoice_cannot_navigate_or_issue(self):
+        from engine import Engine
+        engine=Engine.__new__(Engine);engine.store=self.store
+        key=self.store.create(sale())['id']
+        with patch('engine.Client') as client,patch('engine.workflow.issue') as issue:
+            with self.assertRaisesRegex(ValueError,'Only a completed'):engine.finish(key)
+            client.assert_not_called();issue.assert_not_called()
     def test_only_completed_companion_invoices_can_own_a_native_view(self):
         key=self.store.create(sale())['id']
         self.assertIsNone(self.store.completed_invoice(5))

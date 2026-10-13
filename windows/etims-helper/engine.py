@@ -146,6 +146,8 @@ class Engine:
         if job['state']=='recovering' and screen in ('item-management','customer','stock-status','stock-adjustment'):
             client.navigate('sales')
             screen=client.detect()
+        if screen=='printed':
+            client.click('printed',885,530);screen=client.detect()
         if screen in ('print','detail'):
             point=(330,324) if screen=='print' else (240,216)
             displayed=int(client.value(screen,*point))
@@ -176,6 +178,23 @@ class Engine:
         self.store.update(key,'complete',result=self.result(raw,sale))
         try:client.finish_invoice(raw['local_invoice_id'])
         except Exception:pass # Fiscal completion remains valid if read-only view cleanup is unavailable.
+    def finish(self,key):
+        job=self.store.get(key)
+        if not job or job['state']!='complete':
+            raise ValueError('Only a completed, verified invoice can close its native views')
+        with exclusive_client():
+            require_offline()
+            recorded=json.loads(workflow.ledger_path(key).read_text(encoding='utf-8'))
+            from contracts import digest
+            if recorded['request'].get('pos_sale_digest')!=digest(job['payload']):
+                raise ValueError('The stored invoice differs from this POS sale')
+            raw=self.resume(key,recorded,recorded['request'],job['payload'])
+            state=workflow.read_state('',raw['local_invoice_id'])
+            if len(state['process_ids'])!=1:raise ValueError('Open one eTIMS client')
+            require_ui_access(state['process_ids'][0])
+            client=Client(state['process_ids'][0]);client.normalize()
+            client.finish_invoice(raw['local_invoice_id'])
+        return self.public(job)
     def resume(self,key,recorded,request,sale):
         invoice=recorded.get('invoice_id')
         if invoice is None:
