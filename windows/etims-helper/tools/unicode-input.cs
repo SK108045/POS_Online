@@ -30,5 +30,6 @@ public static class ResearchKeyboardInput {
   foreach(char c in text){if(GetForegroundWindow()!=expectedWindow)throw new InvalidOperationException("Client focus changed");var k=new Input[]{new Input{type=1,keyboard=new Keyboard{scan=c,flags=4}},new Input{type=1,keyboard=new Keyboard{scan=c,flags=6}}};if(SendInput(2,k,40)!=2)throw new InvalidOperationException("Keyboard input was not accepted");System.Threading.Thread.Sleep(35);}
  }
  public static void Clear(IntPtr expectedWindow){if(GetForegroundWindow()!=expectedWindow)throw new InvalidOperationException("Expected client does not have focus");var k=new Input[]{Key(0x11,0),Key(0x41,0),Key(0x41,2),Key(0x11,2),Key(0x08,0),Key(0x08,2)};if(SendInput((uint)k.Length,k,40)!=k.Length)throw new InvalidOperationException("Keyboard clear was not accepted");}
+ public static void Complete(IntPtr expectedWindow){if(GetForegroundWindow()!=expectedWindow)throw new InvalidOperationException("Expected client does not have focus");var keys=new Input[]{Key(0x0D,0),Key(0x0D,2)};if(SendInput((uint)keys.Length,keys,40)!=keys.Length)throw new InvalidOperationException("Keyboard completion was not accepted");}
  static Input Key(ushort key,uint flags){return new Input{type=1,keyboard=new Keyboard{virtualKey=key,flags=flags}};}
 }

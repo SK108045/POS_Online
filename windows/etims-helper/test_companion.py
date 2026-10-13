@@ -131,11 +131,48 @@ class CompanionTests(unittest.TestCase):
             read.assert_not_called()
     def test_offline_requirement_blocks_every_mutating_ui_action(self):
         import workflow
-        for action in ('Click','Text','File'):
+        for action in ('Click','Text','File','Complete'):
             with patch('offline.require_offline',side_effect=ValueError('Internet blocking missing')),patch('workflow.ps') as execute:
                 with self.assertRaisesRegex(ValueError,'Internet blocking'):
                     workflow.Ui(123).send({'action':action})
                 execute.assert_not_called()
+    def test_all_powershell_children_are_hidden_in_gui_build(self):
+        import subprocess,workflow,pdf_invoice
+        result=subprocess.CompletedProcess([],0,stdout=b'null',stderr=b'')
+        with patch.object(subprocess,'CREATE_NO_WINDOW',0x08000000,create=True),patch('subprocess.run',return_value=result) as run:
+            workflow.ps('read-state.ps1')
+            self.assertEqual(run.call_args.kwargs['creationflags'],0x08000000)
+            with patch('pdf_invoice.settings',return_value={'installation_dir':'fixture'}):
+                pdf_invoice.decode_qr(Path('fixture.png'))
+            self.assertEqual(run.call_args.kwargs['creationflags'],0x08000000)
+    def test_stock_adjustment_completes_native_entry_before_calculation_and_save(self):
+        from client import Client
+        after={'saved':False,'completed':False,'checked':False}
+        native=lambda _: {'items':[{'ITEM_CD':'BOOK','RSD_QTY':20 if after['saved'] else 0}]}
+        class NativeStock(Client):
+            def navigate(self,*args):pass
+            def text(self,*args):pass
+            def wait(self,*args):pass
+            def detect(self):return 'stock-adjustment'
+            def action(self,screen,action,*args):
+                if action=='Complete':after['completed']=True
+            def click(self,screen,x,y):
+                if screen=='stock-adjustment' and (x,y)==(1194,89):
+                    if not after['checked']:raise AssertionError('Save before verified native calculation')
+                    after['saved']=True
+            def expect(self,screen,x,y,value,**kwargs):
+                if (x,y)==(750,615):
+                    if not after['completed']:raise ValueError('Native Entry.Completed was not triggered')
+                    after['checked']=True
+        with patch('client.read_state',side_effect=native),patch('client.require_offline'),patch('client.ps'):
+            NativeStock(123).adjust_stock('BOOK',{'before':'0','after':'20','quantity':'20','reason':'Verified physical count'},'fixture',lambda _:None)
+        self.assertTrue(after['saved'])
+    def test_ui_failure_reports_only_whitelisted_reason(self):
+        import subprocess,workflow
+        result=subprocess.CompletedProcess([],1,stdout=b'',stderr=b'Screen does not match the verified workflow; password=PRIVATE-CREDENTIAL')
+        with patch('subprocess.run',return_value=result):
+            with self.assertRaisesRegex(RuntimeError,'screen mismatch') as error:workflow.ps('ui-step.ps1')
+        self.assertNotIn('PRIVATE-CREDENTIAL',str(error.exception))
     def test_recovery_of_ledger_never_calls_fresh_issue(self):
         from engine import Engine
         s=sale();key=self.store.create(s)['id'];ledger=self.home/'ledger.json'
@@ -144,6 +181,62 @@ class CompanionTests(unittest.TestCase):
         with patch('engine.workflow.ledger_path',return_value=ledger),patch.object(engine,'resume',return_value={'verified':True}) as resume,patch.object(engine,'result',return_value={'local_invoice_id':4}),patch('engine.workflow.issue') as issue:
             engine.run(key);resume.assert_called_once();issue.assert_not_called()
         self.assertEqual(self.store.get(key)['state'],'complete')
+    def test_pdf_capture_progress_cannot_publish_a_complete_job_without_result(self):
+        from engine import Engine
+        s=sale();key=self.store.create(s)['id']
+        engine=Engine.__new__(Engine);engine.store=self.store
+        registration=dict(requirements=[],mappings={},missing={},adjustments={},codes={'catalog:1':'BOOK'})
+        def issue(*args):
+            args[6]('complete')
+            self.assertEqual(self.store.get(key)['state'],'invoice_captured')
+            self.assertIsNone(self.store.get(key)['result'])
+            return {'captured':True}
+        with patch('engine.workflow.ledger_path',return_value=self.home/'absent.json'),patch.object(engine,'prepare',return_value=(CONFIG,{'process_ids':[123]},registration)),patch('engine.Client') as native,patch('engine.workflow.issue',side_effect=issue),patch.object(engine,'result',return_value={'fiscal':{'verified':True}}):
+            native.return_value.detect.return_value='menu'
+            engine.run(key)
+        self.assertEqual(self.store.get(key)['state'],'complete')
+        self.assertTrue(self.store.get(key)['result']['fiscal']['verified'])
+    def test_native_item_selection_cannot_erase_the_pos_reference_before_draft_save(self):
+        import workflow
+        request=to_request(sale(),{'catalog:1':'BOOK'});key=job_id(sale())
+        edits={'remark':'','stored':None}
+        class NativeSale:
+            def __init__(self,*args):pass
+            def wait_screen(self,screen,*args):return '4' if screen=='registration' else ''
+            def text(self,screen,x,y,value):
+                if screen=='registration' and (x,y)==(300,433):edits['remark']=value
+            def click(self,screen,x,y):
+                if screen=='item-popup' and (x,y)==(1314,89):edits['remark']=''
+                if screen=='registration' and (x,y)==(844,434):edits['stored']=edits['remark']
+            def action(self,*args):pass
+            def expect(self,screen,x,y,value,**kwargs):
+                if screen=='registration' and (x,y)==(300,433):
+                    if edits['remark']!=value:raise ValueError('Native header refresh erased reference')
+        def stop_after_draft(stage):
+            if stage=='draft saved':raise RuntimeError('TEST_STOP_AFTER_VERIFIED_DRAFT')
+        with patch('workflow.DATA',self.home),patch('workflow.ledger_path',return_value=self.home/'marker-ledger.json'),patch('workflow.preflight',return_value=(request,{'process_ids':[123]})),patch('workflow.Ui',NativeSale),patch('workflow.read_state',return_value={'sales':[]}),patch('workflow.wait_database',side_effect=lambda *args:{'sales':[{'REMARK':edits['stored']}]}),patch('workflow.verify_sale'):
+            with self.assertRaisesRegex(RuntimeError,'TEST_STOP_AFTER_VERIFIED_DRAFT'):
+                workflow._issue(request,request['buyer_pin'],request['buyer_name'],'01',key,True,stop_after_draft)
+        self.assertEqual(edits['stored'],'Oraforge:'+key)
+    def test_approved_legacy_capture_recovers_with_blank_native_marker_without_ui(self):
+        from engine import Engine
+        import hashlib
+        s=sale();key=job_id(s);request=to_request(s,{'catalog:1':'BOOK'})
+        pdf=self.home/'original.pdf';pdf.write_bytes(b'fixture-original-pdf')
+        raw=dict(request_id=key,local_invoice_id=4,pdf=str(pdf),pdf_sha256=hashlib.sha256(pdf.read_bytes()).hexdigest())
+        result=self.home/'captured.json';result.write_text(json.dumps(raw))
+        recorded=dict(invoice_id=4,request=request,result=str(result))
+        native={'registered_devices':[{'TIN':CONFIG['taxpayer_pin'],'BHF_ID':'01'}],
+                'process_ids':[123],'sales':[{'SALES_STTS_CD':'02','REMARK':''}]}
+        engine=Engine.__new__(Engine)
+        with patch('engine.workflow.read_state',return_value=native),patch('engine.require_identity',return_value=CONFIG),patch('engine.workflow.verify_sale'),patch('engine.workflow.verify_pdf') as verify,patch('engine.Client') as ui:
+            self.assertEqual(engine.resume(key,recorded,request,s),raw)
+            verify.assert_called_once_with(raw,native);ui.assert_not_called()
+            native['sales'][0]['REMARK']='Oraforge:another-sale'
+            with self.assertRaisesRegex(ValueError,'another POS reference'):engine.resume(key,recorded,request,s)
+            native['sales'][0]['REMARK']='';pdf.write_bytes(b'changed')
+            with self.assertRaisesRegex(ValueError,'missing or changed'):engine.resume(key,recorded,request,s)
+            ui.assert_not_called()
     def test_recovery_rejects_changed_snapshot_before_ui(self):
         from engine import Engine
         s=sale();key=self.store.create(s)['id'];ledger=self.home/'ledger.json'

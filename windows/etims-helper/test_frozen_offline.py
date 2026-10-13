@@ -36,7 +36,11 @@ def verify(executable):
                 if process.poll() is not None:raise RuntimeError('Frozen helper exited during smoke test')
                 try:
                     with urllib.request.urlopen(url+'/health',timeout=1) as response:
-                        assert json.load(response)['app']=='oraforge-etims-helper'
+                        health=json.load(response)
+                        assert health['app']=='oraforge-etims-helper'
+                        assert health['runtime_mode']=='frozen' and health['build']
+                        assert Path(health['runtime_executable']).resolve()==executable
+                        assert Path(health['runtime_entry']).resolve()==executable
                     break
                 except OSError:
                     if time.monotonic()>=deadline:raise RuntimeError('Frozen helper health timed out') from None

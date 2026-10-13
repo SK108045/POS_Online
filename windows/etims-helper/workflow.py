@@ -26,10 +26,20 @@ CLIENT_HASH = '8869363751e79f0c4a8b97f5877ec2d5b83cb4b784c9e46f95bb91ca376eff75'
 def ps(script: str, *args: str, timeout=90) -> str:
     result = subprocess.run(['powershell.exe', '-NoProfile', '-NonInteractive',
                              '-ExecutionPolicy', 'Bypass', '-File', str(BASE / script), *map(str, args)],
-                            capture_output=True, timeout=timeout)
+                            capture_output=True, timeout=timeout,
+                            creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0))
     if result.returncode:
         # Avoid including connection internals or arbitrary stderr in logs.
-        raise RuntimeError(f'{Path(script).name} failed; stopped without retrying the action')
+        reason=''
+        if Path(script).name=='ui-step.ps1':
+            stderr=result.stderr.decode('utf-8-sig',errors='replace')
+            safe_reasons={'Screen does not match the verified workflow':'screen mismatch',
+                          'Target has no keyboard/mouse focus':'target focus unavailable',
+                          'Client has an active modal dialog':'unexpected modal dialog',
+                          'Observed point is not an allowed target Edit control':'edit control mismatch',
+                          'Unverified window geometry':'window geometry mismatch'}
+            reason=next((' ('+description+')' for message,description in safe_reasons.items() if message in stderr),'')
+        raise RuntimeError(f'{Path(script).name} failed{reason}; stopped without retrying the action')
     return result.stdout.decode('utf-8-sig').strip()
 
 
@@ -139,13 +149,17 @@ class Ui:
         return self.send(instruction)
 
     def send(self, instruction: dict):
-        if instruction.get('action') in ('Click','Text','File'):
+        if instruction.get('action') in ('Click','Text','File','Complete'):
             from offline import require_offline
             require_offline()
         with tempfile.TemporaryDirectory(prefix='etims-step-') as folder:
             path = Path(folder) / 'instruction.json'
             path.write_text(json.dumps(instruction), encoding='utf-8')
-            return ps('ui-step.ps1', '-Instruction', str(path), timeout=40)
+            try:
+                return ps('ui-step.ps1', '-Instruction', str(path), timeout=40)
+            except RuntimeError as error:
+                screen=Path(instruction.get('reference','print-file')).stem
+                raise RuntimeError(f"UI {instruction.get('action')} on {screen}: {error}") from None
 
     def click(self, screen, x, y):
         self.action(screen, 'Click', x, y)
@@ -161,7 +175,7 @@ class Ui:
         actual = self.value(screen, x, y)
         matches = (Decimal(actual.replace(',', '')) == Decimal(value)) if numeric else actual == value
         if not matches:
-            raise ValueError('UI field does not match the reviewed value; stopped')
+            raise ValueError(f'UI field at {x},{y} on {screen} does not match the reviewed value; stopped')
 
     def wait_screen(self, screen, seconds=30):
         end = time.monotonic() + seconds
@@ -228,8 +242,6 @@ def _issue(pdf: Path, pin: str, name: str, payment: str, request_id: str,
         ui.expect('customer-popup', 1200, 252, pin)
         ui.click('customer-popup', 1314, 89)
         ui.expect('registration', 270, 216, pin)
-        # Bind the official draft to this POS sale for interruption recovery.
-        ui.text('registration', 300, 433, 'Oraforge:' + request_id)
         for line in request['lines']:
             ui.click('registration', 982, 180)
             ui.text('item-popup', 600, 179, line['item_code'])
@@ -243,12 +255,18 @@ def _issue(pdf: Path, pin: str, name: str, payment: str, request_id: str,
             ui.expect('registration', 870, 288, line['unit_price'], numeric=True)
             ui.action('registration', 'Text', 1230, 288, line['quantity'])
             ui.expect('registration', 1230, 288, line['quantity'], numeric=True)
+            # Item selection refreshes the header from TranRecord and can clear
+            # unsaved text. Confirm copies this entry to TranRecord.Remark.
+            ui.text('registration', 300, 433, 'Oraforge:' + request_id)
             ui.click('registration', 844, 434)
+        ui.expect('registration', 300, 433, 'Oraforge:' + request_id)
         ui.expect('registration', 300, 360, request['total'], numeric=True)
         checkpoint('draft_save_requested')
         ui.click('registration', 1194, 89)
         draft = wait_database(pin, invoice, False)
         verify_sale(draft, request)
+        if draft['sales'][0].get('REMARK')!='Oraforge:'+request_id:
+            raise ValueError('Stored draft lost its POS reference; stopped before fiscal approval')
         checkpoint('draft_saved')
         ui.click('saved', 885, 530)
         ui.text('sales', 600, 179, str(invoice))

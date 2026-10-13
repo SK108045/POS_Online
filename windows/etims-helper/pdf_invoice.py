@@ -114,7 +114,8 @@ def decode_qr(path: Path):
     run = subprocess.run(['powershell.exe', '-NoProfile', '-NonInteractive', '-File',
                           str(TOOLS / 'decode-qr.ps1'), '-Path', str(path),
                           '-InstallationDir', settings()['installation_dir']],
-                         capture_output=True, timeout=30)
+                         capture_output=True, timeout=30,
+                         creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0))
     if run.returncode:
         raise RuntimeError('Installed QR decoder failed')
     return json.loads(run.stdout.decode('utf-8-sig', errors='strict').strip())

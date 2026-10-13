@@ -131,6 +131,9 @@ class Client(Ui):
         ps('tools/select-observed-combo.ps1','-TargetProcessId',str(self.pid),'-X','160','-Y','506','-Option','Adjustment In')
         self.text('stock-adjustment',750,506,adjustment['reason'])
         self.action('stock-adjustment','Text',450,615,adjustment['quantity'])
+        # StockAdjustmentPage calculates Qty After in Entry.Completed.
+        # Enter completes this edit; Save is a separate, guarded action.
+        self.action('stock-adjustment','Complete',450,615)
         self.expect('stock-adjustment',450,615,adjustment['quantity'],numeric=True)
         self.expect('stock-adjustment',750,615,adjustment['after'],numeric=True)
         checkpoint('stock_adjustment_requested')

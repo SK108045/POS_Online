@@ -19,6 +19,11 @@ def verify_device(state, config):
     if registered!={(config['taxpayer_pin'],config['branch_id'])}:
         raise ValueError('Configured seller and branch do not uniquely match this installed eTIMS device')
 
+def progress_state(stage):
+    # workflow.complete means PDF capture completed. The public job becomes
+    # complete only after Engine.result has attached every fiscal field and QR.
+    return 'invoice_captured' if stage=='complete' else stage.replace(' ','_')
+
 class Engine:
     def __init__(self, store=None):
         self.store = store or Store(HOME/'companion.sqlite3')
@@ -157,7 +162,7 @@ class Engine:
         client.navigate('sales')
         request=to_request(sale,registration['codes'])
         raw=workflow.issue(request,request['buyer_pin'],request['buyer_name'],request['payment_code'],key,True,
-                           lambda stage:self.store.update(key,stage.replace(' ','_')))
+                           lambda stage:self.store.update(key,progress_state(stage)))
         self.store.update(key,'complete',result=self.result(raw,sale))
     def resume(self,key,recorded,request,sale):
         invoice=recorded.get('invoice_id')
@@ -169,12 +174,23 @@ class Engine:
             raise ValueError('The recorded draft is not stored. Review its open form; no fresh invoice was submitted.')
         approved=state['sales'][0]['SALES_STTS_CD']=='02'
         workflow.verify_sale(state,request,approved=approved)
-        if state['sales'][0].get('REMARK')!='Oraforge:'+key:
-            raise ValueError('The stored invoice is not bound to this POS sale reference')
         if recorded.get('result') and Path(recorded['result']).exists():
             raw=json.loads(Path(recorded['result']).read_text(encoding='utf-8'))
+            # Early builds wrote the reference before item selection refreshed
+            # the header. An already captured, approved invoice can still be
+            # recovered using its immutable ledger, exact sale and genuine PDF.
+            if not approved or raw.get('request_id')!=key or raw.get('local_invoice_id')!=invoice:
+                raise ValueError('Captured invoice identity differs from this POS sale')
+            marker=state['sales'][0].get('REMARK')
+            if marker not in ('Oraforge:'+key,'',None):
+                raise ValueError('The stored invoice belongs to another POS reference')
+            original=Path(raw['pdf'])
+            if not original.is_file() or hashlib.sha256(original.read_bytes()).hexdigest()!=raw['pdf_sha256']:
+                raise ValueError('Original captured invoice PDF is missing or changed')
             workflow.verify_pdf(raw,state)
             return raw
+        if state['sales'][0].get('REMARK')!='Oraforge:'+key:
+            raise ValueError('The stored invoice is not bound to this POS sale reference')
         client=Client(state['process_ids'][0]);client.normalize()
         client.navigate('sales')
         client.text('sales',600,179,str(invoice));client.click('sales',1070,179)

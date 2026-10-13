@@ -1,4 +1,4 @@
-param([ValidateSet('Click','Text','Read','Snapshot')][string]$Action,[int]$X,[int]$Y,[string]$Text,[Parameter(Mandatory=$true)][int]$TargetProcessId,[int]$ExpectedWidth=1384,[int]$ExpectedHeight=786,[string]$OutputPath,[switch]$ImageOnly)
+param([ValidateSet('Click','Text','Read','Snapshot','Complete')][string]$Action,[int]$X,[int]$Y,[string]$Text,[Parameter(Mandatory=$true)][int]$TargetProcessId,[int]$ExpectedWidth=1384,[int]$ExpectedHeight=786,[string]$OutputPath,[switch]$ImageOnly)
 $ErrorActionPreference='Stop'
 $OutputEncoding=[Console]::OutputEncoding=New-Object System.Text.UTF8Encoding($false)
 Add-Type -TypeDefinition @'
@@ -64,7 +64,11 @@ if($Action -eq 'Click'){
  if($value.Current.IsReadOnly){throw 'Field is read-only'}
  $entry.SetFocus()
  Add-Type -Path "$PSScriptRoot\unicode-input.cs"
- [ResearchKeyboardInput]::Clear($h)
- [ResearchKeyboardInput]::BulkPhysicalText($h,$Text)
+ if($Action -eq 'Complete'){
+  [ResearchKeyboardInput]::Complete($h)
+ }else{
+  [ResearchKeyboardInput]::Clear($h)
+  [ResearchKeyboardInput]::BulkPhysicalText($h,$Text)
+ }
 }
 Start-Sleep -Milliseconds 500

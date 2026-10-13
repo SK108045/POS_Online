@@ -29,6 +29,6 @@ try{
    if($count -eq 0 -or ($different/[double]$count) -gt 0.004){throw 'Screen does not match the verified workflow; no action sent'}
   }
  }finally{$actual.Dispose();$reference.Dispose()}
- if($p.action -notin @('Click','Text','Read')){throw 'Unsupported UI action'}
+ if($p.action -notin @('Click','Text','Read','Complete')){throw 'Unsupported UI action'}
  & "$tools\invoice-ui.ps1" -Action $p.action -TargetProcessId $p.pid -X $p.x -Y $p.y -Text $p.text
 }finally{Remove-Item -LiteralPath $temp -Force -ErrorAction SilentlyContinue}

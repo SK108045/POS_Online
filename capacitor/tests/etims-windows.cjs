@@ -34,6 +34,32 @@ test('helper proxy rejects network clients, foreign origins and DNS rebinding ho
   assert.equal(proxy.local(req),true);
   for(const changed of [{socket:{remoteAddress:'192.168.1.2'},headers:req.headers},{socket:req.socket,headers:{host:'evil.example:3000'}},{socket:req.socket,headers:{...req.headers,origin:'http://evil.example'}},{socket:req.socket,headers:{...req.headers,'sec-fetch-site':'cross-site'}}])assert.equal(proxy.local(changed),false);
 });
+
+test('proxy detects an old helper even when it answers the correct app health check',async()=>{
+  const fs=require('node:fs'),os=require('node:os'),path=require('node:path'),http=require('node:http');
+  const dir=fs.mkdtempSync(path.join(os.tmpdir(),'oraforge-helper-version-'));
+  const previous=process.env.ORAFORGE_ETIMS_HOME;
+  const server=http.createServer((req,res)=>{res.setHeader('Content-Type','application/json');res.end(JSON.stringify({app:'oraforge-etims-helper',version:2}));});
+  await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
+  try{
+    fs.writeFileSync(path.join(dir,'config.json'),JSON.stringify({port:server.address().port}));
+    process.env.ORAFORGE_ETIMS_HOME=dir;
+    await assert.rejects(proxy.ensure(),error=>error.code==='ETIMS_HELPER_MISMATCH' && /recover this same sale/.test(error.message));
+  }finally{
+    if(previous===undefined)delete process.env.ORAFORGE_ETIMS_HOME;else process.env.ORAFORGE_ETIMS_HOME=previous;
+    await new Promise(resolve=>server.close(resolve));fs.rmSync(dir,{recursive:true,force:true});
+  }
+});
+
+test('proxy verifies the running build and executable rather than the configured path alone',()=>{
+  const path=require('node:path'),entry=path.resolve('fixture-runtime','OraforgeEtims.exe');
+  const target={entry,mode:'frozen'};
+  const health={app:'oraforge-etims-helper',version:2,build:proxy.HELPER_BUILD,runtime_mode:'frozen',runtime_entry:entry,runtime_executable:entry};
+  assert.equal(proxy.verifyHealth(health,target),health);
+  for(const changed of [{runtime_executable:path.resolve('older-runtime','OraforgeEtims.exe')},{runtime_entry:'wrong-entry'},{build:'old'},{runtime_mode:'source'}]){
+    assert.throws(()=>proxy.verifyHealth({...health,...changed},target),error=>error.code==='ETIMS_HELPER_MISMATCH');
+  }
+});
 test('pending receipt exposes helper progress without claiming KRA acceptance',()=>{
   const html=core.receipt({status:'review_required',helper_state:'native_product_import_requested',helper_error:'Review <script>'});
   assert.match(html,/native product import requested/);assert.match(html,/&lt;script&gt;/);assert.doesNotMatch(html,/accepted/);

@@ -11,6 +11,15 @@ from urllib.parse import urlparse
 from engine import Engine
 from settings import HOME, settings
 
+BUILD = '20261013.6'
+
+def health():
+    frozen=bool(getattr(sys,'frozen',False))
+    return {'app':'oraforge-etims-helper','version':2,'platform':sys.platform,
+            'build':BUILD,'runtime_mode':'frozen' if frozen else 'source',
+            'runtime_executable':str(Path(sys.executable).resolve()),
+            'runtime_entry':str(Path(sys.executable if frozen else __file__).resolve())}
+
 def serve():
     HOME.mkdir(parents=True,exist_ok=True)
     token_path=HOME/'helper.token'
@@ -31,7 +40,7 @@ def serve():
                 return self.send(403,{'error':'Local POS backchannel required'})
             route=urlparse(self.path).path
             if route=='/health' and self.command=='GET':
-                return self.send(200,{'app':'oraforge-etims-helper','version':2,'platform':sys.platform})
+                return self.send(200,health())
             if not hmac.compare_digest(self.headers.get('Authorization',''),'Bearer '+token):
                 return self.send(403,{'error':'Companion authorization required'})
             try:
