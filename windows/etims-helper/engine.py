@@ -133,6 +133,12 @@ class Engine:
             # Recover only this exact POS identity and stored invoice, never issue anew.
             raw=self.resume(key,recorded,request,sale)
             self.store.update(key,'complete',result=self.result(raw,sale))
+            try:
+                invoice=raw['local_invoice_id']
+                state=workflow.read_state('',invoice)
+                if len(state['process_ids'])==1:
+                    with span('cleanup'):Client(state['process_ids'][0]).finish_invoice(invoice)
+            except Exception:pass # Published fiscal capture remains complete.
             return
         config,state,registration=self.prepare(sale,job['details'])
         if registration['requirements']:
@@ -225,14 +231,40 @@ class Engine:
             return raw
         if state['sales'][0].get('REMARK')!='Oraforge:'+key:
             raise ValueError('The stored invoice is not bound to this POS sale reference')
+        # Save may have succeeded just before a worker interruption. Reconcile
+        # its original file before touching the UI or requesting another print.
+        folder=HOME/'output'/workflow.ledger_path(key).stem
+        candidates=[]
+        if recorded.get('pdf'):
+            candidate=Path(recorded['pdf'])
+            if not candidate.resolve().is_relative_to(folder.resolve()):
+                raise ValueError('Recorded capture path is outside this POS invoice output')
+            candidates.append(candidate)
+        candidates.append(folder/'eTIMS-issued-invoice.pdf')
+        candidates.extend(sorted(folder.glob('recovered-*.pdf'),reverse=True))
+        if approved:
+            for candidate in candidates:
+                if candidate.is_file():
+                    return self.capture_pdf(key,recorded,state,candidate)
         if len(state['process_ids'])!=1:
             raise ValueError('Open one eTIMS Windows client and log in normally')
         require_ui_access(state['process_ids'][0])
         client=Client(state['process_ids'][0]);client.normalize()
-        client.navigate('sales')
-        client.text('sales',600,179,str(invoice));client.click('sales',1070,179)
-        client.click('sales',410,262);client.click('sales',1194,560)
-        client.expect('detail',240,216,str(invoice));client.expect('detail',240,252,request['buyer_pin'])
+        screen=client.detect()
+        file_state=client.file_state(screen)
+        reuse_print=approved and screen=='print'
+        if reuse_print:
+            if file_state['invoice_id']!=invoice:
+                raise ValueError('The open print view belongs to a different invoice; it was preserved')
+            if file_state['file_dialog'] not in (None,'Save Print Output As'):
+                raise ValueError('An unrelated file dialog is open; no input was sent')
+        else:
+            if file_state['file_dialog']:
+                raise ValueError('An unrelated file dialog is open; no input was sent')
+            client.navigate('sales')
+            client.text('sales',600,179,str(invoice));client.click('sales',1070,179)
+            client.click('sales',410,262);client.click('sales',1194,560)
+            client.expect('detail',240,216,str(invoice));client.expect('detail',240,252,request['buyer_pin'])
         if not approved:
             client.click('detail',70,179);client.click('approve-confirm',705,530)
             client.wait_screen('payment');client.expect('payment',100,216,request['buyer_pin'])
@@ -242,15 +274,25 @@ class Engine:
             state=workflow.wait_database(request['buyer_pin'],invoice,True)
             workflow.verify_sale(state,request,True)
             client.wait_screen('print')
-        else:
+        elif not reuse_print:
             # Printing an existing approved invoice creates no second fiscal record.
             client.click('detail',1194,89);client.wait_screen('print')
         folder=HOME/'output'/workflow.ledger_path(key).stem
         folder.mkdir(parents=True,exist_ok=True)
         import time
         result_pdf=folder/('recovered-'+str(time.time_ns())+'.pdf')
-        client.click('print',390,198)
+        if not reuse_print or file_state['file_dialog'] is None:
+            client.click('print',390,198)
+        recorded.update(stage='pdf_requested',pdf=str(result_pdf))
+        workflow.write_ledger(workflow.ledger_path(key),recorded)
         workflow.choose_print_path(client,result_pdf)
+        return self.capture_pdf(key,recorded,state,result_pdf)
+    def capture_pdf(self,key,recorded,state,result_pdf):
+        # Both fresh print capture and recovery use identical fiscal checks.
+        invoice=recorded['invoice_id']
+        folder=HOME/'output'/workflow.ledger_path(key).stem
+        folder.mkdir(parents=True,exist_ok=True)
+        import time
         workflow.wait_pdf(result_pdf)
         with span('pdf_extract'):
             raw=workflow.extract(result_pdf,folder/('capture-'+str(time.time_ns())))

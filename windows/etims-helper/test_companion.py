@@ -312,6 +312,57 @@ class CompanionTests(unittest.TestCase):
         with patch('engine.workflow.ledger_path',return_value=ledger),patch('engine.workflow.issue') as issue:
             with self.assertRaisesRegex(ValueError,'immutable'):engine.run(key)
             issue.assert_not_called()
+    def test_approved_invoice_reuses_open_save_dialog_without_print_or_approval(self):
+        from engine import Engine
+        s=sale();key=job_id(s);request=to_request(s,{'catalog:1':'BOOK'})
+        recorded=dict(invoice_id=9,stage='issued',request=request)
+        native={'registered_devices':[{'TIN':CONFIG['taxpayer_pin'],'BHF_ID':'01'}],
+                'process_ids':[123],'sales':[{'SALES_STTS_CD':'02','REMARK':'Oraforge:'+key}]}
+        engine=Engine.__new__(Engine)
+        with patch('engine.HOME',self.home),patch('engine.workflow.ledger_path',return_value=self.home/'ledger.json'),patch('engine.workflow.read_state',return_value=native),patch('engine.require_identity',return_value=CONFIG),patch('engine.workflow.verify_sale'),patch('engine.require_ui_access'),patch('engine.Client') as client,patch('engine.workflow.choose_print_path') as choose,patch.object(engine,'capture_pdf',return_value={'local_invoice_id':9}) as capture,patch('engine.workflow.wait_database') as approve:
+            client.return_value.detect.return_value='print'
+            client.return_value.file_state.return_value={'file_dialog':'Save Print Output As','invoice_id':9}
+            result=engine.resume(key,recorded,request,s)
+            self.assertEqual(result['local_invoice_id'],9)
+            client.return_value.click.assert_not_called()
+            client.return_value.navigate.assert_not_called()
+            approve.assert_not_called();choose.assert_called_once();capture.assert_called_once()
+            self.assertEqual(recorded['stage'],'pdf_requested')
+    def test_print_recovery_preserves_a_different_displayed_invoice(self):
+        from engine import Engine
+        s=sale();key=job_id(s);request=to_request(s,{'catalog:1':'BOOK'})
+        recorded=dict(invoice_id=9,stage='issued',request=request)
+        native={'registered_devices':[{'TIN':CONFIG['taxpayer_pin'],'BHF_ID':'01'}],
+                'process_ids':[123],'sales':[{'SALES_STTS_CD':'02','REMARK':'Oraforge:'+key}]}
+        engine=Engine.__new__(Engine)
+        with patch('engine.HOME',self.home),patch('engine.workflow.ledger_path',return_value=self.home/'ledger.json'),patch('engine.workflow.read_state',return_value=native),patch('engine.require_identity',return_value=CONFIG),patch('engine.workflow.verify_sale'),patch('engine.require_ui_access'),patch('engine.Client') as client,patch('engine.workflow.choose_print_path') as choose:
+            client.return_value.detect.return_value='print'
+            client.return_value.file_state.return_value={'file_dialog':'Save Print Output As','invoice_id':10}
+            with self.assertRaisesRegex(ValueError,'different invoice'):
+                engine.resume(key,recorded,request,s)
+            client.return_value.click.assert_not_called();choose.assert_not_called()
+    def test_saved_pdf_before_worker_acknowledgement_recovers_without_ui(self):
+        from engine import Engine
+        s=sale();key=job_id(s);request=to_request(s,{'catalog:1':'BOOK'})
+        ledger=self.home/'ledger.json';folder=self.home/'output'/ledger.stem;folder.mkdir(parents=True)
+        pdf=folder/'eTIMS-issued-invoice.pdf';pdf.write_bytes(b'fixture; capture validates contents')
+        recorded=dict(invoice_id=9,stage='pdf_requested',request=request,pdf=str(pdf))
+        native={'registered_devices':[{'TIN':CONFIG['taxpayer_pin'],'BHF_ID':'01'}],
+                'process_ids':[],'sales':[{'SALES_STTS_CD':'02','REMARK':'Oraforge:'+key}]}
+        engine=Engine.__new__(Engine)
+        with patch('engine.HOME',self.home),patch('engine.workflow.ledger_path',return_value=ledger),patch('engine.workflow.read_state',return_value=native),patch('engine.require_identity',return_value=CONFIG),patch('engine.workflow.verify_sale'),patch('engine.Client') as client,patch.object(engine,'capture_pdf',return_value={'local_invoice_id':9}) as capture:
+            self.assertEqual(engine.resume(key,recorded,request,s)['local_invoice_id'],9)
+            capture.assert_called_once_with(key,recorded,native,pdf)
+            client.assert_not_called()
+    def test_recovered_pdf_is_verified_before_capture_is_published(self):
+        from engine import Engine
+        engine=Engine.__new__(Engine);ledger=self.home/'ledger.json'
+        recorded={'invoice_id':9};pdf=self.home/'original.pdf';state={'receipt':'fixture'}
+        with patch('engine.HOME',self.home),patch('engine.workflow.ledger_path',return_value=ledger),patch('engine.workflow.wait_pdf'),patch('engine.workflow.extract',return_value={'verified':True}),patch('engine.workflow.verify_pdf',side_effect=ValueError('Wrong signature')) as verify:
+            with self.assertRaisesRegex(ValueError,'Wrong signature'):
+                engine.capture_pdf('fixture',recorded,state,pdf)
+            self.assertNotIn('result',recorded)
+            self.assertFalse(ledger.exists());verify.assert_called_once()
     def test_stale_lock_requires_matching_sale_and_dead_owner(self):
         import session_lock
         lock=self.home/'active-run.lock';lock.write_text(json.dumps({'request_id':'same','pid':12}))

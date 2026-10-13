@@ -13,14 +13,23 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Interop;
 using System.Windows.Threading;
+using System.Threading;
+using System.Runtime.InteropServices;
 public static class OraforgeReadinessFixture {
+ [DllImport("user32.dll")]static extern bool EnableWindow(IntPtr window,bool enabled);
  [STAThread] public static void Main(string[] args) {
   var application = new Application();
   var window = new Window {Title="Oraforge readiness fixture",Width=300,Height=100,Left=-10000,Top=-10000,ShowActivated=false,ShowInTaskbar=false};
   var field = new TextBox {Text="Initial"}; window.Content=field;
   int sequence=0;
   var timer = new DispatcherTimer {Interval=TimeSpan.FromMilliseconds(400)};
-  timer.Tick += delegate {sequence++;field.Text=sequence.ToString();window.Title="Oraforge readiness fixture "+sequence;};
+  timer.Tick += delegate {
+   sequence++;field.Text=sequence.ToString();window.Title="Oraforge readiness fixture "+sequence;
+   if(args.Length>1 && File.Exists(args[1])){
+    IntPtr handle=new WindowInteropHelper(window).Handle;EnableWindow(handle,false);
+    File.WriteAllText(args[1]+".disabled","ready");Thread.Sleep(3000);EnableWindow(handle,true);File.Delete(args[1]);
+   }
+  };
   window.Loaded += delegate {
    File.WriteAllText(args[0],new WindowInteropHelper(window).Handle.ToInt64().ToString());timer.Start();
   };
@@ -29,7 +38,8 @@ public static class OraforgeReadinessFixture {
 }
 '@
 $info=New-Object Diagnostics.ProcessStartInfo
-$info.FileName=$exe;$info.Arguments='"'+$ready+'"';$info.UseShellExecute=$false;$info.CreateNoWindow=$true
+$block=Join-Path $folder 'block-owner.txt'
+$info.FileName=$exe;$info.Arguments='"'+$ready+'" "'+$block+'"';$info.UseShellExecute=$false;$info.CreateNoWindow=$true
 $fixture=[Diagnostics.Process]::Start($info)
 $observer=$null
 try{
@@ -49,6 +59,15 @@ try{
  while($observer.Notifications -eq 0 -and [DateTime]::UtcNow -lt $deadline){Start-Sleep -Milliseconds 20}
  if($observer.Notifications -eq 0){throw 'WPF changes did not raise observed UIA events'}
  if($elapsed -gt 1600){throw 'Bounded settling exceeded its deadline'}
+ [IO.File]::WriteAllText($block,'request fixture modal owner')
+ $deadline=[DateTime]::UtcNow.AddSeconds(3)
+ while(-not (Test-Path -LiteralPath ($block+'.disabled'))){
+  if([DateTime]::UtcNow -gt $deadline){throw 'Fixture owner did not enter modal wait'}
+  Start-Sleep -Milliseconds 20
+ }
+ $observer.Arm();$modalWatch=[Diagnostics.Stopwatch]::StartNew();$observer.Settle()
+ if($modalWatch.ElapsedMilliseconds -gt 700){throw 'Disabled modal owner blocked the next file-dialog operation'}
+ Write-Output 'PASS: disabled WPF owner in a synchronous modal wait does not abort successful input.'
  $foreign=New-Object OraforgeUiReadiness($handle,($fixture.Id+100000))
  try{
   $foreign.Arm();$rejected=$false

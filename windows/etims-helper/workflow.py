@@ -351,8 +351,10 @@ def _issue(pdf: Path, pin: str, name: str, payment: str, request_id: str,
         ui.expect('print', 330, 324, str(invoice))
         ui.click('print', 390, 198)
         result_pdf = folder / 'eTIMS-issued-invoice.pdf'
-        choose_print_path(ui, result_pdf)
+        # Persist the intended output before Save: recovery can reconcile a
+        # completed file even if the worker stops before its acknowledgement.
         checkpoint('pdf_requested', pdf=str(result_pdf))
+        choose_print_path(ui, result_pdf)
         wait_pdf(result_pdf)
         with span('pdf_extract'):
             result = extract(result_pdf, folder / 'extracted')

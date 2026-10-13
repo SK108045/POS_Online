@@ -70,6 +70,9 @@ class Client(Ui):
         self.wait(target)
     def normalize(self):
         ps('tools/normalize-window.ps1','-TargetProcessId',str(self.pid))
+    def file_state(self,screen=None):
+        mode={'print':'Print','detail':'Detail'}.get(screen,'None')
+        return json.loads(ps('tools/inspect-file-dialog.ps1','-TargetProcessId',str(self.pid),'-InvoiceScreen',mode))
     def finish_invoice(self,invoice):
         # Only close read-only views whose displayed invoice identity is verified.
         screen=self.detect()

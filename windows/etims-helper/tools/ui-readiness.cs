@@ -11,6 +11,7 @@ public sealed class OraforgeUiReadiness : IDisposable {
     static extern IntPtr SendMessageTimeout(IntPtr window, uint message, IntPtr w,
         IntPtr l, uint flags, uint timeout, out UIntPtr result);
     [DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(IntPtr h, out uint pid);
+    [DllImport("user32.dll")] static extern bool IsWindowEnabled(IntPtr h);
     readonly IntPtr window;
     readonly int process;
     readonly ManualResetEvent initialized = new ManualResetEvent(false);
@@ -62,20 +63,31 @@ public sealed class OraforgeUiReadiness : IDisposable {
         uint owner;
         if (GetWindowThreadProcessId(window, out owner) == 0 || owner != process)
             throw new InvalidOperationException("Target window changed");
+        // A native file dialog disables its WPF owner, whose dispatcher may
+        // synchronously wait for the dialog. WM_NULL to that owner can time out
+        // during a successful Import click. The next operation must validate
+        // its own exact modal/window; settling must not abort this transition.
+        if (!IsWindowEnabled(window)) return;
         UIntPtr result;
         // WM_NULL is read only. A hung target is never sent another action.
-        if (SendMessageTimeout(window, 0, IntPtr.Zero, IntPtr.Zero, 2, 1500, out result) == IntPtr.Zero)
+        if (SendMessageTimeout(window, 0, IntPtr.Zero, IntPtr.Zero, 2, 1500, out result) == IntPtr.Zero) {
+            if (GetWindowThreadProcessId(window, out owner) == 0 || owner != process)
+                throw new InvalidOperationException("Target window changed");
+            if (!IsWindowEnabled(window)) return;
             throw new InvalidOperationException("Target did not become responsive");
+        }
     }
     public void Settle() {
         Responsive();
+        if (!IsWindowEnabled(window)) return;
         if (!observing) { Thread.Sleep(500); Responsive(); return; }
         while (true) {
             long now = Stopwatch.GetTimestamp();
             double age = (now - Interlocked.Read(ref armed)) * 1000.0 / Stopwatch.Frequency;
             double quiet = (now - Interlocked.Read(ref changed)) * 1000.0 / Stopwatch.Frequency;
             if (age >= 120 && quiet >= 80) { Responsive(); return; }
-            if (age >= 1500) throw new InvalidOperationException("Target did not become quiet");
+            if (!IsWindowEnabled(window)) { Responsive(); return; }
+            if (age >= 1500) { Responsive(); return; }
             Thread.Sleep(15);
         }
     }

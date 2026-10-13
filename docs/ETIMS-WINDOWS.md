@@ -105,6 +105,16 @@ Read-only extraction of the already issued genuine PDF took 3.2081 seconds befor
 
 The installed elevated build also passed read-only probes against the actual native application: median screen detection 0.1559 seconds, invoice-only reads 0.0152 seconds, screenshot guard 0.0685 seconds, and event-aware readiness 0.1549 seconds. The existing firewall verifier still ran live (median 0.6391 seconds). The complete authenticated access diagnostic's warm median fell from 1.7534 to 1.1421 seconds. Existing captured fiscal fields and original QR hashes reconciled through the POS API after installation. These timings depend on this PC and current native page; they do not measure a new issuance.
 
+### Native file-dialog correction (helper build 20261013.12)
+
+Live checkout exposed two regressions in build .11. A missing-product run opened the native Import dialog, then the post-click readiness check failed with `Target did not become responsive` while its main WPF owner was disabled by the modal. Another genuine checkout reached verified native issuance, then failed in `choose-native-file.ps1` when requesting the filename Edit's UIA `ValuePattern`, before dispatching Save. The fiscal invoice was already approved; its PDF and POS handoff were incomplete.
+
+Readiness now treats the disabled owner as a modal transition, preserving the next operation's exact screen/dialog guards rather than sending WM_NULL to a synchronously waiting owner. An independently blocked WPF fixture reproduces and tests this condition. The shared file-dialog handler supports the observed Edit IDs, verifies HWND process ownership, sets the filename once, and verifies it with bounded native WM_GETTEXT. It no longer requires ValuePattern on that native filename control. Save/Open uses the button's InvokePattern when available, with a foreground-checked legacy fallback, and waits for dialog closure without repeating the button action. Isolated real Windows Open and Save dialogs exercise the same production implementation.
+
+Recovery reconciles an already saved PDF first. Otherwise it can continue the existing Save Print Output As dialog only after the displayed print-view invoice ID, stored sale marker, approved native sale and genuine receipt match the immutable POS request. It does not repeat Print or approval in this case. Capture verifies the same original six fields and QR before publishing completion; interrupted capture never calls fresh issuance. The intended output is persisted before Save. Firewall verification code and existing network rules remain unchanged.
+
+Installed build .12 recovered the previously approved native invoice 9 through the real POS localhost API. Capture completed with all six fields and the original QR; independent reconciliation verified the genuine PDF, unchanged original invoice/lines/receipt and unchanged native invoice count. No new fiscal invoice was created during this recovery. The regression suite passes 65 Python checks, 9 POS integration checks, real Windows file selection/save fixtures, and a blocked modal-owner WPF fixture. KRA acceptance remains unverified while eTIMS is offline.
+
 ```powershell
 npm ci --prefix capacitor
 node --test capacitor/tests/*.cjs
