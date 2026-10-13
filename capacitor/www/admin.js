@@ -444,7 +444,7 @@ function showAdminSalesReceipt(order, isKot = false) {
     const vatAmount = Math.max(0, Math.min(grossCents, Math.round(Number(order.tax_cents || 0))));
     const exclVat = grossCents - vatAmount;
     const savedRate = Number(order.tax_rate);
-    const taxRate = vatAmount > 0
+    const taxRate = (vatAmount > 0 || order.tax_treatment === 'vat')
       ? (order.tax_rate != null && Number.isFinite(savedRate) ? savedRate
         : (exclVat > 0 ? vatAmount / exclVat * 100 : 0)) : 0;
     const discountCents = Math.max(0, Number(order.discount_cents || 0));
@@ -482,6 +482,7 @@ function showAdminSalesReceipt(order, isKot = false) {
         </table>
         <div class="receipt-totals">
           ${discountCents ? `<div class="receipt-line"><span>Subtotal</span><span>${moneyRaw(subtotalCents)}</span></div><div class="receipt-line"><span>Discount</span><span>-${moneyRaw(discountCents)}</span></div>` : ''}
+          ${order.tax_treatment ? `<div class="receipt-line"><span>Tax treatment</span><span>${order.tax_treatment==='vat'?'VAT ('+Number(taxRate.toFixed(1))+'%)':'Non-VAT'}</span></div>` : ''}
           <div class="receipt-line"><span>Total Excl. VAT</span><span>${moneyRaw(exclVat)}</span></div>
           <div class="receipt-line"><span>VAT Total (${Number(taxRate.toFixed(1))}%)</span><span>${moneyRaw(vatAmount)}</span></div>
           <div class="receipt-total"><span>Total</span><strong>KES ${moneyRaw(grossCents)}</strong></div>
@@ -1010,6 +1011,7 @@ function openItemModal(item) {
   `);
   overlay.querySelector('#modalClose').onclick = () => overlay.remove();
   overlay.querySelector('#mCancel').onclick = () => overlay.remove();
+  window.OraforgeFormControls.searchableSelect(overlay.querySelector('#mCat'),null,'product categories');
   overlay.querySelector('#mSave').onclick = async () => {
     const payload = {
       name: overlay.querySelector('#mName').value.trim(),

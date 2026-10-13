@@ -32,6 +32,7 @@ with sync_playwright() as p:
       window.OraforgeDBReady=Promise.resolve();window.OraforgeShops={activeShopId:()=>"fixture"};
       window.OraforgeDB={get:async(k,f)=>structuredClone(window.fixtureRows[k] ?? f),update:async(k,fn,f)=>{const v=fn(structuredClone(window.fixtureRows[k] ?? f));window.fixtureRows[k]=v;return v;}};
       window.toast=()=>{};const state={settings:{business_name:'Fixture Shop',receipt_footer:'Fixture footer'}};''')
+    page.add_script_tag(path=str(ROOT/'capacitor/www/form-controls.js'))
     page.add_script_tag(path=str(ROOT/'capacitor/www/etims-core.js'))
     page.add_script_tag(path=str(ROOT/'capacitor/www/etims-integration.js'))
     source=(ROOT/'capacitor/www/app.js').read_text(encoding='utf-8')

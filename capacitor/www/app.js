@@ -65,7 +65,7 @@ function showReceiptModal(order, isKot = false, autoPrintEtims = false) {
     const vatAmount = Math.max(0, Math.min(grossCents, Math.round(Number(order.tax_cents || 0))));
     const exclVat = grossCents - vatAmount;
     const savedRate = Number(order.tax_rate);
-    const taxRate = vatAmount > 0
+    const taxRate = (vatAmount > 0 || order.tax_treatment === 'vat')
       ? (order.tax_rate != null && Number.isFinite(savedRate) ? savedRate
         : (exclVat > 0 ? vatAmount / exclVat * 100 : 0)) : 0;
     const discountCents = Math.max(0, Number(order.discount_cents || 0));
@@ -103,6 +103,7 @@ function showReceiptModal(order, isKot = false, autoPrintEtims = false) {
         </table>
         <div class="receipt-totals">
           ${discountCents ? `<div class="receipt-line"><span>Subtotal</span><span>${moneyRaw(subtotalCents)}</span></div><div class="receipt-line"><span>Discount</span><span>-${moneyRaw(discountCents)}</span></div>` : ''}
+          ${order.tax_treatment ? `<div class="receipt-line"><span>Tax treatment</span><span>${order.tax_treatment==='vat'?'VAT ('+Number(taxRate.toFixed(1))+'%)':'Non-VAT'}</span></div>` : ''}
           <div class="receipt-line"><span>Total Excl. VAT</span><span>${moneyRaw(exclVat)}</span></div>
           <div class="receipt-line"><span>VAT Total (${Number(taxRate.toFixed(1))}%)</span><span>${moneyRaw(vatAmount)}</span></div>
           <div class="receipt-total"><span>Total</span><strong>KES ${moneyRaw(grossCents)}</strong></div>
@@ -733,6 +734,13 @@ const LocalPOS = {
       if (!order) throw new Error('Sale not found');
       if (order.status === 'paid') return order;
       if (body.generate_etims && body.etims_shop_id !== (window.OraforgeShops?.activeShopId() || btype)) throw new Error('The active shop changed. Reopen checkout in the original shop.');
+      const configuredSettings = await this.getShop('settings', {}, btype);
+      const configuredRate = Number(configuredSettings.tax_rate);
+      const explicitTax = body.tax_rate !== undefined;
+      if(explicitTax && ![0,16].includes(Number(body.tax_rate)))throw Error('Choose Non-VAT (0%) or VAT (16%).');
+      const taxRate = explicitTax ? Number(body.tax_rate) : configuredSettings.tax_rate_confirmed===true &&
+        Number.isFinite(configuredRate) && configuredRate>0 && configuredRate<=100 ? configuredRate : 0;
+      if(body.generate_etims && taxRate!==0)throw Error('VAT eTIMS invoicing is unavailable on this device. Select Non-VAT or switch off Generate eTIMS Invoice.');
       let verifiedMpesa = null;
       if (body.payment_method === 'mpesa') {
         // Never allow cashier taps or an STK acceptance to mark M-Pesa paid.
@@ -762,12 +770,9 @@ const LocalPOS = {
       }
       // Item prices are tax-inclusive. Tax only exists if the owner explicitly
       // selected a non-zero rate; it never increases the charged total.
-      const configuredSettings = await this.getShop('settings', {}, btype);
-      const configuredRate = Number(configuredSettings.tax_rate);
-      const taxRate = configuredSettings.tax_rate_confirmed === true &&
-        Number.isFinite(configuredRate) && configuredRate > 0 && configuredRate <= 100
-        ? configuredRate : 0;
       order.tax_rate = taxRate;
+      order.tax_treatment = taxRate>0?'vat':'non_vat';
+      order.tax_inclusive = true;
       order.tax_cents = taxRate > 0
         ? Math.round(Number(order.total_cents || 0) * taxRate / (100 + taxRate))
         : 0;
@@ -2013,9 +2018,11 @@ async function showCheckoutModal(order) {
 
   const overlay = document.createElement('div');
   overlay.className = 'qty-popup-overlay';
-  overlay.addEventListener('click', e => { if (e.target === overlay) { stopPaymentPoll(); overlay.remove(); } });
+  overlay.addEventListener('click', e => { if (e.target === overlay && !checkoutBusy) { stopPaymentPoll(); overlay.remove(); } });
 
   let selectedMethod = 'mpesa';
+  let checkoutBusy = false;
+  let selectedTaxRate = state.settings.tax_rate_confirmed === true && Number(state.settings.tax_rate) === 16 ? 16 : 0;
   let savedPhone = order.customer_phone || '';
   const checkoutShop = window.OraforgeEtims?.scope();
   let etimsRegistrationDetails = {};
@@ -2054,9 +2061,18 @@ async function showCheckoutModal(order) {
           <small style="display:block;margin-top:4px;color:var(--muted);font-size:12px;">An STK push prompt will be sent to this phone to enter M-Pesa PIN.</small>
         </div>
 
+        <div class="checkout-tax">
+          <label for="checkoutTaxRate">Tax treatment</label>
+          <select id="checkoutTaxRate" class="field">
+            <option value="0" ${selectedTaxRate === 0 ? 'selected' : ''}>Non-VAT (0%)</option>
+            <option value="16" ${selectedTaxRate === 16 ? 'selected' : ''}>VAT (16%, included in price)</option>
+          </select>
+          <small id="checkoutTaxSummary"></small>
+        </div>
         ${window.OraforgeEtims?.checkoutMarkup() || ''}
+        <p id="checkoutTaxNotice" class="checkout-tax-notice" role="status" hidden></p>
 
-        <div id="checkoutMsg" style="margin-top: 10px; font-weight: 600; font-size: 14px; text-align: center;"></div>
+        <div id="checkoutMsg" role="status" aria-live="polite" aria-atomic="true" style="margin-top: 10px; font-weight: 600; font-size: 14px; text-align: center;"></div>
 
         <div class="qty-popup-actions" style="margin-top: 16px;">
           <button type="button" class="ghost" id="chkCancel">Cancel</button>
@@ -2075,6 +2091,34 @@ async function showCheckoutModal(order) {
     const cancelBtn = overlay.querySelector('#chkCancel');
     const msgEl = overlay.querySelector('#checkoutMsg');
 
+    const taxSelect = overlay.querySelector('#checkoutTaxRate');
+    function updateTaxInfo() {
+      const tax = selectedTaxRate ? Math.round(Number(order.total_cents)*selectedTaxRate/(100+selectedTaxRate)) : 0;
+      overlay.querySelector('#checkoutTaxSummary').textContent = selectedTaxRate
+        ? 'VAT included: '+money(tax)+' · Excl. VAT: '+money(order.total_cents-tax)+'. Total stays '+money(order.total_cents)+'.'
+        : 'No VAT charged. Total: '+money(order.total_cents)+'.';
+      const unsupported = generateEtims && selectedTaxRate !== 0;
+      const notice = overlay.querySelector('#checkoutTaxNotice');
+      notice.hidden = !unsupported;
+      notice.textContent = unsupported ? 'VAT eTIMS invoicing is unavailable on this device. Select Non-VAT or switch off Generate eTIMS Invoice.' : '';
+      confirmBtn.disabled = checkoutBusy || unsupported;
+    }
+    function setBusy(busy, message='Processing your sale…') {
+      checkoutBusy = busy;
+      overlay.querySelector('.qty-popup')?.setAttribute('aria-busy',String(busy));
+      overlay.querySelectorAll('input, select, #chkCancel').forEach(control=>{control.disabled=busy;});
+      confirmBtn.setAttribute('aria-busy',String(busy));
+      msgEl.classList.toggle('checkout-progress',busy);
+      if (busy) {
+        confirmBtn.innerHTML = '<span class="pos-spinner-ring" aria-hidden="true"></span> Processing…';
+        msgEl.style.color=''; msgEl.textContent=message;
+        confirmBtn.scrollIntoView?.({block:'nearest',behavior:'instant'});
+      } else {
+        confirmBtn.textContent=selectedMethod==='mpesa'?'⚡ Send STK Prompt':'Confirm & Print';
+      }
+      updateTaxInfo();
+    }
+    taxSelect.addEventListener('change',()=>{selectedTaxRate=Number(taxSelect.value);updateTaxInfo();});
     const etimsToggle = overlay.querySelector('#generateEtims');
     if (etimsToggle) {
       etimsToggle.checked = generateEtims;
@@ -2087,6 +2131,7 @@ async function showCheckoutModal(order) {
       etimsToggle.onchange = () => {
         generateEtims = etimsToggle.checked;
         overlay.querySelector('#etimsCustomerFields').hidden = !generateEtims;
+        updateTaxInfo();
       };
     }
 
@@ -2120,85 +2165,64 @@ async function showCheckoutModal(order) {
       }
     });
 
-    cancelBtn.addEventListener('click', () => { stopPaymentPoll(); overlay.remove(); });
+    updateTaxInfo();
+    cancelBtn.addEventListener('click', () => { if(!checkoutBusy){stopPaymentPoll(); overlay.remove();} });
 
     confirmBtn.addEventListener('click', async () => {
-      msgEl.textContent = '';
-      if (generateEtims) {
-        try {
-          etimsCustomer = window.OraforgeEtimsCore.customer({name:overlay.querySelector('#etimsName').value,
-            phone:overlay.querySelector('#etimsPhone').value.trim() || customerPhoneInput.value.trim(),
-            pin:overlay.querySelector('#etimsPin').value,
-            email:overlay.querySelector('#etimsEmail').value, billing_address:overlay.querySelector('#etimsAddress').value});
-          etimsCustomer.remarks=overlay.querySelector('#etimsRemarks').value.trim();
-          confirmBtn.disabled=true;msgEl.textContent='Checking eTIMS products and stock?';
-          etimsRegistrationDetails=await window.OraforgeEtims.beforePayment(order,state.settings,etimsCustomer,selectedMethod,state.items);
-          confirmBtn.disabled=false;msgEl.textContent='';
-        } catch (error) { msgEl.textContent = error.message; confirmBtn.disabled=false; return; }
-      }
-      if (selectedMethod === 'mpesa') {
-        const rawPhone = (refInput.value.trim() || customerPhoneInput.value.trim());
-        if (!rawPhone) {
-          msgEl.style.color = 'var(--danger)';
-          msgEl.textContent = 'Please enter customer M-Pesa phone number.';
-          refInput.focus();
-          return;
-        }
-
-        const cleanPhone = normalizeMpesaPhone(rawPhone);
-        if (!cleanPhone || cleanPhone.length < 10) {
-          msgEl.style.color = 'var(--danger)';
-          msgEl.textContent = 'Please enter a valid phone number (e.g. 0712345678).';
-          refInput.focus();
-          return;
-        }
-
-        savedPhone = rawPhone;
-        confirmBtn.disabled = true;
-        confirmBtn.innerHTML = `<span class="pos-spinner-ring" style="border-color:white; border-top-color:transparent; margin-right:6px;"></span> Sending Prompt…`;
-
-        const payResult = await triggerSwiftaMpesaCharge({
-          reference: order.ticket_no || order.id,
-          orderId: order.id,
-          amount: order.total_cents,
-          phone: cleanPhone
+      if (checkoutBusy || confirmBtn.disabled) return;
+      // Paint feedback before preflight, local persistence or payment work.
+      setBusy(true,generateEtims?'Checking eTIMS products and stock…':'Preparing your payment…');
+      let errorField=null;
+      try {
+        await new Promise(resolve=>{
+          // Background/occluded Windows browser frames can pause. Feedback
+          // must never prevent checkout from proceeding in that situation.
+          let finished=false;
+          const finish=()=>{if(!finished){finished=true;clearTimeout(timer);resolve();}};
+          const timer=setTimeout(finish,80);
+          requestAnimationFrame(()=>requestAnimationFrame(finish));
         });
-
-        if (payResult.status !== true || payResult.data?.status === 'failed') {
-          msgEl.style.color = 'var(--danger)';
-          msgEl.textContent = 'STK request failed: ' + (payResult.data?.message || payResult.message || 'Please retry.');
-          confirmBtn.disabled = false;
-          confirmBtn.textContent = '⚡ Send STK Prompt';
-          return;
+        let cleanPhone='';
+        if (selectedMethod==='mpesa') {
+          const rawPhone=refInput.value.trim() || customerPhoneInput.value.trim();
+          errorField=refInput;
+          if(!rawPhone)throw Error('Please enter customer M-Pesa phone number.');
+          cleanPhone=normalizeMpesaPhone(rawPhone);
+          if(!cleanPhone || cleanPhone.length<10)throw Error('Please enter a valid phone number (e.g. 0712345678).');
+          savedPhone=rawPhone;errorField=null;
         }
-        renderProcessingView(cleanPhone, payResult);
-      } else {
-        // Cash payment flow
-        confirmBtn.disabled = true;
-        confirmBtn.innerHTML = `<span class="pos-spinner-ring" style="border-color:white; border-top-color:transparent; margin-right:6px;"></span> Processing…`;
-        try {
-          const paidOrder = await api('/api/order/pay', {
-            method: 'POST',
-            body: {
-              order_id: order.id,
-              payment_method: 'cash',
-              payment_ref: 'CASH',
-              customer_phone: (customerPhoneInput?.value || '').trim(),
-              generate_etims: generateEtims, etims_customer: etimsCustomer, etims_shop_id:checkoutShop, etims_registration_details:etimsRegistrationDetails
-            }
-          });
-          overlay.remove();
-          showReceiptModal(paidOrder, false, true);
-          window.OraforgeEtims?.afterPayment(paidOrder, state.settings);
-          state.order = null;
-          renderTicket();
-          if (typeof toast === 'function') toast('Cash payment confirmed! Receipt generated.', 'success');
-        } catch (e) {
-          msgEl.style.color = 'var(--danger)';
-          msgEl.textContent = e.message;
-          confirmBtn.disabled = false;
-          confirmBtn.textContent = 'Confirm & Print';
+        if (generateEtims) {
+          etimsCustomer=window.OraforgeEtimsCore.customer({name:overlay.querySelector('#etimsName').value,
+            phone:overlay.querySelector('#etimsPhone').value.trim() || customerPhoneInput.value.trim(),
+            pin:overlay.querySelector('#etimsPin').value,email:overlay.querySelector('#etimsEmail').value,
+            billing_address:overlay.querySelector('#etimsAddress').value});
+          etimsCustomer.remarks=overlay.querySelector('#etimsRemarks').value.trim();
+          etimsRegistrationDetails=await window.OraforgeEtims.beforePayment(order,state.settings,etimsCustomer,selectedMethod,state.items,selectedTaxRate);
         }
+        if (selectedMethod==='mpesa') {
+          setBusy(true,'Sending M-Pesa prompt…');
+          const payResult=await triggerSwiftaMpesaCharge({reference:order.ticket_no || order.id,orderId:order.id,
+            amount:order.total_cents,phone:cleanPhone});
+          if(payResult.status!==true || payResult.data?.status==='failed')
+            throw Error('STK request failed: '+(payResult.data?.message || payResult.message || 'Please retry.'));
+          renderProcessingView(cleanPhone,payResult);
+        } else {
+          setBusy(true,'Saving your sale and preparing the receipt…');
+          const paidOrder=await api('/api/order/pay',{method:'POST',body:{order_id:order.id,
+            payment_method:'cash',payment_ref:'CASH',tax_rate:selectedTaxRate,
+            customer_phone:customerPhoneInput.value.trim(),generate_etims:generateEtims,
+            etims_customer:etimsCustomer,etims_shop_id:checkoutShop,etims_registration_details:etimsRegistrationDetails}});
+          overlay.remove();showReceiptModal(paidOrder,false,true);
+          window.OraforgeEtims?.afterPayment(paidOrder,state.settings);
+          state.order=null;renderTicket();
+          if(typeof toast==='function')toast('Cash payment confirmed! Receipt generated.','success');
+        }
+      } catch(error) {
+        msgEl.style.color='var(--danger)';msgEl.textContent=error.message;
+      } finally {
+        checkoutBusy=false;
+        if(overlay.contains(confirmBtn))setBusy(false);
+        if(errorField && overlay.contains(errorField))errorField.focus();
       }
     });
   }
@@ -2211,6 +2235,7 @@ async function showCheckoutModal(order) {
     const attemptId = String(payResult?.data?.attempt_id || '');
     const displayPhone = formatMpesaDisplayPhone(cleanPhone);
     if (!checkoutId) {
+      checkoutBusy=false;
       renderFormView();
       const notice = overlay.querySelector('#checkoutMsg');
       notice.textContent = 'Swifta did not return a checkout ID. Check Swifta before retrying.';
@@ -2256,7 +2281,7 @@ async function showCheckoutModal(order) {
           const paidOrder = await api('/api/order/pay', {
             method:'POST',
             body:{order_id:order.id,payment_method:'mpesa',payment_ref:verified.payment_ref,
-              customer_phone:cleanPhone,swifta_attempt_id:attemptId,swifta_checkout_id:checkoutId,
+              customer_phone:cleanPhone,tax_rate:selectedTaxRate,swifta_attempt_id:attemptId,swifta_checkout_id:checkoutId,
               generate_etims:generateEtims, etims_customer:etimsCustomer, etims_shop_id:checkoutShop, etims_registration_details:etimsRegistrationDetails}
           });
           if (generation !== paymentPollGeneration) return;
@@ -3089,6 +3114,7 @@ function showProductModal(item = null) {
   qs('#pmClose', overlay).addEventListener('click', close);
   qs('#pmCancel', overlay).addEventListener('click', close);
   
+  window.OraforgeFormControls.searchableSelect(overlay.querySelector('[name=category_id]'),null,'product categories');
   const imgUpload = qs('#imgUpload', overlay);
   const imgPreview = qs('#imgPreview', overlay);
   const imgBase64 = qs('#imgBase64', overlay);

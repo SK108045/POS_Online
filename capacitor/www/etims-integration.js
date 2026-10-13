@@ -183,10 +183,13 @@
         const name=index+':'+key,value=previous[r.product_key]?.[key] ?? r.values?.[key] ?? '';
         if(['verified','inventory_confirmed'].includes(key))return `<label><input type="checkbox" name="${name}" required ${value===true?'checked':''}> ${labels[key]}</label>`;
         let choices=key==='class_code'?(options.classes || []).map(c=>({value:c.ITEM_CLS_CD,label:c.ITEM_CLS_NM})):groups[key]?(options.codes || []).filter(c=>c.CD_CLS===groups[key]).map(c=>({value:c.CD,label:c.CD_NM})):key==='existing_code'?(r.candidates || []).map(c=>({value:c.code,label:c.name})):[];
+        if(key==='class_code')return `<label>${labels[key]}<select class="field" name="${name}" data-class-search data-selected="${e(value)}" required><option value="">Select the correct value</option></select></label>`;
         if(choices.length)return `<label>${labels[key]}<select class="field" name="${name}" required><option value="">Select the correct value</option>${choices.map(c=>`<option value="${e(c.value)}" ${String(value)===c.value?'selected':''}>${e(c.value)} - ${e(c.label)}</option>`).join('')}</select></label>`;
         return `<label>${labels[key]}<input class="field" name="${name}" required ${key==='unit_cost_cents'||key==='inventory_before_sale'?'type="number" min="0" step="0.01"':''} ${key==='stock_reason'?'minlength="10"':''} value="${e(key==='unit_cost_cents' && value!==''?Number(value)/100:value)}"></label>`;
       }).join('')}</fieldset>`).join('')}<p data-msg></p><div class="qty-popup-actions"><button type="button" data-cancel>Cancel</button><button class="primary">Confirm details</button></div></form>`;
       document.body.append(overlay);
+      overlay.querySelectorAll('[data-class-search]').forEach(select=>window.OraforgeFormControls.searchableSelect(select,
+        (options.classes || []).map(row=>({value:row.ITEM_CLS_CD,label:row.ITEM_CLS_NM})), 'classifications by name or code'));
       overlay.querySelector('[data-cancel]').onclick=()=>{overlay.remove();reject(Error('Product registration details were not confirmed.'));};
       overlay.querySelector('form').onsubmit=event=>{
         event.preventDefault();const details=structuredClone(previous);
@@ -201,12 +204,12 @@
       };
     });
   }
-  async function beforePayment(order,settings,customer,payment,products) {
+  async function beforePayment(order,settings,customer,payment,products,taxRate) {
     if(!customer.pin || !customer.name)throw Error('Enter the buyer KRA PIN and name.');
     const preview=enrich(structuredClone(order),products || []);
     preview.status='paid';preview.payment_method=payment;
     const rate=Number(settings.tax_rate);
-    preview.tax_rate=settings.tax_rate_confirmed===true && Number.isFinite(rate) && rate>0 && rate<=100?rate:0;
+    preview.tax_rate=taxRate!==undefined?Number(taxRate):settings.tax_rate_confirmed===true && Number.isFinite(rate) && rate>0 && rate<=100?rate:0;
     preview.tax_cents=preview.tax_rate?Math.round(Number(preview.total_cents)*preview.tax_rate/(100+preview.tax_rate)):0;
     const sale=core.windowsSnapshot(preview,scope(),settings,customer);
     let details=order.etims_registration_details || {};

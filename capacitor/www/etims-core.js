@@ -111,7 +111,7 @@
   function windowsSnapshot(order, shopId, settings = {}, details = {}) {
     const sale=snapshot(order,shopId,settings,details);
     if (!sale.customer.pin || !sale.customer.name) throw Error('Buyer KRA PIN and name are required by the Windows eTIMS client.');
-    if (sale.discount.amount_cents || sale.tax_cents) throw Error('This verified eTIMS desktop profile currently supports Non-VAT sales without discounts.');
+    if (sale.discount.amount_cents || sale.tax_cents || sale.tax_rate !== 0) throw Error('This eTIMS device currently supports Non-VAT invoices without discounts. VAT eTIMS invoicing is unavailable on this device.');
     sale.version=2;
     if(details.remarks) sale.customer.remarks=text(details.remarks,500);
     sale.items=sale.items.map((line,index)=>{
