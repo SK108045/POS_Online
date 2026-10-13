@@ -12,7 +12,7 @@ from urllib.parse import urlparse
 from engine import Engine
 from settings import HOME, settings
 
-BUILD = '20261013.12'
+BUILD = '20261013.13'
 
 
 class LocalServer(ThreadingHTTPServer):

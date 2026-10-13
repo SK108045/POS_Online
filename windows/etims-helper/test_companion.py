@@ -131,7 +131,7 @@ class CompanionTests(unittest.TestCase):
             read.assert_not_called()
     def test_offline_requirement_blocks_every_mutating_ui_action(self):
         import workflow
-        for action in ('Click','Text','File','Complete'):
+        for action in ('Click','Close','Text','File','Complete'):
             with patch('offline.require_offline',side_effect=ValueError('Internet blocking missing')),patch('workflow.ps') as execute:
                 with self.assertRaisesRegex(ValueError,'Internet blocking'):
                     workflow.Ui(123).send({'action':action})
@@ -193,11 +193,12 @@ class CompanionTests(unittest.TestCase):
     def test_faster_transport_waits_only_on_screen_guard_before_input(self):
         import workflow
         instruction=dict(action='Click',reference='sales.png')
-        with patch('workflow.ps',side_effect=[RuntimeError('ui-step.ps1 failed (screen mismatch); stopped without retrying the action'),'done']) as execute,patch('offline.require_offline') as offline,patch('workflow.time.sleep'):
-            self.assertEqual(workflow.Ui(123).send(instruction),'done')
-            self.assertEqual(execute.call_count,2)
-            self.assertEqual(offline.call_count,2)
-        for message in ('target focus unavailable','Windows worker timed out','Windows operation failed'):
+        for reason in ('screen mismatch','target busy before input'):
+            with patch('workflow.ps',side_effect=[RuntimeError('ui-step.ps1 failed ('+reason+'); stopped without retrying the action'),'done']) as execute,patch('offline.require_offline') as offline,patch('workflow.time.sleep'):
+                self.assertEqual(workflow.Ui(123).send(instruction),'done')
+                self.assertEqual(execute.call_count,2)
+                self.assertEqual(offline.call_count,2)
+        for message in ('target focus unavailable','Windows worker timed out','Windows operation failed','Target did not become responsive'):
             with patch('workflow.ps',side_effect=RuntimeError(message)) as execute,patch('offline.require_offline'):
                 with self.assertRaises(RuntimeError):workflow.Ui(123).send(instruction)
                 execute.assert_called_once()
@@ -214,19 +215,20 @@ class CompanionTests(unittest.TestCase):
             snapshot.assert_called_once()
     def test_cleanup_checks_native_invoice_identity_before_closing_any_view(self):
         from client import Client
-        with patch.object(Client,'detect',side_effect=['print','detail','sales']),patch.object(Client,'expect') as expect,patch.object(Client,'close_owned') as close:
+        with patch.object(Client,'detect',side_effect=['print','detail','sales','menu']),patch.object(Client,'expect') as expect,patch.object(Client,'close_owned') as close:
             Client(123).finish_invoice(5)
             self.assertEqual(expect.call_args_list[0].args,('print',330,324,'5'))
             self.assertEqual(expect.call_args_list[1].args,('detail',240,216,'5'))
-            self.assertEqual([c.args[0] for c in close.call_args_list],['print','detail'])
+            self.assertEqual([c.args[0] for c in close.call_args_list],['print','detail','sales'])
         with patch.object(Client,'detect',return_value='print'),patch.object(Client,'expect',side_effect=ValueError('Wrong invoice')),patch.object(Client,'close_owned') as close:
             with self.assertRaisesRegex(ValueError,'Wrong invoice'):Client(123).finish_invoice(5)
             close.assert_not_called()
-        with patch.object(Client,'detect',side_effect=['printed','detail','sales']),patch.object(Client,'expect') as expect,patch.object(Client,'click') as click,patch.object(Client,'close_owned') as close:
-            Client(123).finish_invoice(5)
-            self.assertEqual(expect.call_args_list[0].args,('detail',240,216,'5'))
-            click.assert_called_once_with('printed',885,530)
-            close.assert_called_once_with('detail')
+        for acknowledgement in ('printed','saved'):
+            with patch.object(Client,'detect',side_effect=[acknowledgement,'detail','sales','menu']),patch.object(Client,'expect') as expect,patch.object(Client,'click') as click,patch.object(Client,'close_owned') as close:
+                Client(123).finish_invoice(5)
+                self.assertEqual(expect.call_args_list[0].args,('detail',240,216,'5'))
+                click.assert_called_once_with(acknowledgement,885,530)
+                self.assertEqual([c.args[0] for c in close.call_args_list],['detail','sales'])
     def test_finishing_pending_invoice_cannot_navigate_or_issue(self):
         from engine import Engine
         engine=Engine.__new__(Engine);engine.store=self.store
@@ -261,6 +263,9 @@ class CompanionTests(unittest.TestCase):
         with patch('engine.workflow.ledger_path',return_value=self.home/'absent.json'),patch.object(engine,'prepare',return_value=(CONFIG,{'process_ids':[123]},registration)),patch('engine.Client') as native,patch('engine.workflow.issue',side_effect=issue),patch.object(engine,'result',return_value={'fiscal':{'verified':True}}):
             native.return_value.detect.return_value='menu'
             engine.run(key)
+            calls=[c[0] for c in native.return_value.method_calls]
+            self.assertLess(calls.index('normalize'),calls.index('reset_menu'))
+            self.assertLess(calls.index('reset_menu'),calls.index('ensure_customer'))
         self.assertEqual(self.store.get(key)['state'],'complete')
         self.assertTrue(self.store.get(key)['result']['fiscal']['verified'])
     def test_native_item_selection_cannot_erase_the_pos_reference_before_draft_save(self):
@@ -319,15 +324,16 @@ class CompanionTests(unittest.TestCase):
         native={'registered_devices':[{'TIN':CONFIG['taxpayer_pin'],'BHF_ID':'01'}],
                 'process_ids':[123],'sales':[{'SALES_STTS_CD':'02','REMARK':'Oraforge:'+key}]}
         engine=Engine.__new__(Engine)
-        with patch('engine.HOME',self.home),patch('engine.workflow.ledger_path',return_value=self.home/'ledger.json'),patch('engine.workflow.read_state',return_value=native),patch('engine.require_identity',return_value=CONFIG),patch('engine.workflow.verify_sale'),patch('engine.require_ui_access'),patch('engine.Client') as client,patch('engine.workflow.choose_print_path') as choose,patch.object(engine,'capture_pdf',return_value={'local_invoice_id':9}) as capture,patch('engine.workflow.wait_database') as approve:
-            client.return_value.detect.return_value='print'
-            client.return_value.file_state.return_value={'file_dialog':'Save Print Output As','invoice_id':9}
-            result=engine.resume(key,recorded,request,s)
-            self.assertEqual(result['local_invoice_id'],9)
-            client.return_value.click.assert_not_called()
-            client.return_value.navigate.assert_not_called()
-            approve.assert_not_called();choose.assert_called_once();capture.assert_called_once()
-            self.assertEqual(recorded['stage'],'pdf_requested')
+        for screen in ('print','detail'):
+            with patch('engine.HOME',self.home),patch('engine.workflow.ledger_path',return_value=self.home/'ledger.json'),patch('engine.workflow.read_state',return_value=native),patch('engine.require_identity',return_value=CONFIG),patch('engine.workflow.verify_sale'),patch('engine.require_ui_access'),patch('engine.Client') as client,patch('engine.workflow.choose_print_path') as choose,patch.object(engine,'capture_pdf',return_value={'local_invoice_id':9}) as capture,patch('engine.workflow.wait_database') as approve:
+                client.return_value.detect.return_value=screen
+                client.return_value.file_state.return_value={'file_dialog':'Save Print Output As','invoice_id':9}
+                result=engine.resume(key,recorded,request,s)
+                self.assertEqual(result['local_invoice_id'],9)
+                client.return_value.click.assert_not_called()
+                client.return_value.navigate.assert_not_called()
+                approve.assert_not_called();choose.assert_called_once();capture.assert_called_once()
+                self.assertEqual(recorded['stage'],'pdf_requested')
     def test_print_recovery_preserves_a_different_displayed_invoice(self):
         from engine import Engine
         s=sale();key=job_id(s);request=to_request(s,{'catalog:1':'BOOK'})

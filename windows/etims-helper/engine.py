@@ -141,31 +141,12 @@ class Engine:
             except Exception:pass # Published fiscal capture remains complete.
             return
         config,state,registration=self.prepare(sale,job['details'])
+        client=Client(state['process_ids'][0]);client.normalize()
+        self.store.update(key,'preparing')
+        client.reset_menu()
         if registration['requirements']:
             self.store.update(key,'needs_details',result={'requirements':registration['requirements']})
             return
-        client=Client(state['process_ids'][0]);client.normalize()
-        screen=client.detect()
-        # A prior owned import/customer save may have succeeded before a crash.
-        # Re-plan from actual records above; never repeat an importer blindly.
-        if job['state']=='recovering' and screen in ('import-success','saved'):
-            client.click(screen,885,530)
-            screen=client.detect()
-        if job['state']=='recovering' and screen in ('item-management','customer','stock-status','stock-adjustment'):
-            client.navigate('sales')
-            screen=client.detect()
-        if screen=='printed':
-            client.click('printed',885,530);screen=client.detect()
-        if screen in ('print','detail'):
-            point=(330,324) if screen=='print' else (240,216)
-            displayed=int(client.value(screen,*point))
-            owned=self.store.completed_invoice(displayed)
-            native=workflow.read_state('',displayed)
-            if not owned or len(native['receipts'])!=1 or native['receipts'][0]['CU_INVOICE_NUMBER']!=owned['fiscal']['cu_invoice_number']:
-                raise ValueError('The open native invoice is not a verified completed POS invoice; finish its view before continuing')
-            client.finish_invoice(displayed);screen=client.detect()
-        if screen not in ('menu','sales'):
-            raise ValueError('Finish the unrelated open eTIMS form once, then recover this same POS sale')
         def checkpoint(stage):self.store.update(key,stage)
         self.store.update(key,'preparing')
         # Persist intended codes BEFORE invoking an importer. Recovery discovers
@@ -252,7 +233,7 @@ class Engine:
         client=Client(state['process_ids'][0]);client.normalize()
         screen=client.detect()
         file_state=client.file_state(screen)
-        reuse_print=approved and screen=='print'
+        reuse_print=approved and (screen=='print' or (screen=='detail' and file_state['file_dialog']=='Save Print Output As'))
         if reuse_print:
             if file_state['invoice_id']!=invoice:
                 raise ValueError('The open print view belongs to a different invoice; it was preserved')

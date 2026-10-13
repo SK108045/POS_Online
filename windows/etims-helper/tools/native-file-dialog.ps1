@@ -99,3 +99,29 @@ function Set-OraforgeNativeFile {
   Start-Sleep -Milliseconds 50
  }
 }
+
+function Cancel-OraforgeNativeFile {
+ param([int]$TargetProcessId,[ValidateSet('Open','Save Print Output As')][string]$DialogTitle)
+ $controls=Find-OraforgeFileDialog -TargetProcessId $TargetProcessId -DialogTitle $DialogTitle -TimeoutSeconds 0
+ $condition=[Windows.Automation.AndCondition]::new(
+  [Windows.Automation.PropertyCondition]::new([Windows.Automation.AutomationElement]::AutomationIdProperty,'2'),
+  [Windows.Automation.PropertyCondition]::new([Windows.Automation.AutomationElement]::ClassNameProperty,'Button'))
+ $buttons=$controls.Dialog.FindAll([Windows.Automation.TreeScope]::Descendants,$condition)
+ if($buttons.Count -ne 1){throw 'Native file Cancel button is missing or ambiguous'}
+ $button=$buttons[0];$handle=[IntPtr]$button.Current.NativeWindowHandle
+ [uint32]$owner=0;[void][NativeFileChoice]::GetWindowThreadProcessId($handle,[ref]$owner)
+ if($owner -ne $TargetProcessId -or -not $button.Current.IsEnabled){throw 'Native file Cancel target is unavailable'}
+ $invoke=$null
+ if($button.TryGetCurrentPattern([Windows.Automation.InvokePattern]::Pattern,[ref]$invoke)){$invoke.Invoke()}
+ else{
+  if([NativeFileChoice]::GetForegroundWindow() -ne [IntPtr]$controls.Dialog.Cached.NativeWindowHandle){throw 'File dialog has no focus; no cancel action sent'}
+  if(-not [NativeFileChoice]::PostMessage($handle,0x00F5,[IntPtr]::Zero,[IntPtr]::Zero)){throw 'Native file Cancel action failed'}
+ }
+ $end=[DateTime]::UtcNow.AddSeconds(15)
+ while($true){
+  try{$null=Find-OraforgeFileDialog -TargetProcessId $TargetProcessId -DialogTitle $DialogTitle -TimeoutSeconds 0}
+  catch{if($_.Exception.Message.Contains('Expected file dialog missing')){return};throw}
+  if([DateTime]::UtcNow -ge $end){throw 'Native file Cancel was not confirmed; action was not repeated'}
+  Start-Sleep -Milliseconds 50
+ }
+}

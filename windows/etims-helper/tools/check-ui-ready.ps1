@@ -8,7 +8,10 @@ $windows=[Windows.Automation.AutomationElement]::RootElement.FindAll([Windows.Au
 $main=@($windows|Where-Object {$_.Current.Name -ceq 'ETIMS1.0'})
 if($main.Count -ne 1){throw 'Main eTIMS window missing or ambiguous'}
 $observer=& "$PSScriptRoot\observe-ui.ps1" -WindowHandle ([IntPtr]$main[0].Current.NativeWindowHandle) -TargetProcessId $TargetProcessId
+$preInput=[Diagnostics.Stopwatch]::StartNew()
+$observer.BeforeInput()
+$preInput.Stop()
 $observer.Arm()
 $watch=[Diagnostics.Stopwatch]::StartNew()
 $observer.Settle()
-[pscustomobject]@{read_only=$true;events_available=$observer.Observing;settle_seconds=$watch.Elapsed.TotalSeconds}|ConvertTo-Json -Compress
+[pscustomobject]@{read_only=$true;events_available=$observer.Observing;before_input_seconds=$preInput.Elapsed.TotalSeconds;settle_seconds=$watch.Elapsed.TotalSeconds;status=$observer.Status}|ConvertTo-Json -Compress

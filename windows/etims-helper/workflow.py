@@ -39,6 +39,8 @@ def ps(script: str, *args: str, timeout=90) -> str:
                           'Unverified window geometry':'window geometry mismatch',
                           'Unrecognized eTIMS screen':'unrecognized screen',
                           'Expected file dialog missing':'file dialog not ready'}
+            safe_reasons['Target not ready before input']='target busy before input'
+            safe_reasons['Observed page navigation button missing']='page navigation control mismatch'
             reason=next((' ('+description+')' for message,description in safe_reasons.items() if message in stderr),'')
         raise RuntimeError(f'{Path(script).name} failed{reason}; stopped without retrying the action')
     return result.stdout.decode('utf-8-sig').strip()
@@ -156,7 +158,7 @@ class Ui:
             path.write_text(json.dumps(instruction), encoding='utf-8')
             deadline=time.monotonic()+5
             while True:
-                if instruction.get('action') in ('Click','Text','File','Complete'):
+                if instruction.get('action') in ('Click','Close','Text','File','Complete'):
                     from offline import require_offline
                     require_offline()
                 try:
@@ -165,7 +167,7 @@ class Ui:
                     # Faster transport must still allow the native page to paint.
                     # This exact category is emitted BEFORE any input is sent.
                     # Never replay focus failures, timeouts or a dispatched action.
-                    if '(screen mismatch)' in str(error) and time.monotonic()<deadline:
+                    if any(reason in str(error) for reason in ('(screen mismatch)','(target busy before input)')) and time.monotonic()<deadline:
                         time.sleep(.1)
                         continue
                     screen=Path(instruction.get('reference','print-file')).stem

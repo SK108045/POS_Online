@@ -30,6 +30,11 @@ try{
  foreach($region in $p.regions){
   [OraforgeScreenGuard]::VerifyFile($actual,[string]$p.reference,[int]$region[0],[int]$region[1],[int]$region[2],[int]$region[3])
  }
- if($p.action -notin @('Click','Text','Read','Complete')){throw 'Unsupported UI action'}
+ if($p.action -eq 'Close'){
+  $region=$p.navigation_region
+  if($region.Count -ne 4 -or $p.x -lt $region[0] -or $p.x -ge ($region[0]+$region[2]) -or $p.y -lt $region[1] -or $p.y -ge ($region[1]+$region[3])){throw 'Observed page navigation button missing; no input sent'}
+  [OraforgeScreenGuard]::VerifyFile($actual,[string]$p.navigation_reference,[int]$region[0],[int]$region[1],[int]$region[2],[int]$region[3])
+ }
+ if($p.action -notin @('Click','Close','Text','Read','Complete')){throw 'Unsupported UI action'}
  & "$tools\invoice-ui.ps1" -Action $p.action -TargetProcessId $p.pid -X $p.x -Y $p.y -Text $p.text
 }finally{if($actual){$actual.Dispose()}}

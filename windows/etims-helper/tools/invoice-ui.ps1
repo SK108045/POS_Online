@@ -1,4 +1,4 @@
-param([ValidateSet('Click','Text','Read','Snapshot','Complete')][string]$Action,[int]$X,[int]$Y,[string]$Text,[Parameter(Mandatory=$true)][int]$TargetProcessId,[int]$ExpectedWidth=1384,[int]$ExpectedHeight=786,[string]$OutputPath,[switch]$ImageOnly,[switch]$InMemory)
+param([ValidateSet('Click','Close','Text','Read','Snapshot','Complete')][string]$Action,[int]$X,[int]$Y,[string]$Text,[Parameter(Mandatory=$true)][int]$TargetProcessId,[int]$ExpectedWidth=1384,[int]$ExpectedHeight=786,[string]$OutputPath,[switch]$ImageOnly,[switch]$InMemory)
 $ErrorActionPreference='Stop'
 $OutputEncoding=[Console]::OutputEncoding=New-Object System.Text.UTF8Encoding($false)
 if(-not ('InvoiceUi' -as [type])){Add-Type -TypeDefinition @'
@@ -52,9 +52,10 @@ if([InvoiceUi]::GetForegroundWindow() -ne $h){
 if([InvoiceUi]::GetForegroundWindow() -ne $h){throw 'Target has no keyboard/mouse focus'}
 if($Action -ne 'Read'){
  $observer=& "$PSScriptRoot\observe-ui.ps1" -WindowHandle $h -TargetProcessId $TargetProcessId
+ $observer.BeforeInput()
  $global:OraforgeReady.Arm()
 }
-if($Action -eq 'Click'){
+if($Action -in @('Click','Close')){
  if($X -lt 0 -or $Y -lt 0 -or $X -ge $ExpectedWidth -or $Y -ge $ExpectedHeight){throw 'Point outside observed window'}
  [void][InvoiceUi]::SetCursorPos($rect.Left+$X,$rect.Top+$Y)
  [InvoiceUi]::mouse_event(2,0,0,0,[UIntPtr]::Zero)

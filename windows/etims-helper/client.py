@@ -7,13 +7,29 @@ from timing import timed
 
 DIALOGS = {'close-confirm','stock-confirm','customer-confirm','new-customer','new-confirm','approve-confirm','saved','printed','import-success'}
 REGIONS = {'menu':[10,110,270,440]}
+NAVIGATION = {
+    **{screen:('toolbar-close',1258,1314) for screen in ('registration','payment','stock-adjustment','detail','print')},
+    **{screen:('toolbar-close-plain',1258,1314) for screen in ('sales','stock-status')},
+    'item-management':('toolbar-close-item',1258,1314),
+    'customer':('toolbar-back',1258,1314),
+    **{screen:('toolbar-cancel',1137,1194) for screen in ('item-popup','customer-popup')},
+}
 
 class Client(Ui):
     def region(self,screen):
         return REGIONS.get(screen, [405,330,580,58] if screen in DIALOGS else [35,57,500,60])
     def action(self,screen,action,x=0,y=0,text=None):
-        return self.send(dict(pid=self.pid,action=action,x=x,y=y,text=text,
-                             reference=str(BASE/'profiles'/(screen+'.png')),regions=[self.region(screen)]))
+        instruction=dict(pid=self.pid,action=action,x=x,y=y,text=text,
+                         reference=str(BASE/'profiles'/(screen+'.png')),regions=[self.region(screen)])
+        if action=='Close':
+            profile,left,point=NAVIGATION[screen]
+            if (x,y)!=(point,89):raise ValueError('Unverified page navigation point')
+            # Xamarin draws these toolbar buttons on a canvas: no UIA Button
+            # peer exists. Verify Close/Back/Cancel as well as the page,
+            # especially beside the popups' distinct Confirm button.
+            instruction.update(navigation_reference=str(BASE/'profiles'/(profile+'.png')),
+                               navigation_region=[left,57,115,60])
+        return self.send(instruction)
     def detect(self):
         deadline=time.monotonic()+5
         while True:
@@ -25,7 +41,7 @@ class Client(Ui):
                 time.sleep(.15)
     def _detect_once(self):
         profiles=[dict(screen=screen,reference=str(BASE/'profiles'/(screen+'.png')),region=self.region(screen))
-                  for screen in sorted(DIALOGS)+['menu','sales','item-management','customer','stock-status','stock-adjustment','detail','print','registration']
+                  for screen in sorted(DIALOGS)+['menu','sales','item-management','customer','stock-status','stock-adjustment','detail','print','registration','payment','item-popup','customer-popup']
                   if (BASE/'profiles'/(screen+'.png')).exists()]
         try:
             return json.loads(self.send(dict(pid=self.pid,action='Detect',profiles=profiles)))['screen']
@@ -43,8 +59,10 @@ class Client(Ui):
             time.sleep(.3)
             found=self.detect()
     def close_owned(self,screen):
-        self.click(screen,1314,89)
+        self.close_page(screen)
         if self.detect()=='close-confirm':self.click('close-confirm',705,530)
+    def close_page(self,screen):
+        self.action(screen,'Close',NAVIGATION[screen][2],89)
     def menu(self):
         screen=self.detect()
         if screen=='menu':return
@@ -54,6 +72,28 @@ class Client(Ui):
         if self.detect()=='stock-status':self.close_owned('stock-status')
         if self.detect()=='sales':self.close_owned('sales')
         self.wait('menu')
+    @timed('navigate')
+    def reset_menu(self):
+        """User-authorized takeover: close unsaved pages, never save/approve/delete."""
+        for _ in range(18):
+            state=self.file_state()
+            if state['file_dialog']:
+                require_offline()
+                ps('tools/cancel-file-dialog.ps1','-TargetProcessId',str(self.pid),'-DialogTitle',state['file_dialog'])
+                continue
+            screen=self.detect()
+            if screen=='menu':return
+            if screen in ('saved','printed','import-success'):
+                self.click(screen,885,530) # Informational OK only.
+            elif screen in ('new-confirm','approve-confirm','stock-confirm','customer-confirm','new-customer'):
+                self.click(screen,885,530) # No: never create/approve on takeover.
+            elif screen=='close-confirm':
+                self.click(screen,705,530) # Yes, close without saving (explicit user instruction).
+            elif screen in ('sales','registration','payment','item-popup','customer-popup','item-management','customer','stock-status','stock-adjustment','detail','print'):
+                self.close_page(screen)
+            else:
+                raise ValueError('Unrecognized eTIMS page; no unverified close action was sent')
+        raise RuntimeError('eTIMS did not return to its main menu; no sale was submitted')
     @timed('navigate')
     def navigate(self,target):
         if self.detect()==target:return
@@ -76,19 +116,19 @@ class Client(Ui):
     def finish_invoice(self,invoice):
         # Only close read-only views whose displayed invoice identity is verified.
         screen=self.detect()
-        if screen=='printed':
+        if screen in ('printed','saved'):
             # This is an informational print acknowledgement, not an approval.
             # Its overlay hides the underlying edit controls from hit testing.
             # Verify the invoice immediately after dismissing this exact message.
-            self.click('printed',885,530);screen=self.detect()
+            self.click(screen,885,530);screen=self.detect()
         if screen=='print':
             self.expect('print',330,324,str(invoice))
             self.close_owned('print');screen=self.detect()
         if screen=='detail':
             self.expect('detail',240,216,str(invoice))
             self.close_owned('detail');screen=self.detect()
-        if screen=='menu':self.navigate('sales');return
-        if screen!='sales':raise ValueError('Finish the unrelated open eTIMS form before continuing')
+        if screen=='sales':self.close_owned('sales');screen=self.detect()
+        if screen!='menu':raise ValueError('Finish the unrelated open eTIMS form before continuing')
     @timed('product_registration')
     def register_products(self,path,registrations,buyer,checkpoint):
         # Validate absence immediately before import: native import can overwrite stock.

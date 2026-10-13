@@ -31,6 +31,7 @@ public static class FileFixture {
 }
 '@
 try{
+ foreach($operation in @('select','cancel')){
  foreach($title in @('Open','Save Print Output As')){
   $ready=Join-Path $folder 'ready.txt';$done=Join-Path $folder 'done.txt'
   foreach($old in @($ready,$done)){if(Test-Path -LiteralPath $old){Remove-Item -LiteralPath $old -Force}}
@@ -51,6 +52,16 @@ try{
    $controls=Find-OraforgeFileDialog -TargetProcessId $process.Id -DialogTitle $title -TimeoutSeconds 10
    $observer.Settle()
    Write-Output ($title+': verified filename Edit id='+$controls.Edit.Cached.AutomationId)
+   if($operation -eq 'cancel'){
+    $before=if(Test-Path -LiteralPath $path){[IO.File]::ReadAllText($path)}else{$null}
+    Cancel-OraforgeNativeFile -TargetProcessId $process.Id -DialogTitle $title
+    if(-not $process.WaitForExit(10000)){throw 'Cancelled fixture did not exit'}
+    if(Test-Path -LiteralPath $done){throw 'Cancel dispatched Save/Open'}
+    $after=if(Test-Path -LiteralPath $path){[IO.File]::ReadAllText($path)}else{$null}
+    if($before -cne $after){throw 'Cancel modified the fixture file'}
+    Write-Output ('PASS: '+$title+' cancelled once; no save, import or file modification.')
+    continue
+   }
    Set-OraforgeNativeFile -TargetProcessId $process.Id -DialogTitle $title -Path $path
    $end=[DateTime]::UtcNow.AddSeconds(10)
    while(-not (Test-Path -LiteralPath $done)){
@@ -65,6 +76,7 @@ try{
    if(-not $process.HasExited){$process.Kill();$process.WaitForExit(3000)|Out-Null}
    $process.Dispose()
   }
+ }
  }
 }finally{
  $absolute=[IO.Path]::GetFullPath($folder)

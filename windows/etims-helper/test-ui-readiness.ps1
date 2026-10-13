@@ -29,6 +29,9 @@ public static class OraforgeReadinessFixture {
     IntPtr handle=new WindowInteropHelper(window).Handle;EnableWindow(handle,false);
     File.WriteAllText(args[1]+".disabled","ready");Thread.Sleep(3000);EnableWindow(handle,true);File.Delete(args[1]);
    }
+   if(args.Length>2 && File.Exists(args[2])){
+    File.WriteAllText(args[2]+".busy","ready");Thread.Sleep(5500);File.Delete(args[2]);
+   }
   };
   window.Loaded += delegate {
    File.WriteAllText(args[0],new WindowInteropHelper(window).Handle.ToInt64().ToString());timer.Start();
@@ -39,7 +42,8 @@ public static class OraforgeReadinessFixture {
 '@
 $info=New-Object Diagnostics.ProcessStartInfo
 $block=Join-Path $folder 'block-owner.txt'
-$info.FileName=$exe;$info.Arguments='"'+$ready+'" "'+$block+'"';$info.UseShellExecute=$false;$info.CreateNoWindow=$true
+$busy=Join-Path $folder 'busy-owner.txt'
+$info.FileName=$exe;$info.Arguments='"'+$ready+'" "'+$block+'" "'+$busy+'"';$info.UseShellExecute=$false;$info.CreateNoWindow=$true
 $fixture=[Diagnostics.Process]::Start($info)
 $observer=$null
 try{
@@ -67,7 +71,25 @@ try{
  }
  $observer.Arm();$modalWatch=[Diagnostics.Stopwatch]::StartNew();$observer.Settle()
  if($modalWatch.ElapsedMilliseconds -gt 700){throw 'Disabled modal owner blocked the next file-dialog operation'}
+ if($observer.Status -ne 'modal'){throw 'Disabled owner was not reported as modal'}
+ $rejected=$false
+ try{$observer.BeforeInput()}catch{if($_.Exception.InnerException.Message -ne 'Target not ready before input'){throw};$rejected=$true}
+ if(-not $rejected){throw 'Input was allowed to a disabled modal owner'}
  Write-Output 'PASS: disabled WPF owner in a synchronous modal wait does not abort successful input.'
+ $deadline=[DateTime]::UtcNow.AddSeconds(6)
+ while(Test-Path -LiteralPath $block){if([DateTime]::UtcNow -gt $deadline){throw 'Fixture modal wait did not end'};Start-Sleep -Milliseconds 20}
+ [IO.File]::WriteAllText($busy,'request enabled dispatcher wait')
+ $deadline=[DateTime]::UtcNow.AddSeconds(3)
+ while(-not (Test-Path -LiteralPath ($busy+'.busy'))){if([DateTime]::UtcNow -gt $deadline){throw 'Fixture dispatcher did not enter busy wait'};Start-Sleep -Milliseconds 20}
+ $observer.Arm();$busyWatch=[Diagnostics.Stopwatch]::StartNew();$observer.Settle()
+ if($observer.Status -ne 'pending' -or $busyWatch.ElapsedMilliseconds -gt 2100){throw 'Busy enabled owner caused a false post-input failure'}
+ $rejected=$false
+ try{$observer.BeforeInput()}catch{if($_.Exception.InnerException.Message -ne 'Target not ready before input'){throw};$rejected=$true}
+ if(-not $rejected){throw 'New input was allowed during a busy dispatcher wait'}
+ Write-Output 'PASS: busy enabled WPF dispatcher returns pending after dispatch and rejects new input before dispatch.'
+ $deadline=[DateTime]::UtcNow.AddSeconds(7)
+ while(Test-Path -LiteralPath $busy){if([DateTime]::UtcNow -gt $deadline){throw 'Fixture busy wait did not end'};Start-Sleep -Milliseconds 20}
+ $observer.BeforeInput()
  $foreign=New-Object OraforgeUiReadiness($handle,($fixture.Id+100000))
  try{
   $foreign.Arm();$rejected=$false

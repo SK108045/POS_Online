@@ -23,6 +23,7 @@ public sealed class OraforgeUiReadiness : IDisposable {
     volatile bool observing;
     public bool Observing { get { return observing; } }
     public long Notifications { get { return Interlocked.Read(ref notifications); } }
+    public string Status { get; private set; }
 
     public OraforgeUiReadiness(IntPtr window, int process) {
         this.window = window; this.process = process;
@@ -59,7 +60,7 @@ public sealed class OraforgeUiReadiness : IDisposable {
         long now = Stopwatch.GetTimestamp();
         Interlocked.Exchange(ref armed, now); Interlocked.Exchange(ref changed, now);
     }
-    void Responsive() {
+    bool Responsive() {
         uint owner;
         if (GetWindowThreadProcessId(window, out owner) == 0 || owner != process)
             throw new InvalidOperationException("Target window changed");
@@ -67,26 +68,37 @@ public sealed class OraforgeUiReadiness : IDisposable {
         // synchronously wait for the dialog. WM_NULL to that owner can time out
         // during a successful Import click. The next operation must validate
         // its own exact modal/window; settling must not abort this transition.
-        if (!IsWindowEnabled(window)) return;
+        if (!IsWindowEnabled(window)) return true;
         UIntPtr result;
         // WM_NULL is read only. A hung target is never sent another action.
         if (SendMessageTimeout(window, 0, IntPtr.Zero, IntPtr.Zero, 2, 1500, out result) == IntPtr.Zero) {
             if (GetWindowThreadProcessId(window, out owner) == 0 || owner != process)
                 throw new InvalidOperationException("Target window changed");
-            if (!IsWindowEnabled(window)) return;
-            throw new InvalidOperationException("Target did not become responsive");
+            if (!IsWindowEnabled(window)) return true;
+            return false;
         }
+        return true;
+    }
+    public void BeforeInput() {
+        // This check happens before any click/key input. The caller may retry
+        // only this explicit pre-input category after rechecking the screen.
+        if (!Responsive() || !IsWindowEnabled(window))
+            throw new InvalidOperationException("Target not ready before input");
     }
     public void Settle() {
-        Responsive();
-        if (!IsWindowEnabled(window)) return;
-        if (!observing) { Thread.Sleep(500); Responsive(); return; }
+        Status = "pending";
+        // Input has already been dispatched. A temporarily busy dispatcher
+        // is not evidence that it failed. Leave the normal DB/page/value
+        // verification to establish the outcome; never replay this input.
+        if (!Responsive()) return;
+        if (!IsWindowEnabled(window)) { Status = "modal"; return; }
+        if (!observing) { Thread.Sleep(500); if (Responsive()) Status = "ready"; return; }
         while (true) {
             long now = Stopwatch.GetTimestamp();
             double age = (now - Interlocked.Read(ref armed)) * 1000.0 / Stopwatch.Frequency;
             double quiet = (now - Interlocked.Read(ref changed)) * 1000.0 / Stopwatch.Frequency;
-            if (age >= 120 && quiet >= 80) { Responsive(); return; }
-            if (!IsWindowEnabled(window)) { Responsive(); return; }
+            if (age >= 120 && quiet >= 80) { if (Responsive()) Status = "ready"; return; }
+            if (!IsWindowEnabled(window)) { Responsive(); Status = "modal"; return; }
             if (age >= 1500) { Responsive(); return; }
             Thread.Sleep(15);
         }

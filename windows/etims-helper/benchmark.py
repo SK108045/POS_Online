@@ -36,6 +36,7 @@ def benchmark(repetitions=4, legacy_assets=None):
                   screen_detection=measure(client.detect, repetitions))
     readiness = json.loads(ps('tools/check-ui-ready.ps1', '-TargetProcessId', str(client.pid)))
     result['ui_events_available'] = readiness['events_available']
+    result['pre_input_readiness_seconds'] = readiness.get('before_input_seconds')
     result['readiness_settle'] = measure(lambda: ps('tools/check-ui-ready.ps1', '-TargetProcessId', str(client.pid)), repetitions)
     with tempfile.TemporaryDirectory(prefix='etims-readonly-timing-') as folder:
         instruction = Path(folder) / 'guard.json'
