@@ -25,7 +25,7 @@
     const name = text(input.name, 120);
     return {pin, phone: text(input.phone || input.customer_phone, 40), email,
       billing_address: text(input.billing_address || input.customer_billing_address, 240),
-      ...(name ? {name} : {})};
+      ...(name ? {name} : {}), ...(input.remarks ? {remarks:text(input.remarks,500)} : {})};
   }
   function snapshot(order, shopId, settings = {}, details = {}) {
     if (order.status !== 'paid' || order.is_quote || order.order_type === 'quote') throw Error('Only completed sales can be invoiced.');
@@ -64,7 +64,15 @@
     for (const key of ['cu_invoice_number','scu_id','receipt_signature','invoice_number','invoice_date']) result[key] = text(input[key], 160);
     if (!result.cu_invoice_number || !/^[A-Za-z0-9][A-Za-z0-9/_ .:-]{2,159}$/.test(result.cu_invoice_number)) throw Error('Enter the genuine CU Invoice Number shown by KRA.');
     result.qr_image = qr(input.qr_image);
-    if (source === 'portal' && (!result.scu_id || !result.receipt_signature || !result.invoice_date || !result.invoice_number || !result.qr_image)) throw Error('The KRA invoice is incomplete. Open the official invoice or enter its details manually.');
+    if (['portal','windows'].includes(source) && (!result.scu_id || !result.receipt_signature || !result.invoice_date || !result.invoice_number || !result.qr_image)) throw Error('The KRA invoice is incomplete. Open the official invoice or enter its details manually.');
+    if (source === 'windows') {
+      if (input.local_issuance_status !== 'issued') throw Error('The Windows client has not confirmed local issuance.');
+      result.local_issuance_status = 'issued';
+      result.kra_acceptance_status = input.kra_acceptance_status === 'accepted' ? 'accepted' : 'unverified';
+      result.qr_payload = text(input.qr_payload, 2000);
+      result.original_pdf_sha256 = text(input.original_pdf_sha256, 64);
+      result.original_qr_sha256 = text(input.original_qr_sha256, 64);
+    }
     result.source = source;
     return result;
   }
@@ -85,7 +93,7 @@
     } else if (action.type === 'capture') {
       const value = fiscal(action.fiscal, action.source);
       if (generated && record.fiscal.cu_invoice_number !== value.cu_invoice_number) throw Error('A different CU Invoice Number is already saved.');
-      if (action.source === 'portal' && (action.attempt_id !== record.attempt_id || action.digest !== record.digest || action.total_cents !== record.snapshot.total_cents)) throw Error('KRA confirmation does not match this sale attempt.');
+      if (['portal','windows'].includes(action.source) && (action.attempt_id !== record.attempt_id || action.digest !== record.digest || action.total_cents !== record.snapshot.total_cents)) throw Error('KRA confirmation does not match this sale attempt.');
       next.status = 'generated';
       // A late automatic result may complete a manually saved CU, without erasing it.
       next.fiscal = {...record.fiscal, ...Object.fromEntries(Object.entries(value).filter(([,v]) => v !== ''))};
@@ -96,9 +104,25 @@
   function receipt(record) {
     if (!record) return '';
     const f = record.fiscal;
-    if (!f?.cu_invoice_number) return `<section class="receipt-etims"><p>eTIMS: ${record.status === 'pending' ? 'Pending' : 'Check existing KRA invoice'}</p></section>`;
+    if (!f?.cu_invoice_number) return `<section class="receipt-etims"><p>eTIMS: ${escape(record.helper_state ? record.helper_state.replaceAll('_',' ') : record.status === 'pending' ? 'Pending' : 'Check existing KRA invoice')}</p>${record.helper_error?`<p>${escape(record.helper_error)}</p>`:''}</section>`;
     const rows = [['CU Invoice Number',f.cu_invoice_number],['SCU ID',f.scu_id],['Receipt Signature',f.receipt_signature],['Invoice Number',f.invoice_number],['Invoice Date',f.invoice_date]];
-    return `<section class="receipt-etims"><p><strong>KRA eTIMS</strong>${f.source === 'manual' ? ' · Manually recorded' : ''}</p>${rows.filter(([,v])=>v).map(([k,v])=>`<div class="receipt-line"><span>${k}</span><span>${escape(v)}</span></div>`).join('')}${f.qr_image ? `<img class="receipt-kra-qr" alt="Official KRA QR code" src="${escape(qr(f.qr_image))}">` : '<p>Official QR not captured. Refer to the KRA invoice.</p>'}</section>`;
+    return `<section class="receipt-etims"><p><strong>KRA eTIMS</strong>${f.source === 'manual' ? ' · Manually recorded' : ''}</p>${rows.filter(([,v])=>v).map(([k,v])=>`<div class="receipt-line"><span>${k}</span><span>${escape(v)}</span></div>`).join('')}${f.source==='windows'?`<p>Issued by eTIMS Windows Client · KRA upload ${f.kra_acceptance_status==='accepted'?'accepted':'unverified'}</p>`:''}${f.qr_image ? `<img class="receipt-kra-qr" alt="Official KRA QR code" src="${escape(qr(f.qr_image))}">` : '<p>Official QR not captured. Refer to the KRA invoice.</p>'}</section>`;
   }
-  return {escape, customer, snapshot, fiscal, transition, receipt, qr};
+  function windowsSnapshot(order, shopId, settings = {}, details = {}) {
+    const sale=snapshot(order,shopId,settings,details);
+    if (!sale.customer.pin || !sale.customer.name) throw Error('Buyer KRA PIN and name are required by the Windows eTIMS client.');
+    if (sale.discount.amount_cents || sale.tax_cents) throw Error('This verified eTIMS desktop profile currently supports Non-VAT sales without discounts.');
+    sale.version=2;
+    if(details.remarks) sale.customer.remarks=text(details.remarks,500);
+    sale.items=sale.items.map((line,index)=>{
+      const item=order.items[index];
+      // Price and quantity never form part of a product identity.
+      const productKey=item.etims_product_key || (item.menu_item_id ? 'catalog:'+item.menu_item_id : 'manual:'+text(item.name).toLowerCase());
+      return {...line,product_key:text(productKey+(item.variant_info?'|variant:'+item.variant_info:''),200),
+        registration:item.etims_registration || {},inventory:item.etims_inventory || {},
+        ...(item.expiry_date?{expiry_date:text(item.expiry_date,20)}:{}),...(item.batch_no?{batch_no:text(item.batch_no,80)}:{})};
+    });
+    return sale;
+  }
+  return {escape, customer, snapshot, windowsSnapshot, fiscal, transition, receipt, qr};
 });

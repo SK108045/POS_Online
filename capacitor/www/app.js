@@ -5,7 +5,7 @@ const qsa = (sel, root = document) => [...root.querySelectorAll(sel)];
 
 // ── Receipt Modal ─────────────────────────────────────────────────────────────
 const receiptEscape = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;'}[c]));
-function showReceiptModal(order, isKot = false) {
+function showReceiptModal(order, isKot = false, autoPrintEtims = false) {
   document.getElementById('receiptModal')?.remove();
 
   const bname = state.settings?.business_name || 'POS SYSTEM';
@@ -88,7 +88,7 @@ function showReceiptModal(order, isKot = false) {
           <h2 class="receipt-sale-title">${isQuote ? 'Quotation' : 'Cash Sale'}</h2>
         </header>
         <div class="receipt-details">
-          <div class="receipt-line"><span>Name</span><span>${receiptEscape(order.customer_name || 'Walk-In Customer')}</span></div>
+          <div class="receipt-line"><span>Name</span><span>${receiptEscape(order.etims_customer?.name || order.customer_name || 'Walk-In Customer')}</span></div>
           <div class="receipt-line"><span>Receipt No.</span><span>${receiptEscape(order.ticket_no || order.id || '-')}</span></div>
           <div class="receipt-line"><span>Date</span><span>${created.toLocaleDateString('en-GB')}</span></div>
           <div class="receipt-line"><span>Print Time</span><span>${printedAt}</span></div>
@@ -123,6 +123,7 @@ function showReceiptModal(order, isKot = false) {
 
   const overlay = document.createElement('div');
   overlay.id = 'receiptModal';
+  overlay.dataset.etimsAutoPrint = String(autoPrintEtims && Boolean(order.etims_requested));
   overlay.className = 'receipt-modal-overlay';
   overlay.innerHTML = `
     <div class="receipt-modal" role="dialog" aria-modal="true">
@@ -148,7 +149,7 @@ function showReceiptModal(order, isKot = false) {
     try {
       await overlay.etimsReady;
       if (!isKot && !isQuote && overlay.dataset.etimsRequested === 'true' && overlay.dataset.etimsConfirmed !== 'true') {
-        toast('The payment is saved. Finish issuing the KRA invoice before printing the final receipt.', 'info');
+        toast('The payment is saved. Wait for eTIMS local issuance before printing the final fiscal receipt.', 'info');
         return;
       }
       await Promise.all([...overlay.querySelectorAll('.receipt-kra-qr')].map(img => img.decode()));
@@ -616,6 +617,20 @@ const LocalPOS = {
       return order;
     }
 
+    if (cleanPath === '/api/order/add-manual' && method === 'POST') {
+      const orders=await this.getShop('orders',[],btype);
+      const order=orders.find(o=>o.id===Number(body.order_id));
+      if(!order || order.status!=='open')throw Error('Select an open sale');
+      const name=String(body.name || '').trim(),sku=String(body.sku || '').trim().toLowerCase();
+      const qty=Number(body.qty),price=Number(body.unit_price_cents),cost=Number(body.cost_cents);
+      if(!name || name.length>160 || /[\u0000-\u001f]/.test(name+sku) || sku.length>120)throw Error('Enter a valid custom product name and reference');
+      if(!Number.isFinite(qty) || qty<=0 || !Number.isSafeInteger(price) || price<=0 || !Number.isSafeInteger(cost) || cost<0 || !Number.isSafeInteger(Math.round(qty*price)))throw Error('Enter actual quantity, selling price and purchase cost');
+      order.items.push({id:this.nextId(order.items || []),menu_item_id:null,name,qty,unit_price_cents:price,cost_cents:cost,
+        line_total_cents:Math.round(qty*price),variant_info:'',note:'',batch_no:'',
+        etims_product_key:'manual:'+(sku || name.toLowerCase()),etims_registration:{unit_cost_cents:cost}});
+      this.recalc(order);await this.saveOrders(orders,btype);return order;
+    }
+
     if (cleanPath === '/api/order/add' && method === 'POST') {
       const orders = await this.getShop('orders', [], btype);
       const products = await this.getShop('items', [], btype);
@@ -732,6 +747,12 @@ const LocalPOS = {
         if (verifiedMpesa.status !== 'success') {
           throw new Error('M-Pesa is not verified yet. Complete the prompt and wait for automatic confirmation.');
         }
+      }
+      if (body.generate_etims) {
+        const buyer=window.OraforgeEtimsCore.customer(body.etims_customer || {});
+        if(!buyer.pin || !buyer.name) throw Error('Buyer KRA PIN and name are required.');
+        window.OraforgeEtims.enrich(order,products);
+        order.etims_registration_details=body.etims_registration_details || {};
       }
       if (order.status !== 'paid') {
         for (const oi of order.items || []) {
@@ -1343,6 +1364,7 @@ function posLayout() {
           <small>Tap a product to add it instantly</small>
         </div>
         <div class="pos-control-strip">
+          <button type="button" class="secondary" id="customSaleItemBtn">Custom item</button>
           ${hasCap('wholesale_pricing') ? `<button type="button" id="tierToggleBtn" class="tier-toggle-btn ${state.pricingTier === 'wholesale' ? 'active' : ''}">${state.pricingTier === 'wholesale' ? '⚡ Wholesale' : '🏷️ Retail'}</button>` : ''}
           ${hasCap('tables') ? `<select id="tableSelect" class="field"><option value="">Table / Tab</option>${state.tables.map(t => `<option value="${t.id}" ${state.selectedTableId == t.id ? 'selected' : ''}>${t.name}</option>`).join('')}</select>` : ''}
           ${hasCap('waiters') ? `<select id="waiterSelect" class="field"><option value="">Staff / Waiter</option>${state.employees.map(e => `<option value="${e.id}" ${state.selectedEmployeeId == e.id ? 'selected' : ''}>${e.name}</option>`).join('')}</select>` : ''}
@@ -1393,6 +1415,7 @@ function posLayout() {
     renderItems();
   });
   qs('#posBarcodeScanBtn')?.addEventListener('click', () => showBarcodeModal('pos'));
+  qs('#customSaleItemBtn')?.addEventListener('click',showCustomSaleItem);
   qs('#mobileCartBar')?.addEventListener('click', () => setMobileCartOpen(true));
   qs('#mobileCartBackdrop')?.addEventListener('click', () => setMobileCartOpen(false));
   qs('#mobileCartClose')?.addEventListener('click', () => setMobileCartOpen(false));
@@ -1712,6 +1735,20 @@ async function ensureOrder() {
   return state.order;
 }
 
+function showCustomSaleItem() {
+  const overlay=document.createElement('div');overlay.className='qty-popup-overlay';
+  overlay.innerHTML=`<form class="qty-popup"><h3>Custom sale item</h3><label>Product name *<input class="field" name="name" maxlength="160" required></label><label>Stable product reference (optional)<input class="field" name="sku" maxlength="120"></label><label>Quantity *<input class="field" name="qty" type="number" min="0.001" step="0.001" value="1" required></label><label>Unit selling price (KES) *<input class="field" name="price" type="number" min="0.01" step="0.01" required></label><label>Actual unit purchase cost (KES) *<input class="field" name="cost" type="number" min="0" step="0.01" required></label><p data-msg role="status"></p><div class="qty-popup-actions"><button type="button" data-cancel>Cancel</button><button class="primary">Add to sale</button></div></form>`;
+  document.body.append(overlay);overlay.querySelector('[data-cancel]').onclick=()=>overlay.remove();
+  overlay.querySelector('form').onsubmit=async event=>{
+    event.preventDefault();const form=event.target,button=form.querySelector('.primary');button.disabled=true;
+    try{
+      const toCents=value=>{const n=Number(value)*100;if(Math.abs(n-Math.round(n))>0.000001)throw Error('Use at most two decimal places for money');return Math.round(n);};
+      const order=await ensureOrder();state.order=await api('/api/order/add-manual',{method:'POST',body:{order_id:order.id,name:form.elements.name.value,sku:form.elements.sku.value,qty:Number(form.elements.qty.value),unit_price_cents:toCents(form.elements.price.value),cost_cents:toCents(form.elements.cost.value)}});
+      overlay.remove();renderTicket();
+    }catch(error){overlay.querySelector('[data-msg]').textContent=error.message;button.disabled=false;}
+  };
+}
+
 async function addItemWithQty(menuItemId, qty, variantInfo = '', note = '', batchNo = '') {
   const order = await ensureOrder();
   state.order = await api('/api/order/add', {
@@ -1803,7 +1840,7 @@ function renderTicket() {
           ${dbItem.image_url ? `<img src="${dbItem.image_url}" style="width:100%;height:100%;object-fit:contain;padding:4px;box-sizing:border-box;border-radius:7px;">` : getCategoryIcon(catName)}
         </div>
         <div class="ticket-info">
-          <strong>${item.name}</strong>
+          <strong>${receiptEscape(item.name)}</strong>
           ${item.variant_info ? `<div style="font-size:11px; color:var(--ink); font-weight:700;">[${item.variant_info}]</div>` : ''}
           ${item.batch_no ? `<div style="font-size:11px; color:var(--muted);">Batch: ${item.batch_no}</div>` : ''}
           ${item.note ? `<div style="font-size:11px; color:#2563eb; font-style:italic;">* ${item.note}</div>` : ''}
@@ -1981,6 +2018,7 @@ async function showCheckoutModal(order) {
   let selectedMethod = 'mpesa';
   let savedPhone = order.customer_phone || '';
   const checkoutShop = window.OraforgeEtims?.scope();
+  let etimsRegistrationDetails = {};
   let generateEtims = false, etimsCustomer = {name:order.etims_customer?.name || order.customer_name || '', phone:order.etims_customer?.phone || order.customer_phone || '',pin:order.customer_kra_pin || '', email:order.customer_email || '',billing_address:order.customer_billing_address || ''};
   let paymentPollTimer = null;
   let paymentPollGeneration = 0;
@@ -2092,7 +2130,11 @@ async function showCheckoutModal(order) {
             phone:overlay.querySelector('#etimsPhone').value.trim() || customerPhoneInput.value.trim(),
             pin:overlay.querySelector('#etimsPin').value,
             email:overlay.querySelector('#etimsEmail').value, billing_address:overlay.querySelector('#etimsAddress').value});
-        } catch (error) { msgEl.textContent = error.message; return; }
+          etimsCustomer.remarks=overlay.querySelector('#etimsRemarks').value.trim();
+          confirmBtn.disabled=true;msgEl.textContent='Checking eTIMS products and stock?';
+          etimsRegistrationDetails=await window.OraforgeEtims.beforePayment(order,state.settings,etimsCustomer,selectedMethod,state.items);
+          confirmBtn.disabled=false;msgEl.textContent='';
+        } catch (error) { msgEl.textContent = error.message; confirmBtn.disabled=false; return; }
       }
       if (selectedMethod === 'mpesa') {
         const rawPhone = (refInput.value.trim() || customerPhoneInput.value.trim());
@@ -2142,11 +2184,11 @@ async function showCheckoutModal(order) {
               payment_method: 'cash',
               payment_ref: 'CASH',
               customer_phone: (customerPhoneInput?.value || '').trim(),
-              generate_etims: generateEtims, etims_customer: etimsCustomer, etims_shop_id:checkoutShop
+              generate_etims: generateEtims, etims_customer: etimsCustomer, etims_shop_id:checkoutShop, etims_registration_details:etimsRegistrationDetails
             }
           });
           overlay.remove();
-          showReceiptModal(paidOrder);
+          showReceiptModal(paidOrder, false, true);
           window.OraforgeEtims?.afterPayment(paidOrder, state.settings);
           state.order = null;
           renderTicket();
@@ -2215,12 +2257,12 @@ async function showCheckoutModal(order) {
             method:'POST',
             body:{order_id:order.id,payment_method:'mpesa',payment_ref:verified.payment_ref,
               customer_phone:cleanPhone,swifta_attempt_id:attemptId,swifta_checkout_id:checkoutId,
-              generate_etims:generateEtims, etims_customer:etimsCustomer, etims_shop_id:checkoutShop}
+              generate_etims:generateEtims, etims_customer:etimsCustomer, etims_shop_id:checkoutShop, etims_registration_details:etimsRegistrationDetails}
           });
           if (generation !== paymentPollGeneration) return;
           stopPaymentPoll();
           overlay.remove();
-          showReceiptModal(paidOrder);
+          showReceiptModal(paidOrder, false, true);
           window.OraforgeEtims?.afterPayment(paidOrder, state.settings);
           state.order = null;
           renderTicket();

@@ -1,0 +1,7 @@
+{
+  "installation_dir": "C:\\eTIMS-Paypoint-Win",
+  "taxpayer_pin": "",
+  "branch_id": "01",
+  "port": 17383,
+  "registration_defaults": {"origin": "KE"}
+}

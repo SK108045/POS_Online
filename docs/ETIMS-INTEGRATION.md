@@ -1,5 +1,7 @@
 # Oraforge eTIMS Companion
 
+**Historical portal extension documentation.** Current Windows checkout uses the [Windows helper integration](ETIMS-WINDOWS.md). The extension is excluded from new Windows packages; this document is retained for existing fiscal records and regression reference.
+
 Implemented on `improved-ui` for the active browser POS in `capacitor/www` and its existing KRA eCitizen popup URL. The Chrome extension is in `chrome-extension/`. Windows packaging includes this folder. The separate legacy Python UI and Android WebView do not run Chrome extensions.
 
 ## Install

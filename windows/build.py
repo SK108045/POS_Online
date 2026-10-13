@@ -81,9 +81,12 @@ def main():
     app.mkdir(parents=True)
     # In particular, do not ship the tracked www/paystack.txt or development credentials.
     shutil.copytree(CAP / "www", app / "www", ignore=shutil.ignore_patterns("paystack.txt", "*.map"))
-    shutil.copytree(ROOT / "chrome-extension", STAGE / "chrome-extension")
+    shutil.copytree(ROOT / "windows/etims-helper", STAGE / "app/windows/etims-helper",
+                    ignore=shutil.ignore_patterns('__pycache__', '*.pyc', 'config.json', 'helper.token', '*.sqlite3', 'ledger', 'output', 'imports'))
+    (STAGE / 'app/docs').mkdir(parents=True, exist_ok=True)
+    shutil.copy2(ROOT / 'docs/ETIMS-WINDOWS.md', STAGE / 'app/docs/ETIMS-WINDOWS.md')
     for name in ("dev-server.js", "auto-backup.js", "sms.js", "swifta.js",
-                 "swifta-config.js", "swifta-contract.js"):
+                 "swifta-config.js", "swifta-contract.js", "etims-windows.js"):
         shutil.copy2(CAP / name, app / name)
     (STAGE / "app/swifta.txt").write_text("", encoding="utf-8")
     (app / "sozuri-config.json").write_text(json.dumps(EMPTY_SOZURI, indent=2) + "\n", encoding="utf-8")

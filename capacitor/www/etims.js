@@ -1,4 +1,4 @@
-/* Oraforge eTIMS workspace: KRA invoices are issued in the official portal. */
+/* Oraforge eTIMS workspace: Invoices are issued by the local eTIMS Windows client. */
 (() => {
   const markup = `
   <style id="etims-launch-portal">
@@ -28,33 +28,18 @@
   <span class="etims-launch-eyebrow">✦ Digital Invoicing Workspace</span>
   <h2 id="oraforge-etims-title">eTIMS <span>Invoice Workspace.</span></h2>
   <p class="etims-launch-description">Manage your store in Oraforge and access official KRA invoicing from one convenient workspace.</p>
-  <div class="etims-launch-bottom"><button type="button" id="etimsLaunchOpen" class="etims-launch-open">Open eTIMS <span aria-hidden="true">↗</span></button><span class="etims-launch-note">Opens official KRA invoicing in a separate secure window. Select a pending POS sale below to prepare an invoice. Review and confirm generation in KRA.</span></div>
+  <div class="etims-launch-bottom"><button type="button" id="etimsLaunchOpen" class="etims-launch-open">Open eTIMS <span aria-hidden="true">↗</span></button><span class="etims-launch-note">Registers missing products and issues invoices through your installed eTIMS Windows client. Local issuance and KRA upload acceptance are tracked separately.</span></div>
 </section>`;
   window.renderEtims = function () {
     const root = document.getElementById('sec-etims');
     if (!root) return;
     root.innerHTML = markup;
     const openButton = root.querySelector('#etimsLaunchOpen');
-    openButton.addEventListener('click', () => {
-      // GNOME/Ubuntu can auto-maximize large new Chrome windows. Keep both
-      // dimensions comfortably below the available desktop work area.
-      const screenWidth = window.screen.availWidth || window.innerWidth || 1280;
-      const screenHeight = window.screen.availHeight || window.innerHeight || 800;
-      const width = Math.min(820, Math.max(480, Math.round(screenWidth * 0.60)));
-      const height = Math.min(600, Math.max(400, Math.round(screenHeight * 0.76)));
-      const left = Math.max(0, (window.screen.availLeft || 0) + Math.round((screenWidth - width) / 2));
-      const top = Math.max(0, (window.screen.availTop || 0) + Math.round((screenHeight - height) / 2));
-      const features = `popup=yes,width=${width},height=${height},left=${left},top=${top},scrollbars=yes,resizable=yes`;
-      // New name avoids reusing an already-maximized window from the old launcher.
-      const popup = window.open('https://ecitizen.kra.go.ke/individual/etims/sale/create', 'oraforge-etims-compact-v3', features);
-      if (popup) {
-        // Browsers may restore remembered window dimensions on subsequent clicks.
-        // These methods are best-effort; the window manager still has final say.
-        try { popup.resizeTo(width, height); popup.moveTo(left, top); } catch (_) {}
-        popup.focus();
-      } else {
-        window.alert('Please allow pop-up windows for Oraforge to open eTIMS.');
-      }
+    openButton.textContent='Check Windows helper';
+    openButton.addEventListener('click',async()=>{
+      openButton.disabled=true;
+      try {await window.OraforgeEtims.bridge('ping');window.alert('Windows eTIMS helper is running. Select a POS sale below, or use Generate eTIMS Invoice at checkout.');}
+      catch(error){window.alert(error.message);}finally{openButton.disabled=false;}
     });
   };
 
@@ -76,10 +61,10 @@
       const rows = all.filter(r => filter === 'all' || r.status === filter);
       host.innerHTML = `<h2>POS eTIMS invoices</h2><p>${all.filter(r=>r.status==='pending').length} pending · ${all.filter(r=>r.status==='generated').length} generated · ${all.filter(r=>r.status==='review_required').length} require checking</p>
         <label>Show <select data-filter><option value="all">All invoices</option><option value="pending">Pending</option><option value="generated">Generated</option><option value="review_required">Check existing invoice</option></select></label>
-        <button type="button" data-sync>Refresh from extension</button><p role="status" data-status></p>
-        <table><thead><tr><th>POS receipt</th><th>Total</th><th>Status</th><th>CU Invoice Number</th><th>Actions</th></tr></thead><tbody>${rows.map(r=>`<tr><td>${e(r.receipt_no)}</td><td>KES ${(r.snapshot.total_cents/100).toFixed(2)}</td><td>${r.status==='generated'?'Generated':r.status==='pending'?'Pending':'Check existing invoice'}</td><td>${e(r.fiscal?.cu_invoice_number || '—')}</td><td>
-          ${r.status==='pending'?`<button data-action="start" data-id="${e(r.id)}">Prepare in KRA</button>`:''}
-          ${r.status==='review_required'?`<button data-action="resume" data-id="${e(r.id)}">Resume filling in KRA</button><button data-action="recover" data-id="${e(r.id)}">Check existing in KRA</button><button data-action="absent" data-id="${e(r.id)}">Checked: no invoice issued</button>`:''}
+        <button type="button" data-sync>Refresh Windows helper</button><p role="status" data-status></p>
+        <table><thead><tr><th>POS receipt</th><th>Total</th><th>Status</th><th>CU Invoice Number</th><th>Actions</th></tr></thead><tbody>${rows.map(r=>`<tr><td>${e(r.receipt_no)}</td><td>KES ${(r.snapshot.total_cents/100).toFixed(2)}</td><td>${e(r.helper_state || r.status)}${r.fiscal?.source==='windows'?'<br>KRA upload '+e(r.fiscal.kra_acceptance_status):''}${r.helper_error?'<br>'+e(r.helper_error):''}</td><td>${e(r.fiscal?.cu_invoice_number || '—')}</td><td>
+          ${r.status==='pending'?`<button data-action="start" data-id="${e(r.id)}">Issue with Windows helper</button>`:''}
+          ${r.status==='review_required' && r.snapshot.version===2?`<button data-action="recover" data-id="${e(r.id)}">Recover this sale</button>`:''}
           <button data-action="manual" data-id="${e(r.id)}">${r.status==='generated'?'Complete KRA details':'Enter CU manually'}</button>
           <button data-action="reprint" data-id="${e(r.id)}">Reprint receipt</button></td></tr>`).join('') || '<tr><td colspan="5">No invoices in this view. Select Generate eTIMS Invoice at checkout, or manage eTIMS from a paid receipt.</td></tr>'}</tbody></table>`;
       host.querySelector('[data-filter]').value = filter;

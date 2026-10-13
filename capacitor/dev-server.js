@@ -148,6 +148,11 @@ function handleRequest(req, res) {
   const parsedUrl = new URL(req.url, 'http://' + (req.headers.host || 'localhost'));
   let pathname = decodeURIComponent(parsedUrl.pathname);
 
+  if (pathname.startsWith('/api/etims/')) {
+    require('./etims-windows').handle(req, res);
+    return;
+  }
+
   if (DESKTOP && pathname === '/api/local/health') {
     res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
     res.end(JSON.stringify({ app: 'oraforge-pos', instance: process.env.POS_INSTANCE, build: process.env.POS_BUILD, pid: process.pid }));

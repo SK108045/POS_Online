@@ -14,6 +14,8 @@ NEEDED = [
     "app/capacitor/dev-server.js", "app/capacitor/www/sqlite-bridge.js",
     "app/capacitor/www/index.html", "app/capacitor/www/admin.html",
     "app/capacitor/sozuri-config.json", "app/swifta.txt", "build-info.json",
+    "app/capacitor/etims-windows.js", "app/windows/etims-helper/server.py",
+    "app/windows/etims-helper/read-state.ps1", "app/windows/etims-helper/profiles/sales.png",
 ]
 
 
@@ -24,6 +26,10 @@ def verify():
         for name in NEEDED:
             assert "OraforgePOS/" + name in names, f"Missing {name}"
         assert not any(name.endswith("/paystack.txt") for name in names), "Payment key file bundled"
+        assert not any('/chrome-extension/' in name for name in names), "Legacy extension bundled"
+        for name in names:
+            if '/etims-helper/' in name:
+                assert not name.endswith(('/config.json','/helper.token','/active-run.lock','.sqlite3')), 'Private helper state bundled'
         assert z.read("OraforgePOS/app/swifta.txt").strip() == b"", "Swifta key bundled"
         sms = json.loads(z.read("OraforgePOS/app/capacitor/sozuri-config.json"))
         assert not sms.get("apiKey"), "Sozuri key bundled"

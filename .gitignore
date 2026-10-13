@@ -34,3 +34,12 @@ capacitor/src/provider-config.json
 # Windows delivery archives contain configured provider files and bundled runtime.
 /dist/
 /windows/.cache/
+
+# Per-user eTIMS companion state is never shipped or committed.
+windows/etims-helper/config.json
+windows/etims-helper/helper.token
+windows/etims-helper/*.sqlite3*
+windows/etims-helper/active-run.lock
+windows/etims-helper/ledger/
+windows/etims-helper/output/
+windows/etims-helper/imports/
