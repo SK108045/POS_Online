@@ -2,7 +2,7 @@ param([int]$TargetProcessId,[string]$OutputPath,[long]$WindowHandle=0)
 $ErrorActionPreference='Stop'
 Add-Type -AssemblyName UIAutomationClient
 Add-Type -AssemblyName System.Drawing
-Add-Type -TypeDefinition 'using System;using System.Runtime.InteropServices;public static class ResearchPrintWindow{[DllImport("user32.dll")]public static extern bool PrintWindow(IntPtr window,IntPtr dc,uint flags);}'
+if(-not ('ResearchPrintWindow' -as [type])){Add-Type -TypeDefinition 'using System;using System.Runtime.InteropServices;public static class ResearchPrintWindow{[DllImport("user32.dll")]public static extern bool PrintWindow(IntPtr window,IntPtr dc,uint flags);}'}
 $p=Get-Process -Id $TargetProcessId -ErrorAction Stop
 $handle=if($WindowHandle){[IntPtr]$WindowHandle}else{$p.MainWindowHandle}
 $root=[Windows.Automation.AutomationElement]::FromHandle($handle)

@@ -24,10 +24,8 @@ CLIENT_HASH = '8869363751e79f0c4a8b97f5877ec2d5b83cb4b784c9e46f95bb91ca376eff75'
 
 
 def ps(script: str, *args: str, timeout=90) -> str:
-    result = subprocess.run(['powershell.exe', '-NoProfile', '-NonInteractive',
-                             '-ExecutionPolicy', 'Bypass', '-File', str(BASE / script), *map(str, args)],
-                            capture_output=True, timeout=timeout,
-                            creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0))
+    from powershell_host import execute
+    result = execute(script, args, timeout)
     if result.returncode:
         # Avoid including connection internals or arbitrary stderr in logs.
         reason=''
@@ -149,17 +147,25 @@ class Ui:
         return self.send(instruction)
 
     def send(self, instruction: dict):
-        if instruction.get('action') in ('Click','Text','File','Complete'):
-            from offline import require_offline
-            require_offline()
         with tempfile.TemporaryDirectory(prefix='etims-step-') as folder:
             path = Path(folder) / 'instruction.json'
             path.write_text(json.dumps(instruction), encoding='utf-8')
-            try:
-                return ps('ui-step.ps1', '-Instruction', str(path), timeout=40)
-            except RuntimeError as error:
-                screen=Path(instruction.get('reference','print-file')).stem
-                raise RuntimeError(f"UI {instruction.get('action')} on {screen}: {error}") from None
+            deadline=time.monotonic()+5
+            while True:
+                if instruction.get('action') in ('Click','Text','File','Complete'):
+                    from offline import require_offline
+                    require_offline()
+                try:
+                    return ps('ui-step.ps1', '-Instruction', str(path), timeout=40)
+                except RuntimeError as error:
+                    # Faster transport must still allow the native page to paint.
+                    # This exact category is emitted BEFORE any input is sent.
+                    # Never replay focus failures, timeouts or a dispatched action.
+                    if '(screen mismatch)' in str(error) and time.monotonic()<deadline:
+                        time.sleep(.1)
+                        continue
+                    screen=Path(instruction.get('reference','print-file')).stem
+                    raise RuntimeError(f"UI {instruction.get('action')} on {screen}: {error}") from None
 
     def click(self, screen, x, y):
         self.action(screen, 'Click', x, y)

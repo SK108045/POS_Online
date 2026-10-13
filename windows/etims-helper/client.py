@@ -37,9 +37,11 @@ class Client(Ui):
         raise ValueError('Unrecognized eTIMS screen. Log in normally and finish any unrelated open form.')
     def wait(self,screen,timeout=30):
         end=time.monotonic()+timeout
-        while self.detect()!=screen:
-            if time.monotonic()>=end:raise RuntimeError('Expected eTIMS page did not appear')
+        found=self.detect()
+        while found!=screen:
+            if time.monotonic()>=end:raise RuntimeError(f'Expected eTIMS page {screen} did not appear; observed {found}. No click was retried.')
             time.sleep(.3)
+            found=self.detect()
     def close_owned(self,screen):
         self.click(screen,1314,89)
         if self.detect()=='close-confirm':self.click('close-confirm',705,530)

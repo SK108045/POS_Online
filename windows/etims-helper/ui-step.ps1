@@ -15,18 +15,12 @@ $temp=Join-Path ([IO.Path]::GetTempPath()) ('etims-screen-'+[Guid]::NewGuid().To
 try{
  & "$tools\invoice-ui.ps1" -Action Snapshot -TargetProcessId $p.pid -ImageOnly -OutputPath $temp
  Add-Type -AssemblyName System.Drawing
+ if(-not ('OraforgeScreenGuard' -as [type])){Add-Type -Path "$tools\screen-guard.cs" -ReferencedAssemblies System.Drawing}
  $actual=[Drawing.Bitmap]::FromFile($temp)
  $reference=[Drawing.Bitmap]::FromFile([string]$p.reference)
  try{
-  if($actual.Width -ne 1384 -or $actual.Height -ne 786){throw 'Unverified window geometry'}
   foreach($region in $p.regions){
-   if($reference.Width -ne [int]$region[2] -or $reference.Height -ne [int]$region[3]){throw 'Invalid reference dimensions'}
-   $different=0;$count=0
-   for($y=[int]$region[1];$y -lt ([int]$region[1]+[int]$region[3]);$y+=2){for($x=[int]$region[0];$x -lt ([int]$region[0]+[int]$region[2]);$x+=2){
-    $a=$actual.GetPixel($x,$y);$b=$reference.GetPixel(($x-[int]$region[0]),($y-[int]$region[1]));$count++
-    if([Math]::Abs([int]$a.R-[int]$b.R) -gt 24 -or [Math]::Abs([int]$a.G-[int]$b.G) -gt 24 -or [Math]::Abs([int]$a.B-[int]$b.B) -gt 24){$different++}
-   }}
-   if($count -eq 0 -or ($different/[double]$count) -gt 0.004){throw 'Screen does not match the verified workflow; no action sent'}
+   [OraforgeScreenGuard]::Verify($actual,$reference,[int]$region[0],[int]$region[1],[int]$region[2],[int]$region[3])
   }
  }finally{$actual.Dispose();$reference.Dispose()}
  if($p.action -notin @('Click','Text','Read','Complete')){throw 'Unsupported UI action'}

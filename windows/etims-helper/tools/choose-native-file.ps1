@@ -1,7 +1,7 @@
 param([Parameter(Mandatory=$true)][int]$TargetProcessId,[string]$Path,[string]$DialogTitle='Open')
 $ErrorActionPreference='Stop'
 Add-Type -AssemblyName UIAutomationClient
-Add-Type -TypeDefinition @'
+if(-not ('NativeFileChoice' -as [type])){Add-Type -TypeDefinition @'
 using System;using System.Runtime.InteropServices;
 public class NativeFileChoice{
  [DllImport("user32.dll",CharSet=CharSet.Unicode)]public static extern IntPtr SendMessage(IntPtr h,uint m,IntPtr w,string l);
@@ -9,6 +9,7 @@ public class NativeFileChoice{
  [DllImport("user32.dll")]public static extern uint GetWindowThreadProcessId(IntPtr h,out uint p);
 }
 '@
+}
 if($DialogTitle -eq 'Open' -and -not (Test-Path -LiteralPath $Path -PathType Leaf)){throw 'Input file missing'}
 if($DialogTitle -eq 'Save Print Output As' -and (Test-Path -LiteralPath $Path)){throw 'Output exists; refusing overwrite'}
 $app=Get-Process -Id $TargetProcessId

@@ -4,7 +4,7 @@ const fs=require('node:fs'),path=require('node:path'),http=require('node:http');
 const {spawn}=require('node:child_process');
 const home=()=>process.env.ORAFORGE_ETIMS_HOME || path.join(process.env.LOCALAPPDATA || process.env.HOME || '.', 'OraforgePOS','etims');
 let starting=null;
-const HELPER_BUILD='20261013.6';
+const HELPER_BUILD='20261013.7';
 function config(){try{return JSON.parse(fs.readFileSync(path.join(home(),'config.json'),'utf8').replace(/^\uFEFF/,''));}catch{return {};}}
 function launchTarget(){
   const exe=process.env.ORAFORGE_ETIMS_EXE || config().helper_exe || path.resolve(__dirname,'../../runtime/etims/OraforgeEtims/OraforgeEtims.exe');

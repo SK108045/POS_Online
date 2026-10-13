@@ -1,7 +1,7 @@
 param([ValidateSet('Click','Text','Read','Snapshot','Complete')][string]$Action,[int]$X,[int]$Y,[string]$Text,[Parameter(Mandatory=$true)][int]$TargetProcessId,[int]$ExpectedWidth=1384,[int]$ExpectedHeight=786,[string]$OutputPath,[switch]$ImageOnly)
 $ErrorActionPreference='Stop'
 $OutputEncoding=[Console]::OutputEncoding=New-Object System.Text.UTF8Encoding($false)
-Add-Type -TypeDefinition @'
+if(-not ('InvoiceUi' -as [type])){Add-Type -TypeDefinition @'
 using System;using System.Runtime.InteropServices;
 public class InvoiceUi {
  [StructLayout(LayoutKind.Sequential)]public struct Rect{public int Left,Top,Right,Bottom;}
@@ -19,6 +19,7 @@ public class InvoiceUi {
  [DllImport("user32.dll")]public static extern bool ShowWindow(IntPtr h,int n);
 }
 '@
+}
 [void][InvoiceUi]::SetProcessDPIAware()
 $app=Get-Process -Id $TargetProcessId
 if($app.ProcessName -ne 'EBM2x.WPF'){throw 'Unexpected target process'}
@@ -63,7 +64,7 @@ if($Action -eq 'Click'){
  if($Action -eq 'Read'){[pscustomobject]@{value=$value.Current.Value;read_only=$value.Current.IsReadOnly}|ConvertTo-Json -Compress;return}
  if($value.Current.IsReadOnly){throw 'Field is read-only'}
  $entry.SetFocus()
- Add-Type -Path "$PSScriptRoot\unicode-input.cs"
+ if(-not ('ResearchKeyboardInput' -as [type])){Add-Type -Path "$PSScriptRoot\unicode-input.cs"}
  if($Action -eq 'Complete'){
   [ResearchKeyboardInput]::Complete($h)
  }else{

@@ -6,12 +6,24 @@ import json
 import os
 from pathlib import Path
 import secrets
+import socket
 import sys
 from urllib.parse import urlparse
 from engine import Engine
 from settings import HOME, settings
 
-BUILD = '20261013.6'
+BUILD = '20261013.7'
+
+
+class LocalServer(ThreadingHTTPServer):
+    # Windows SO_REUSEADDR allows two processes to bind the same address.
+    # Own this loopback port exclusively before Engine can touch the job queue.
+    allow_reuse_address = False
+
+    def server_bind(self):
+        if os.name == 'nt':
+            self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_EXCLUSIVEADDRUSE, 1)
+        super().server_bind()
 
 def health():
     frozen=bool(getattr(sys,'frozen',False))
@@ -75,7 +87,7 @@ def serve():
         do_POST=handle_request
         def do_OPTIONS(self):self.send(403,{'error':'Use the local POS proxy'})
     # Binding before entering the queue prevents parallel helper processes.
-    server=ThreadingHTTPServer(('127.0.0.1',settings()['port']),Handler)
+    server=LocalServer(('127.0.0.1',settings()['port']),Handler)
     engine=Engine()
     server.daemon_threads=True
     server.serve_forever()

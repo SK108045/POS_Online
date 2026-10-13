@@ -138,13 +138,21 @@ class CompanionTests(unittest.TestCase):
                 execute.assert_not_called()
     def test_all_powershell_children_are_hidden_in_gui_build(self):
         import subprocess,workflow,pdf_invoice
+        from powershell_host import PowerShellHost
         result=subprocess.CompletedProcess([],0,stdout=b'null',stderr=b'')
-        with patch.object(subprocess,'CREATE_NO_WINDOW',0x08000000,create=True),patch('subprocess.run',return_value=result) as run:
+        with patch('powershell_host.execute',return_value=result) as run:
             workflow.ps('read-state.ps1')
-            self.assertEqual(run.call_args.kwargs['creationflags'],0x08000000)
+            self.assertEqual(run.call_args.args[0],'read-state.ps1')
             with patch('pdf_invoice.settings',return_value={'installation_dir':'fixture'}):
                 pdf_invoice.decode_qr(Path('fixture.png'))
-            self.assertEqual(run.call_args.kwargs['creationflags'],0x08000000)
+            self.assertEqual(run.call_args.args[0],'tools/decode-qr.ps1')
+        with patch.object(subprocess,'CREATE_NO_WINDOW',0x08000000,create=True),patch('subprocess.Popen') as start:
+            host=PowerShellHost()
+            with patch('powershell_host.threading.Thread'):
+                host._start()
+            self.assertEqual(start.call_args.kwargs['creationflags'],0x08000000)
+            self.assertEqual(start.call_args.kwargs['stderr'],subprocess.DEVNULL)
+            self.assertIn('-STA',start.call_args.args[0])
     def test_stock_adjustment_completes_native_entry_before_calculation_and_save(self):
         from client import Client
         after={'saved':False,'completed':False,'checked':False}
@@ -170,9 +178,20 @@ class CompanionTests(unittest.TestCase):
     def test_ui_failure_reports_only_whitelisted_reason(self):
         import subprocess,workflow
         result=subprocess.CompletedProcess([],1,stdout=b'',stderr=b'Screen does not match the verified workflow; password=PRIVATE-CREDENTIAL')
-        with patch('subprocess.run',return_value=result):
+        with patch('powershell_host.execute',return_value=result):
             with self.assertRaisesRegex(RuntimeError,'screen mismatch') as error:workflow.ps('ui-step.ps1')
         self.assertNotIn('PRIVATE-CREDENTIAL',str(error.exception))
+    def test_faster_transport_waits_only_on_screen_guard_before_input(self):
+        import workflow
+        instruction=dict(action='Click',reference='sales.png')
+        with patch('workflow.ps',side_effect=[RuntimeError('ui-step.ps1 failed (screen mismatch); stopped without retrying the action'),'done']) as execute,patch('offline.require_offline') as offline,patch('workflow.time.sleep'):
+            self.assertEqual(workflow.Ui(123).send(instruction),'done')
+            self.assertEqual(execute.call_count,2)
+            self.assertEqual(offline.call_count,2)
+        for message in ('target focus unavailable','Windows worker timed out','Windows operation failed'):
+            with patch('workflow.ps',side_effect=RuntimeError(message)) as execute,patch('offline.require_offline'):
+                with self.assertRaises(RuntimeError):workflow.Ui(123).send(instruction)
+                execute.assert_called_once()
     def test_recovery_of_ledger_never_calls_fresh_issue(self):
         from engine import Engine
         s=sale();key=self.store.create(s)['id'];ledger=self.home/'ledger.json'

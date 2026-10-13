@@ -1,7 +1,7 @@
 param([Parameter(Mandatory=$true)][int]$TargetProcessId)
 $ErrorActionPreference='Stop'
 Add-Type -AssemblyName UIAutomationClient
-Add-Type -TypeDefinition @'
+if(-not ('EtimsBounds' -as [type])){Add-Type -TypeDefinition @'
 using System;using System.Runtime.InteropServices;
 public static class EtimsBounds {
  [DllImport("user32.dll")]public static extern bool SetProcessDPIAware();
@@ -12,6 +12,7 @@ public static class EtimsBounds {
  [DllImport("user32.dll")]public static extern bool GetWindowRect(IntPtr h,out Rect r);
 }
 '@
+}
 [void][EtimsBounds]::SetProcessDPIAware()
 $app=Get-Process -Id $TargetProcessId
 if($app.ProcessName -ne 'EBM2x.WPF'){throw 'Unexpected process'}

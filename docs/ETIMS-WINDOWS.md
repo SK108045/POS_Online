@@ -65,6 +65,24 @@ This live test exercised existing-product selection, legitimate inventory reconc
 
 ## Tests and delivery
 
+### Checkout performance update (helper build 20261013.7)
+
+The helper uses one hidden PowerShell worker over private stdin/stdout instead of starting a new process for every action. Only the shipped, allowlisted scripts are callable; arguments are data and are never evaluated as shell code. Requests are serialized, replies are bound to request IDs, and a timeout kills the worker without replaying the operation. A later explicit recovery reconciles the existing sale. PowerShell exceptions are reduced to safe categories, and timing metrics contain script names and durations only.
+
+Screen comparison runs in compiled C# with the same sampling, RGB tolerance, geometry requirements and mismatch limit. UI controls, values, stock, native drafts, fiscal receipts and original QR/PDF contents retain their existing verification. Live effective firewall policy is inspected before every mutating UI action; no firewall result is cached. Database access remains read-only. The helper also reserves its loopback port exclusively on Windows, preventing competing helper processes from sharing that port.
+
+Read-only measurements on the installed client found a median screen-validation time of 2.0734 seconds with the previous worker versus 0.1448 seconds with this worker (14.32 times faster for that operation). Repeated native state reads were approximately 0.35 seconds in the initial measurement, versus 1.84 seconds previously. Machine load affects these results. These are component benchmarks, not a newly timed fiscal issuance; a complete checkout duration must be measured on the next genuine sale. New product/customer registration and native printing still add work.
+
+```powershell
+python -m unittest discover -s windows/etims-helper -p 'test_*.py'
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File windows/etims-helper/test-screen-guard.ps1
+# Optional timing checks; requires one normally logged-in native client.
+# Does not click, type, save, print or submit an invoice.
+python windows/etims-helper/benchmark.py --iterations 4
+```
+
+The performance regression suite includes actual Windows transport reuse, Unicode argument handling, concurrent response ownership, sanitized failures, worker replacement, no replay after timeouts, and exclusive loopback binding. Compiled comparison fixtures cover tolerance, mismatch, bounds and window geometry.
+
 ```powershell
 npm ci --prefix capacitor
 node --test capacitor/tests/*.cjs

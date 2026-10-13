@@ -1,8 +1,10 @@
 param([Parameter(Mandatory=$true)][string]$InstallationDir,[Parameter(Mandatory=$true)][string]$DatabasePath)
 $ErrorActionPreference='Stop'
 $bin=Join-Path $InstallationDir 'bin'
-$handler=[ResolveEventHandler]{param($sender,$eventArgs) try { return [Reflection.Assembly]::ReflectionOnlyLoad([string]$eventArgs.Name) } catch { return $null }}
-[AppDomain]::CurrentDomain.add_ReflectionOnlyAssemblyResolve($handler)
+if(-not $global:OraforgeReflectionResolver){
+ $global:OraforgeReflectionResolver=[ResolveEventHandler]{param($sender,$eventArgs) try { return [Reflection.Assembly]::ReflectionOnlyLoad([string]$eventArgs.Name) } catch { return $null }}
+ [AppDomain]::CurrentDomain.add_ReflectionOnlyAssemblyResolve($global:OraforgeReflectionResolver)
+}
 [void][Reflection.Assembly]::ReflectionOnlyLoadFrom((Join-Path $bin 'EBM2x.dll'))
 [void][Reflection.Assembly]::ReflectionOnlyLoadFrom((Join-Path $bin 'System.Data.SQLite.dll'))
 $w=[Reflection.Assembly]::ReflectionOnlyLoadFrom((Join-Path $bin 'EBM2x.WPF.exe'))
