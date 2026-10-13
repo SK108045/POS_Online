@@ -3,7 +3,7 @@ $ProgressPreference='SilentlyContinue'
 $encoding=New-Object System.Text.UTF8Encoding($false)
 [Console]::InputEncoding=$encoding
 $OutputEncoding=[Console]::OutputEncoding=$encoding
-$allowed=@('read-state.ps1','ui-step.ps1','tools/check-offline.ps1','tools/normalize-window.ps1','tools/select-observed-combo.ps1','tools/choose-native-file.ps1','tools/decode-qr.ps1')
+$allowed=@('read-state.ps1','ui-step.ps1','tools/check-offline.ps1','tools/normalize-window.ps1','tools/select-observed-combo.ps1','tools/choose-native-file.ps1','tools/decode-qr.ps1','tools/check-ui-ready.ps1')
 # Private stdin/stdout transport only. No listener, temporary request files,
 # transcript, command-line customer data, or arbitrary PowerShell evaluation.
 while($null -ne ($line=[Console]::ReadLine())){
@@ -25,7 +25,7 @@ while($null -ne ($line=[Console]::ReadLine())){
  }catch{
   # Arbitrary exceptions may contain entered values; transmit categories only.
   $safe='Windows operation failed'
-  foreach($reason in @('Screen does not match the verified workflow','Target has no keyboard/mouse focus','Client has an active modal dialog','Observed point is not an allowed target Edit control','Unverified window geometry')){
+  foreach($reason in @('Screen does not match the verified workflow','Target has no keyboard/mouse focus','Client has an active modal dialog','Observed point is not an allowed target Edit control','Unverified window geometry','Unrecognized eTIMS screen','Expected file dialog missing')){
    if($_.Exception.Message.Contains($reason)){$safe=$reason;break}
   }
   $response=@{id=$request.id;ok=$false;output='';error=$safe}

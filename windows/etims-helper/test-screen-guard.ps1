@@ -20,5 +20,15 @@ try{
   try{[OraforgeScreenGuard]::Verify($wrong,$reference,10,10,10,10)}catch{$rejected=$_.Exception.Message.Contains('Unverified window geometry')}
   if(-not $rejected){throw 'Changed geometry accepted'}
  }finally{$wrong.Dispose()}
+ $temp=Join-Path ([IO.Path]::GetTempPath()) ('oraforge-guard-'+[Guid]::NewGuid().ToString('N')+'.png')
+ try{
+  $actual.SetPixel(10,10,[Drawing.Color]::Black)
+  $reference.Save($temp,[Drawing.Imaging.ImageFormat]::Png)
+  if(-not [OraforgeScreenGuard]::MatchesFile($actual,$temp,10,10,10,10)){throw 'Cached screen match rejected'}
+  $reference.SetPixel(0,0,[Drawing.Color]::White)
+  $reference.Save($temp,[Drawing.Imaging.ImageFormat]::Png)
+  [IO.File]::SetLastWriteTimeUtc($temp,[DateTime]::UtcNow.AddSeconds(2))
+  if([OraforgeScreenGuard]::MatchesFile($actual,$temp,10,10,10,10)){throw 'Updated reference reused stale pixels'}
+ }finally{if(Test-Path -LiteralPath $temp){Remove-Item -LiteralPath $temp -Force}}
  Write-Output 'PASS: compiled screen guard preserves tolerance, mismatch, bounds and window geometry checks.'
 }finally{$actual.Dispose();$reference.Dispose()}

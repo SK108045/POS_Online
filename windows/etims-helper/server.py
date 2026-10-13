@@ -12,7 +12,7 @@ from urllib.parse import urlparse
 from engine import Engine
 from settings import HOME, settings
 
-BUILD = '20261013.10'
+BUILD = '20261013.11'
 
 
 class LocalServer(ThreadingHTTPServer):
@@ -58,6 +58,22 @@ def serve():
                 return self.send(403,{'error':'Companion authorization required'})
             try:
                 body={}
+                if route=='/benchmark' and self.command=='GET':
+                    from benchmark import benchmark
+                    from session_lock import exclusive_client
+                    from windows_access import require_ui_access
+                    from workflow import read_state
+                    from offline import require_offline
+                    from urllib.parse import parse_qs
+                    count=int(parse_qs(urlparse(self.path).query).get('iterations',['4'])[0])
+                    if not 1<=count<=10:raise ValueError('Choose 1 to 10 read-only timing iterations')
+                    with exclusive_client():
+                        require_offline()
+                        native=read_state('')
+                        if len(native['process_ids'])!=1:raise ValueError('Open one eTIMS client')
+                        require_ui_access(native['process_ids'][0])
+                        report=benchmark(count)
+                    return self.send(200,report)
                 if route=='/access' and self.command=='GET':
                     from offline import require_offline
                     from settings import require_identity

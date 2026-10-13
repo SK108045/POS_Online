@@ -32,7 +32,11 @@ def benchmark(repetitions=4, legacy_assets=None):
     result = dict(read_only=True, screen=screen,
                   offline_check=measure(require_offline, repetitions),
                   native_state_read=measure(lambda: read_state(''), repetitions),
+                  invoice_state_read=measure(lambda: read_state('', state['max_invoice']), repetitions),
                   screen_detection=measure(client.detect, repetitions))
+    readiness = json.loads(ps('tools/check-ui-ready.ps1', '-TargetProcessId', str(client.pid)))
+    result['ui_events_available'] = readiness['events_available']
+    result['readiness_settle'] = measure(lambda: ps('tools/check-ui-ready.ps1', '-TargetProcessId', str(client.pid)), repetitions)
     with tempfile.TemporaryDirectory(prefix='etims-readonly-timing-') as folder:
         instruction = Path(folder) / 'guard.json'
 

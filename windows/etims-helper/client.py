@@ -1,10 +1,9 @@
 """Observed, guarded native application navigation; no application injection."""
-from pathlib import Path
-import tempfile
+import json
 import time
-from PIL import Image, ImageChops
 from workflow import Ui, BASE, ps, read_state
 from offline import require_offline
+from timing import timed
 
 DIALOGS = {'close-confirm','stock-confirm','customer-confirm','new-customer','new-confirm','approve-confirm','saved','printed','import-success'}
 REGIONS = {'menu':[10,110,270,440]}
@@ -25,25 +24,17 @@ class Client(Ui):
                 if not str(error).startswith('Unrecognized eTIMS screen.') or time.monotonic()>=deadline:raise
                 time.sleep(.15)
     def _detect_once(self):
-        with tempfile.TemporaryDirectory() as temp:
-            path=Path(temp)/'screen.png'
-            self.send(dict(pid=self.pid,action='Snapshot',path=str(path)))
-            with Image.open(path) as actual:
-                if actual.size != (1384,786):
-                    raise ValueError('Unverified client window geometry')
-                for screen in list(DIALOGS)+['menu','sales','item-management','customer','stock-status','stock-adjustment','detail','print','registration']:
-                    reference=BASE/'profiles'/(screen+'.png')
-                    if not reference.exists():continue
-                    x,y,w,h=self.region(screen)
-                    with Image.open(reference) as expected:
-                        a=actual.crop((x,y,x+w,y+h)).convert('RGB');b=expected.convert('RGB')
-                        count=bad=0
-                        for yy in range(0,h,2):
-                            for xx in range(0,w,2):
-                                count+=1
-                                if max(abs(i-j) for i,j in zip(a.getpixel((xx,yy)),b.getpixel((xx,yy))))>24:bad+=1
-                        if bad/count <= .004:return screen
-        raise ValueError('Unrecognized eTIMS screen. Log in normally and finish any unrelated open form.')
+        profiles=[dict(screen=screen,reference=str(BASE/'profiles'/(screen+'.png')),region=self.region(screen))
+                  for screen in sorted(DIALOGS)+['menu','sales','item-management','customer','stock-status','stock-adjustment','detail','print','registration']
+                  if (BASE/'profiles'/(screen+'.png')).exists()]
+        try:
+            return json.loads(self.send(dict(pid=self.pid,action='Detect',profiles=profiles)))['screen']
+        except RuntimeError as error:
+            if '(unrecognized screen)' in str(error):
+                raise ValueError('Unrecognized eTIMS screen. Log in normally and finish any unrelated open form.') from None
+            if '(window geometry mismatch)' in str(error):
+                raise ValueError('Unverified client window geometry') from None
+            raise
     def wait(self,screen,timeout=30):
         end=time.monotonic()+timeout
         found=self.detect()
@@ -63,6 +54,7 @@ class Client(Ui):
         if self.detect()=='stock-status':self.close_owned('stock-status')
         if self.detect()=='sales':self.close_owned('sales')
         self.wait('menu')
+    @timed('navigate')
     def navigate(self,target):
         if self.detect()==target:return
         self.menu()
@@ -94,6 +86,7 @@ class Client(Ui):
             self.close_owned('detail');screen=self.detect()
         if screen=='menu':self.navigate('sales');return
         if screen!='sales':raise ValueError('Finish the unrelated open eTIMS form before continuing')
+    @timed('product_registration')
     def register_products(self,path,registrations,buyer,checkpoint):
         # Validate absence immediately before import: native import can overwrite stock.
         state=read_state(buyer)
@@ -120,8 +113,9 @@ class Client(Ui):
                 raise ValueError('Imported product or actual opening stock differs from the approved registration')
         self.wait('import-success');self.click('import-success',885,530)
         checkpoint('products_registered')
+    @timed('customer')
     def ensure_customer(self,customer,checkpoint):
-        state=read_state(customer['pin'])
+        state=read_state(customer['pin'],scope='Customer')
         if state['customers']:
             if len(state['customers'])!=1 or state['customers'][0]['CUST_NM']!=customer['name']:
                 raise ValueError('Buyer PIN exists with a different registered name')
@@ -137,7 +131,7 @@ class Client(Ui):
         self.click('customer',1070,89);self.wait('customer-confirm');self.click('customer-confirm',705,530)
         end=time.monotonic()+30
         while True:
-            records=read_state(customer['pin'])['customers']
+            records=read_state(customer['pin'],scope='Customer')['customers']
             if records:
                 if len(records)!=1 or records[0]['CUST_NM']!=customer['name']:raise ValueError('Customer save did not match buyer identity')
                 break
@@ -145,6 +139,7 @@ class Client(Ui):
             time.sleep(.5)
         if self.detect()=='saved':self.click('saved',885,530)
         checkpoint('customer_registered')
+    @timed('stock_adjustment')
     def adjust_stock(self,code,adjustment,buyer,checkpoint):
         from decimal import Decimal
         current=next(i for i in read_state(buyer)['items'] if i['ITEM_CD']==code)

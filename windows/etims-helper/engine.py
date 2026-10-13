@@ -14,6 +14,7 @@ from client import Client
 from session_lock import exclusive_client, reclaim_dead_lock
 from offline import require_offline
 from windows_access import require_ui_access
+from timing import record_run, timed, span
 
 def verify_device(state, config):
     registered={(str(row['TIN']),str(row['BHF_ID'])) for row in state.get('registered_devices',[])}
@@ -35,6 +36,7 @@ class Engine:
         for job in self.store.interrupted():
             self.store.update(job['id'],'review_required',error='Helper restarted. Recover this same sale; no new invoice was submitted.')
         threading.Thread(target=self.worker,daemon=True,name='etims-ui-worker').start()
+    @timed('prepare')
     def prepare(self,sale,details=None):
         validate(sale)
         config=require_identity()
@@ -90,7 +92,7 @@ class Engine:
         while True:
             key=self.queue.get()
             try:
-                with exclusive_client():
+                with record_run(HOME/'timings'/(key+'.json')), exclusive_client():
                     require_offline()
                     reclaim_dead_lock(key)
                     self.run(key)
@@ -176,7 +178,8 @@ class Engine:
         raw=workflow.issue(request,request['buyer_pin'],request['buyer_name'],request['payment_code'],key,True,
                            lambda stage:self.store.update(key,progress_state(stage)))
         self.store.update(key,'complete',result=self.result(raw,sale))
-        try:client.finish_invoice(raw['local_invoice_id'])
+        try:
+            with span('cleanup'):client.finish_invoice(raw['local_invoice_id'])
         except Exception:pass # Fiscal completion remains valid if read-only view cleanup is unavailable.
     def finish(self,key):
         job=self.store.get(key)
@@ -247,18 +250,12 @@ class Engine:
         import time
         result_pdf=folder/('recovered-'+str(time.time_ns())+'.pdf')
         client.click('print',390,198)
-        end=time.monotonic()+30
-        while True:
-            try:client.send(dict(pid=client.pid,action='File',path=str(result_pdf)));break
-            except RuntimeError:
-                if result_pdf.exists() or time.monotonic()>=end:raise
-                time.sleep(.4)
-        end=time.monotonic()+60
-        while not result_pdf.exists() or result_pdf.stat().st_size==0:
-            if time.monotonic()>=end:raise RuntimeError('Original PDF did not become available')
-            time.sleep(.4)
-        raw=workflow.extract(result_pdf,folder/('capture-'+str(time.time_ns())))
-        workflow.verify_pdf(raw,state)
+        workflow.choose_print_path(client,result_pdf)
+        workflow.wait_pdf(result_pdf)
+        with span('pdf_extract'):
+            raw=workflow.extract(result_pdf,folder/('capture-'+str(time.time_ns())))
+        with span('fiscal_verification'):
+            workflow.verify_pdf(raw,state)
         raw.update(local_invoice_id=invoice,request_id=key,extraction_only=False,local_database_verified=True)
         result_path=folder/'result.json';result_path.write_text(json.dumps(raw,indent=2),encoding='utf-8')
         recorded.update(stage='complete',result=str(result_path));workflow.write_ledger(workflow.ledger_path(key),recorded)

@@ -11,18 +11,25 @@ if($p.action -eq 'Snapshot'){
  & "$tools\invoice-ui.ps1" -Action Snapshot -TargetProcessId $p.pid -ImageOnly -OutputPath $p.path
  return
 }
-$temp=Join-Path ([IO.Path]::GetTempPath()) ('etims-screen-'+[Guid]::NewGuid().ToString('N')+'.png')
+$actual=$null
 try{
- & "$tools\invoice-ui.ps1" -Action Snapshot -TargetProcessId $p.pid -ImageOnly -OutputPath $temp
+ $actual=& "$tools\invoice-ui.ps1" -Action Snapshot -TargetProcessId $p.pid -ImageOnly -InMemory
  Add-Type -AssemblyName System.Drawing
  if(-not ('OraforgeScreenGuard' -as [type])){Add-Type -Path "$tools\screen-guard.cs" -ReferencedAssemblies System.Drawing}
- $actual=[Drawing.Bitmap]::FromFile($temp)
- $reference=[Drawing.Bitmap]::FromFile([string]$p.reference)
- try{
-  foreach($region in $p.regions){
-   [OraforgeScreenGuard]::Verify($actual,$reference,[int]$region[0],[int]$region[1],[int]$region[2],[int]$region[3])
+ if($p.action -eq 'Detect'){
+  if($actual.Width -ne 1384 -or $actual.Height -ne 786){throw 'Unverified window geometry'}
+  foreach($profile in $p.profiles){
+   $region=$profile.region
+   if([OraforgeScreenGuard]::MatchesFile($actual,[string]$profile.reference,[int]$region[0],[int]$region[1],[int]$region[2],[int]$region[3])){
+    [pscustomobject]@{screen=[string]$profile.screen}|ConvertTo-Json -Compress
+    return
+   }
   }
- }finally{$actual.Dispose();$reference.Dispose()}
+  throw 'Unrecognized eTIMS screen'
+ }
+ foreach($region in $p.regions){
+  [OraforgeScreenGuard]::VerifyFile($actual,[string]$p.reference,[int]$region[0],[int]$region[1],[int]$region[2],[int]$region[3])
+ }
  if($p.action -notin @('Click','Text','Read','Complete')){throw 'Unsupported UI action'}
  & "$tools\invoice-ui.ps1" -Action $p.action -TargetProcessId $p.pid -X $p.x -Y $p.y -Text $p.text
-}finally{Remove-Item -LiteralPath $temp -Force -ErrorAction SilentlyContinue}
+}finally{if($actual){$actual.Dispose()}}

@@ -11,7 +11,7 @@ from settings import ASSETS
 
 SCRIPTS = frozenset(('read-state.ps1', 'ui-step.ps1', 'tools/check-offline.ps1',
                      'tools/normalize-window.ps1', 'tools/select-observed-combo.ps1',
-                     'tools/choose-native-file.ps1', 'tools/decode-qr.ps1'))
+                     'tools/choose-native-file.ps1', 'tools/decode-qr.ps1', 'tools/check-ui-ready.ps1'))
 
 
 class PowerShellHost:
@@ -102,6 +102,10 @@ class PowerShellHost:
                 metric['calls'] += 1
                 metric['seconds'] += elapsed
                 metric['max_seconds'] = max(metric['max_seconds'], elapsed)
+                from timing import CURRENT
+                recorder = CURRENT.get()
+                if recorder is not None:
+                    recorder.script(script, elapsed)
 
 
 HOST = PowerShellHost()

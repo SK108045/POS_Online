@@ -1,4 +1,4 @@
-param([ValidateSet('Click','Text','Read','Snapshot','Complete')][string]$Action,[int]$X,[int]$Y,[string]$Text,[Parameter(Mandatory=$true)][int]$TargetProcessId,[int]$ExpectedWidth=1384,[int]$ExpectedHeight=786,[string]$OutputPath,[switch]$ImageOnly)
+param([ValidateSet('Click','Text','Read','Snapshot','Complete')][string]$Action,[int]$X,[int]$Y,[string]$Text,[Parameter(Mandatory=$true)][int]$TargetProcessId,[int]$ExpectedWidth=1384,[int]$ExpectedHeight=786,[string]$OutputPath,[switch]$ImageOnly,[switch]$InMemory)
 $ErrorActionPreference='Stop'
 $OutputEncoding=[Console]::OutputEncoding=New-Object System.Text.UTF8Encoding($false)
 if(-not ('InvoiceUi' -as [type])){Add-Type -TypeDefinition @'
@@ -30,30 +30,35 @@ if($main.Count -ne 1){throw 'Main eTIMS window missing or ambiguous'}
 $h=[IntPtr]$main[0].Current.NativeWindowHandle
 if([InvoiceUi]::IsIconic($h)){[void][InvoiceUi]::ShowWindow($h,9);Start-Sleep -Milliseconds 400}
 if($Action -eq 'Snapshot'){
- & "$PSScriptRoot\capture-app-window.ps1" -TargetProcessId $TargetProcessId -WindowHandle $h.ToInt64() -OutputPath $OutputPath
- if(-not $ImageOnly){& "$PSScriptRoot\inspect_ui.ps1" -TargetProcessId $TargetProcessId -OutputPath ($OutputPath -replace '\.png$','.uia.json') | Out-Null}
+ & "$PSScriptRoot\capture-app-window.ps1" -TargetProcessId $TargetProcessId -WindowHandle $h.ToInt64() -OutputPath $OutputPath -InMemory:$InMemory
+ if(-not $ImageOnly -and -not $InMemory){& "$PSScriptRoot\inspect_ui.ps1" -TargetProcessId $TargetProcessId -OutputPath ($OutputPath -replace '\.png$','.uia.json') | Out-Null}
  return
 }
 $rect=New-Object InvoiceUi+Rect
 if(-not [InvoiceUi]::GetWindowRect($h,[ref]$rect)){throw 'Window bounds unavailable'}
 if(($rect.Right-$rect.Left) -ne $ExpectedWidth -or ($rect.Bottom-$rect.Top) -ne $ExpectedHeight){throw 'Window size changed; observe new screenshot first'}
 if(-not $main[0].Current.IsEnabled){throw 'Client has an active modal dialog'}
-[void][InvoiceUi]::SetForegroundWindow($h)
-Add-Type -AssemblyName UIAutomationClient
-try{[Windows.Automation.AutomationElement]::FromHandle($h).SetFocus()}catch{}
-Start-Sleep -Milliseconds 100
+if([InvoiceUi]::GetForegroundWindow() -ne $h){
+ [void][InvoiceUi]::SetForegroundWindow($h)
+ try{$main[0].SetFocus()}catch{}
+ $focusEnd=[DateTime]::UtcNow.AddMilliseconds(200)
+ while([InvoiceUi]::GetForegroundWindow() -ne $h -and [DateTime]::UtcNow -lt $focusEnd){Start-Sleep -Milliseconds 20}
+}
 if([InvoiceUi]::GetForegroundWindow() -ne $h){
  [uint32]$fgPid=0;$fgThread=[InvoiceUi]::GetWindowThreadProcessId([InvoiceUi]::GetForegroundWindow(),[ref]$fgPid);$ourThread=[InvoiceUi]::GetCurrentThreadId()
  $attached=[InvoiceUi]::AttachThreadInput($ourThread,$fgThread,$true)
  try{[void][InvoiceUi]::BringWindowToTop($h);[void][InvoiceUi]::SetForegroundWindow($h)}finally{if($attached){[void][InvoiceUi]::AttachThreadInput($ourThread,$fgThread,$false)}}
 }
 if([InvoiceUi]::GetForegroundWindow() -ne $h){throw 'Target has no keyboard/mouse focus'}
+if($Action -ne 'Read'){
+ $observer=& "$PSScriptRoot\observe-ui.ps1" -WindowHandle $h -TargetProcessId $TargetProcessId
+ $global:OraforgeReady.Arm()
+}
 if($Action -eq 'Click'){
  if($X -lt 0 -or $Y -lt 0 -or $X -ge $ExpectedWidth -or $Y -ge $ExpectedHeight){throw 'Point outside observed window'}
  [void][InvoiceUi]::SetCursorPos($rect.Left+$X,$rect.Top+$Y)
- Start-Sleep -Milliseconds 100
  [InvoiceUi]::mouse_event(2,0,0,0,[UIntPtr]::Zero)
- Start-Sleep -Milliseconds 100
+ Start-Sleep -Milliseconds 20
  [InvoiceUi]::mouse_event(4,0,0,0,[UIntPtr]::Zero)
 }else{
  $root=[Windows.Automation.AutomationElement]::FromHandle($h)
@@ -72,4 +77,4 @@ if($Action -eq 'Click'){
   [ResearchKeyboardInput]::BulkPhysicalText($h,$Text)
  }
 }
-Start-Sleep -Milliseconds 500
+$observer.Settle()

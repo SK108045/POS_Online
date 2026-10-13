@@ -110,44 +110,57 @@ def fields_from_text(text: str) -> dict:
                 invoice_date=issued.isoformat() + '+03:00' if issued else None)
 
 
-def decode_qr(path: Path):
+def decode_qr(path: Path, thorough=False):
     from powershell_host import execute
     run = execute('tools/decode-qr.ps1', ('-Path', str(path),
-                  '-InstallationDir', settings()['installation_dir']), timeout=30)
+                  '-InstallationDir', settings()['installation_dir'],
+                  '-Mode', 'Thorough' if thorough else 'Fast'), timeout=30)
     if run.returncode:
         raise RuntimeError('Installed QR decoder failed')
     return json.loads(run.stdout.decode('utf-8-sig', errors='strict').strip())
 
 
 def find_original_qr(path: Path, output: Path) -> dict | None:
+    def accept(candidate, source, xref, page, thorough=False):
+        decoded = decode_qr(candidate, thorough=True) if thorough else decode_qr(candidate)
+        if not decoded:
+            return None
+        host = urlparse(decoded['text']).hostname or ''
+        if host != 'kra.go.ke' and not host.endswith('.kra.go.ke'):
+            return None
+        raw = candidate.read_bytes()
+        asset = output / ('original-qr' + candidate.suffix if xref else 'original-qr-page.png')
+        asset.write_bytes(raw)
+        return dict(image=str(asset.resolve()), payload=decoded['text'], source=source,
+                    page=page + 1, pdf_xref=xref, sha256=hashlib.sha256(raw).hexdigest(),
+                    verification_status='not_checked')
+
     with tempfile.TemporaryDirectory(prefix='etims-qr-') as temp, fitz.open(path) as doc:
         for page in doc:
             candidates = []
-            for item in page.get_images(full=True):
+            # QR images are usually square. Order candidates without discarding
+            # any supported image or changing its original bytes.
+            images = sorted(page.get_images(full=True), key=lambda item: abs(item[2]-item[3])/max(1,item[2],item[3]))
+            for item in images:
                 if item[2] < 50 or item[3] < 50:
                     continue
                 data = doc.extract_image(item[0])
                 candidate = Path(temp) / f'p{page.number}-x{item[0]}.{data["ext"]}'
                 candidate.write_bytes(data['image'])
                 candidates.append((candidate, 'original_embedded_image', item[0]))
-            # Also handle a vector QR by decoding the original page rendering.
+            for thorough in (False, True):
+                for candidate, source, xref in candidates:
+                    found = accept(candidate, source, xref, page.number, thorough)
+                    if found:
+                        return found
+            # Render only when no embedded original decodes, including vector QR.
             render = Path(temp) / f'page-{page.number}.png'
             if page.rect.width * page.rect.height * 4 <= 12_000_000:
                 page.get_pixmap(matrix=fitz.Matrix(2, 2), alpha=False).save(render)
-                candidates.append((render, 'original_page_render', None))
-            for candidate, source, xref in candidates:
-                decoded = decode_qr(candidate)
-                if not decoded:
-                    continue
-                host = urlparse(decoded['text']).hostname or ''
-                if host != 'kra.go.ke' and not host.endswith('.kra.go.ke'):
-                    continue
-                raw = candidate.read_bytes()
-                asset = output / ('original-qr' + candidate.suffix if xref else 'original-qr-page.png')
-                asset.write_bytes(raw)
-                return dict(image=str(asset.resolve()), payload=decoded['text'],
-                            source=source, page=page.number + 1, pdf_xref=xref,
-                            sha256=hashlib.sha256(raw).hexdigest(), verification_status='not_checked')
+                for thorough in (False, True):
+                    found = accept(render, 'original_page_render', None, page.number, thorough)
+                    if found:
+                        return found
     return None
 
 

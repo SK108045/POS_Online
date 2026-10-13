@@ -15,6 +15,7 @@ from urllib.parse import parse_qs, urlparse
 
 from pdf_invoice import read_sale, extract
 from settings import ASSETS, HOME, require_identity
+from timing import span, mark, timed
 
 BASE = ASSETS
 DATA = HOME
@@ -35,17 +36,20 @@ def ps(script: str, *args: str, timeout=90) -> str:
                           'Target has no keyboard/mouse focus':'target focus unavailable',
                           'Client has an active modal dialog':'unexpected modal dialog',
                           'Observed point is not an allowed target Edit control':'edit control mismatch',
-                          'Unverified window geometry':'window geometry mismatch'}
+                          'Unverified window geometry':'window geometry mismatch',
+                          'Unrecognized eTIMS screen':'unrecognized screen',
+                          'Expected file dialog missing':'file dialog not ready'}
             reason=next((' ('+description+')' for message,description in safe_reasons.items() if message in stderr),'')
         raise RuntimeError(f'{Path(script).name} failed{reason}; stopped without retrying the action')
     return result.stdout.decode('utf-8-sig').strip()
 
 
-def read_state(pin: str, invoice=-1) -> dict:
+def read_state(pin: str, invoice=-1, scope=None) -> dict:
     config = require_identity()
     return json.loads(ps('read-state.ps1', '-BuyerPin', pin, '-TaxpayerPin', config['taxpayer_pin'],
                          '-BranchId', config['branch_id'], '-InvoiceId', str(invoice),
-                         '-InstallationDir', config['installation_dir'], '-DatabasePath', config['database_path']))
+                         '-InstallationDir', config['installation_dir'], '-DatabasePath', config['database_path'],
+                         '-Scope', scope or ('Invoice' if invoice >= 0 else 'Full')))
 
 
 def ledger_path(request_id: str) -> Path:
@@ -178,10 +182,20 @@ class Ui:
         return json.loads(self.action(screen, 'Read', x, y))['value']
 
     def expect(self, screen, x, y, value, numeric=False):
-        actual = self.value(screen, x, y)
-        matches = (Decimal(actual.replace(',', '')) == Decimal(value)) if numeric else actual == value
-        if not matches:
-            raise ValueError(f'UI field at {x},{y} on {screen} does not match the reviewed value; stopped')
+        # Input is sent once. Only the read is repeated while WPF processes it.
+        from decimal import InvalidOperation
+        deadline = time.monotonic() + 3
+        while True:
+            actual = self.value(screen, x, y)
+            try:
+                matches = (Decimal(actual.replace(',', '')) == Decimal(value)) if numeric else actual == value
+            except InvalidOperation:
+                matches = False
+            if matches:
+                return
+            if time.monotonic() >= deadline:
+                raise ValueError(f'UI field at {x},{y} on {screen} does not match the reviewed value; stopped')
+            time.sleep(.05)
 
     def wait_screen(self, screen, seconds=30):
         end = time.monotonic() + seconds
@@ -210,6 +224,45 @@ def wait_database(pin: str, invoice: int, approved: bool, timeout=60) -> dict:
         time.sleep(.5)
 
 
+def choose_print_path(ui, path, seconds=30):
+    deadline = time.monotonic() + seconds
+    with span('print_dialog'):
+        while True:
+            try:
+                ui.send(dict(pid=ui.pid, action='File', path=str(path)))
+                return
+            except RuntimeError as error:
+                # This category is emitted only before any file input/save.
+                if '(file dialog not ready)' not in str(error) or path.exists() or time.monotonic() >= deadline:
+                    raise
+                time.sleep(.1)
+
+
+def wait_pdf(path, seconds=60):
+    """Wait for one complete printed file. Never print again or start QR early."""
+    import fitz
+    deadline = time.monotonic() + seconds
+    with span('pdf_wait'):
+        while True:
+            try:
+                before = path.stat()
+                if before.st_size > 50_000_000:
+                    raise ValueError('Printed PDF exceeds the supported size')
+                raw = path.read_bytes()
+                after = path.stat()
+                if (before.st_size == after.st_size == len(raw) and before.st_mtime_ns == after.st_mtime_ns
+                        and raw.rstrip().endswith(b'%%EOF')):
+                    with fitz.open(stream=raw, filetype='pdf') as document:
+                        if not document.needs_pass and 0 < len(document) <= 20:
+                            return
+            except (OSError, fitz.FileDataError):
+                pass
+            if time.monotonic() >= deadline:
+                raise RuntimeError('Original PDF did not become complete; recover this same sale without reissuing')
+            time.sleep(.1)
+
+
+@timed('invoice_workflow')
 def _issue(pdf: Path, pin: str, name: str, payment: str, request_id: str,
           new_sale_confirmed: bool, progress=print, mappings: dict | None = None) -> dict:
     if not new_sale_confirmed:
@@ -228,9 +281,11 @@ def _issue(pdf: Path, pin: str, name: str, payment: str, request_id: str,
     folder = DATA / 'output' / ledger.stem
     folder.mkdir(parents=True, exist_ok=False)
     ui = Ui(before['process_ids'][0])
+    mark('prepared')
     def checkpoint(stage, **values):
         run.update(stage=stage, **values)
         write_ledger(ledger, run)
+        mark(stage)
         progress(stage.replace('_', ' '))
     try:
         progress('Checking Sales Management page')
@@ -296,36 +351,20 @@ def _issue(pdf: Path, pin: str, name: str, payment: str, request_id: str,
         ui.expect('print', 330, 324, str(invoice))
         ui.click('print', 390, 198)
         result_pdf = folder / 'eTIMS-issued-invoice.pdf'
-        # Only discovery of the file dialog is retried. Print and Save clicks are single-shot.
-        end = time.monotonic() + 30
-        while True:
-            try:
-                ui.send(dict(pid=ui.pid, action='File', path=str(result_pdf)))
-                break
-            except RuntimeError:
-                if result_pdf.exists() or time.monotonic() >= end:
-                    raise
-                time.sleep(.3)
+        choose_print_path(ui, result_pdf)
         checkpoint('pdf_requested', pdf=str(result_pdf))
-        end = time.monotonic() + 60
-        while True:
-            try:
-                result = extract(result_pdf, folder / 'extracted')
-                break
-            except (OSError, RuntimeError):
-                if (folder / 'extracted').exists() or time.monotonic() >= end:
-                    raise
-                time.sleep(.5)
-        verify_pdf(result, approved)
+        wait_pdf(result_pdf)
+        with span('pdf_extract'):
+            result = extract(result_pdf, folder / 'extracted')
+        with span('fiscal_verification'):
+            verify_pdf(result, approved)
         result.update(local_invoice_id=invoice, request_id=request_id, local_database_verified=True,
                       extraction_only=False, execution_method='Windows UI automation through the normal eTIMS client')
         (folder / 'result.json').write_text(json.dumps(result, indent=2), encoding='utf-8')
         checkpoint('complete', result=str(folder / 'result.json'))
-        # Dismiss only the observed final success modal.
-        try:
-            ui.click('saved', 885, 530)
-        except RuntimeError:
-            progress('Invoice captured; return the client to Sales Management manually')
+        # Engine finishes the verified print/detail views, including the distinct
+        # "Print the document." info popup. Do not probe the wrong saved popup
+        # here: it needlessly spends the whole screen-mismatch retry budget.
         return result
     except Exception as error:
         run['last_error'] = str(error)
