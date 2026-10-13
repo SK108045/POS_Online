@@ -4,6 +4,7 @@ import tempfile
 import time
 from PIL import Image, ImageChops
 from workflow import Ui, BASE, ps, read_state
+from offline import require_offline
 
 DIALOGS = {'close-confirm','stock-confirm','customer-confirm','new-customer','new-confirm','approve-confirm','saved','import-success'}
 REGIONS = {'menu':[10,110,270,440]}
@@ -74,6 +75,7 @@ class Client(Ui):
         self.navigate('item-management')
         checkpoint('native_product_import_requested')
         self.click('item-management',705,89)
+        require_offline()
         ps('tools/choose-native-file.ps1','-TargetProcessId',str(self.pid),'-Path',str(path),'-DialogTitle','Open')
         end=time.monotonic()+60
         while True:
@@ -125,6 +127,7 @@ class Client(Ui):
         self.click('stock-status',1300,179);self.click('stock-status',410,262);self.click('stock-status',1194,89)
         self.wait('stock-confirm');self.click('stock-confirm',705,530);self.wait('stock-adjustment')
         self.expect('stock-adjustment',300,179,code)
+        require_offline()
         ps('tools/select-observed-combo.ps1','-TargetProcessId',str(self.pid),'-X','160','-Y','506','-Option','Adjustment In')
         self.text('stock-adjustment',750,506,adjustment['reason'])
         self.action('stock-adjustment','Text',450,615,adjustment['quantity'])

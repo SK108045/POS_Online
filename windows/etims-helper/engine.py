@@ -12,6 +12,7 @@ from products import plan, workbook
 import workflow
 from client import Client
 from session_lock import exclusive_client, reclaim_dead_lock
+from offline import require_offline
 
 def verify_device(state, config):
     registered={(str(row['TIN']),str(row['BHF_ID'])) for row in state.get('registered_devices',[])}
@@ -31,6 +32,7 @@ class Engine:
     def prepare(self,sale,details=None):
         validate(sale)
         config=require_identity()
+        require_offline(config)
         if sale.get('seller_pin') and sale['seller_pin']!=config['taxpayer_pin']:
             raise ValueError('POS seller PIN differs from the registered eTIMS device')
         binary=Path(config['installation_dir'])/'bin/EBM2x.dll'
@@ -82,6 +84,7 @@ class Engine:
             key=self.queue.get()
             try:
                 with exclusive_client():
+                    require_offline()
                     reclaim_dead_lock(key)
                     self.run(key)
             except Exception as error:

@@ -91,6 +91,9 @@ jobs:
           python -m pip install -r windows/etims-helper/requirements.txt
           python -m unittest discover -s windows/etims-helper -p test_companion.py
           ./windows/build-etims-helper.ps1
+      - name: Frozen helper refuses unblocked eTIMS installation
+        shell: pwsh
+        run: python windows/etims-helper/test_frozen_offline.py --executable dist/windows/OraforgePOS/runtime/etims/OraforgeEtims/OraforgeEtims.exe
       - name: Native Windows Node launcher smoke test
         shell: pwsh
         run: ./windows/desktop-smoke.ps1 -PackageDirectory (Resolve-Path dist/windows/OraforgePOS)

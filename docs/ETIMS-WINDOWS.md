@@ -47,13 +47,15 @@ The local token stays in the helper directory and Node backchannel. Browser requ
 
 ## Issuance versus KRA acceptance
 
-`local_issuance_status=issued` means the client approved the invoice, its receipt exists and its original PDF fields/QR match that receipt. `kra_acceptance_status=unverified` is separate: a local receipt or QR alone does not prove server acceptance. Existing firewall rules and pending uploads are preserved.
+eTIMS must remain offline. The helper never enables Internet access, disables outbound blocking, or requests a KRA connection. Read-only checks require the Windows Firewall service, all three enabled profiles, and unrestricted outbound block rules covering both configured executables: `bin/EBM2x.WPF.exe` and `EBM2xLauncher.exe`. Rules are matched by installed program paths, not machine-specific names. Preflight, recovery and mutating UI steps stop if blocking cannot be verified. The helper does not change firewall policy. Persistent firewall rules enforce blocking outside helper activity as well.
+
+`local_issuance_status=issued` means the client approved the invoice, its receipt exists and its original PDF fields/QR match that receipt. `kra_acceptance_status=unverified` is separate: a local receipt or QR alone does not prove server acceptance. Pending uploads remain preserved locally while eTIMS is blocked. Oraforge's localhost IPC runs in separate processes and remains available.
 
 ## Supported profile and real-test blocker
 
 This installed device is Non-VAT. The verified profile supports tax D, zero discounts, ordinary items/services and payment categories 01–07. Nonzero VAT, discounts, expiry-controlled stock and changed client builds stop in preflight. They require further native validation and are never silently converted. The verified original PDF embeds its QR; other templates require validation.
 
-The selected genuine POS sale contains Teddy Bears. Their UNSPSC commodity **60141004 – Stuffed animals or puppets** is published in the [GS1/UNSPSC codeset](https://assets.ctfassets.net/9uypwcnuzbqi/3EqqMDRnuu7gAUpst9eeuL/587f32bb6e2c655388cce3a03d91e3aa/GS1au-cookbook-npc-UNSPSC-v8-1201.pdf), page 772. That code is absent from the installed active `ITEM_CLASS` table. The native importer calls `TaxpayerItemMaster.GetItemClassCode`, requiring an active row before saving. Live preflight stops before any product, stock or invoice write. The supported next step is the client's KRA classification/master-data refresh. Previously requested firewall blocks currently prevent that connection. No network rules or reference tables were changed to force the test through.
+The selected genuine POS sale contains Teddy Bears. Their UNSPSC commodity **60141004 – Stuffed animals or puppets** is published in the [GS1/UNSPSC codeset](https://assets.ctfassets.net/9uypwcnuzbqi/3EqqMDRnuu7gAUpst9eeuL/587f32bb6e2c655388cce3a03d91e3aa/GS1au-cookbook-npc-UNSPSC-v8-1201.pdf), page 772. That code is absent from the installed active `ITEM_CLASS` table. The native importer calls `TaxpayerItemMaster.GetItemClassCode`, requiring an active row before saving. Live preflight stops before any product, stock or invoice write. Internet access is explicitly prohibited, so no online master-data refresh will be attempted. This sale remains pending unless a supported offline classification update becomes available. No network rules or reference tables were changed to force the test through, and no substitute product classification was invented.
 
 The previously issued reference PDF was re-extracted: all six fields and original QR matched its stored receipt. It was not reissued. A distinct real issuance test remains pending until the classification blocker is resolved.
 
@@ -65,11 +67,15 @@ node --test capacitor/tests/*.cjs
 python -m unittest discover -s windows/etims-helper -p test_companion.py
 # With the local POS server running:
 python capacitor/tests/etims-windows-browser.py
+# After building the Windows helper:
+python windows/etims-helper/test_frozen_offline.py --executable dist/windows/OraforgePOS/runtime/etims/OraforgeEtims/OraforgeEtims.exe
 ```
 
 Python tests use temporary companion databases. The browser regression intercepts every helper route in an isolated context; it never submits a native fiscal job. Live loopback health/preflight and reconciliation of the genuine reference PDF were tested separately. Mock tests do not count as a new real issuance.
 
-Validation on 2026-10-13: 68 Node tests and 20 helper tests passed, along with three browser flow checks. The frozen helper was started on Windows and reached through the actual POS proxy. The existing genuine QR remained decodable with its original payload after rendering at the POS footer's 145-by-145-pixel size. Original POS orders, products/stock, settings and fiscal ledger matched the pre-deployment snapshot. The selected new fiscal sale remains blocked in read-only preflight by the missing classification; no new invoice was submitted.
+The frozen-helper smoke check uses an isolated configuration with an unregistered fixture installation path. It verifies that real firewall inspection rejects preflight before database or UI access. It passed on Windows without disabling any live firewall rules or submitting an invoice job, and is included in Windows CI.
+
+Validation on 2026-10-13: 68 Node tests and 22 helper tests passed, along with three browser flow checks. The frozen helper was started on Windows and reached through the actual POS proxy. The offline guard verified both existing outbound blocks and all enabled firewall profiles. Tests confirmed that missing blocking stops preflight and mutating UI steps; live firewall rules were never disabled for testing. The existing genuine QR remained decodable with its original payload after rendering at the POS footer's 145-by-145-pixel size. Original POS orders, products/stock, settings and fiscal ledger matched the pre-deployment snapshot. The selected new fiscal sale remains blocked in read-only preflight by the missing classification; no new invoice was submitted.
 
 GitHub Actions packages the Node POS, Windows launcher, Python backend, frozen helper and Inno Setup installer. `windows/build-etims-helper.ps1` builds the standalone helper/runtime. Merchant credentials, buyer data, real PDFs, tokens and databases are excluded. UI profile assets contain only cropped titles, menu labels and dialog prompts.
 

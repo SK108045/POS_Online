@@ -122,6 +122,20 @@ class CompanionTests(unittest.TestCase):
         for devices in ([],[{**row,'BHF_ID':'02'}],[row,{**row,'TIN':'A000000000Z'}]):
             with self.assertRaisesRegex(ValueError,'installed eTIMS device'):
                 verify_device({'registered_devices':devices},CONFIG)
+    def test_offline_requirement_stops_preflight_before_native_reads(self):
+        from engine import Engine
+        engine=Engine.__new__(Engine);engine.store=self.store
+        with patch('engine.require_identity',return_value=CONFIG),patch('engine.require_offline',side_effect=ValueError('Internet blocking missing')),patch('engine.workflow.read_state') as read:
+            with self.assertRaisesRegex(ValueError,'Internet blocking'):
+                engine.prepare(sale())
+            read.assert_not_called()
+    def test_offline_requirement_blocks_every_mutating_ui_action(self):
+        import workflow
+        for action in ('Click','Text','File'):
+            with patch('offline.require_offline',side_effect=ValueError('Internet blocking missing')),patch('workflow.ps') as execute:
+                with self.assertRaisesRegex(ValueError,'Internet blocking'):
+                    workflow.Ui(123).send({'action':action})
+                execute.assert_not_called()
     def test_recovery_of_ledger_never_calls_fresh_issue(self):
         from engine import Engine
         s=sale();key=self.store.create(s)['id'];ledger=self.home/'ledger.json'

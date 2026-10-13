@@ -93,6 +93,8 @@ def verify_pdf(result: dict, state: dict):
 
 def preflight(pdf: Path | dict, pin: str, name: str, payment: str, mappings: dict | None = None) -> tuple[dict, dict]:
     config = require_identity()
+    from offline import require_offline
+    require_offline(config)
     client = Path(config['installation_dir']) / 'bin/EBM2x.dll'
     if hashlib.sha256(client.read_bytes()).hexdigest() != CLIENT_HASH:
         raise ValueError('Client build changed; this UI profile needs revalidation')
@@ -137,6 +139,9 @@ class Ui:
         return self.send(instruction)
 
     def send(self, instruction: dict):
+        if instruction.get('action') in ('Click','Text','File'):
+            from offline import require_offline
+            require_offline()
         with tempfile.TemporaryDirectory(prefix='etims-step-') as folder:
             path = Path(folder) / 'instruction.json'
             path.write_text(json.dumps(instruction), encoding='utf-8')
