@@ -6,6 +6,9 @@ $bitmap=[Drawing.Bitmap]::FromFile((Resolve-Path -LiteralPath $Path).Path)
 try{
  $reader=New-Object ZXing.BarcodeReader
  $reader.Options.TryHarder=$true
+ $formats=New-Object 'System.Collections.Generic.List[ZXing.BarcodeFormat]'
+ $formats.Add([ZXing.BarcodeFormat]::QR_CODE)
+ $reader.Options.PossibleFormats=$formats
  $result=$reader.Decode($bitmap)
  if($result -and $result.BarcodeFormat.ToString() -eq 'QR_CODE'){
   [pscustomobject]@{format='QR_CODE';text=$result.Text;points=@($result.ResultPoints|ForEach-Object {[pscustomobject]@{x=$_.X;y=$_.Y}})}|ConvertTo-Json -Depth 3 -Compress

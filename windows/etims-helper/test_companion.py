@@ -136,6 +136,15 @@ class CompanionTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError,'Internet blocking'):
                     workflow.Ui(123).send({'action':action})
                 execute.assert_not_called()
+    def test_privilege_mismatch_stops_preparation_before_native_navigation(self):
+        from engine import Engine
+        native=state();native.update(registered_devices=[{'TIN':CONFIG['taxpayer_pin'],'BHF_ID':'01'}],process_ids=[123])
+        engine=Engine.__new__(Engine);engine.store=self.store
+        with patch('engine.require_identity',return_value={**CONFIG,'installation_dir':'fixture'}),patch('engine.require_offline'),patch('engine.Path') as path,patch('engine.hashlib.sha256') as sha,patch('engine.workflow.read_state',return_value=native),patch('engine.require_ui_access',side_effect=ValueError('Repair eTIMS Helper Access')),patch('engine.Client') as client:
+            import workflow
+            sha.return_value.hexdigest.return_value=workflow.CLIENT_HASH
+            with self.assertRaisesRegex(ValueError,'Repair eTIMS'):engine.prepare(sale())
+            client.assert_not_called()
     def test_all_powershell_children_are_hidden_in_gui_build(self):
         import subprocess,workflow,pdf_invoice
         from powershell_host import PowerShellHost
@@ -192,6 +201,33 @@ class CompanionTests(unittest.TestCase):
             with patch('workflow.ps',side_effect=RuntimeError(message)) as execute,patch('offline.require_offline'):
                 with self.assertRaises(RuntimeError):workflow.Ui(123).send(instruction)
                 execute.assert_called_once()
+    def test_navigation_tolerates_only_transient_unrecognized_snapshots(self):
+        from client import Client
+        with patch.object(Client,'_detect_once',side_effect=[ValueError('Unrecognized eTIMS screen. Transition frame'),'sales']) as snapshot,patch('client.time.sleep'):
+            self.assertEqual(Client(123).detect(),'sales')
+            self.assertEqual(snapshot.call_count,2)
+        with patch.object(Client,'_detect_once',side_effect=ValueError('Unverified client window geometry')) as snapshot:
+            with self.assertRaisesRegex(ValueError,'geometry'):Client(123).detect()
+            snapshot.assert_called_once()
+        with patch.object(Client,'_detect_once',side_effect=ValueError('Unrecognized eTIMS screen. Unknown page')) as snapshot,patch('client.time.monotonic',side_effect=[0,6]):
+            with self.assertRaisesRegex(ValueError,'Unrecognized'):Client(123).detect()
+            snapshot.assert_called_once()
+    def test_cleanup_checks_native_invoice_identity_before_closing_any_view(self):
+        from client import Client
+        with patch.object(Client,'detect',side_effect=['print','detail','sales']),patch.object(Client,'expect') as expect,patch.object(Client,'close_owned') as close:
+            Client(123).finish_invoice(5)
+            self.assertEqual(expect.call_args_list[0].args,('print',330,324,'5'))
+            self.assertEqual(expect.call_args_list[1].args,('detail',240,216,'5'))
+            self.assertEqual([c.args[0] for c in close.call_args_list],['print','detail'])
+        with patch.object(Client,'detect',return_value='print'),patch.object(Client,'expect',side_effect=ValueError('Wrong invoice')),patch.object(Client,'close_owned') as close:
+            with self.assertRaisesRegex(ValueError,'Wrong invoice'):Client(123).finish_invoice(5)
+            close.assert_not_called()
+    def test_only_completed_companion_invoices_can_own_a_native_view(self):
+        key=self.store.create(sale())['id']
+        self.assertIsNone(self.store.completed_invoice(5))
+        self.store.update(key,'complete',result={'local_invoice_id':5,'fiscal':{'cu_invoice_number':'FIXTURE/5'}})
+        self.assertEqual(self.store.completed_invoice(5)['fiscal']['cu_invoice_number'],'FIXTURE/5')
+        self.assertIsNone(self.store.completed_invoice(6))
     def test_recovery_of_ledger_never_calls_fresh_issue(self):
         from engine import Engine
         s=sale();key=self.store.create(s)['id'];ledger=self.home/'ledger.json'

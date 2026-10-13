@@ -16,6 +16,15 @@ class Client(Ui):
         return self.send(dict(pid=self.pid,action=action,x=x,y=y,text=text,
                              reference=str(BASE/'profiles'/(screen+'.png')),regions=[self.region(screen)]))
     def detect(self):
+        deadline=time.monotonic()+5
+        while True:
+            try:return self._detect_once()
+            except ValueError as error:
+                # Closing a page can briefly expose a partially painted frame.
+                # Retry only this read; no click or other native action is replayed.
+                if not str(error).startswith('Unrecognized eTIMS screen.') or time.monotonic()>=deadline:raise
+                time.sleep(.15)
+    def _detect_once(self):
         with tempfile.TemporaryDirectory() as temp:
             path=Path(temp)/'screen.png'
             self.send(dict(pid=self.pid,action='Snapshot',path=str(path)))
@@ -69,6 +78,17 @@ class Client(Ui):
         self.wait(target)
     def normalize(self):
         ps('tools/normalize-window.ps1','-TargetProcessId',str(self.pid))
+    def finish_invoice(self,invoice):
+        # Only close read-only views whose displayed invoice identity is verified.
+        screen=self.detect()
+        if screen=='print':
+            self.expect('print',330,324,str(invoice))
+            self.close_owned('print');screen=self.detect()
+        if screen=='detail':
+            self.expect('detail',240,216,str(invoice))
+            self.close_owned('detail');screen=self.detect()
+        if screen=='menu':self.navigate('sales');return
+        if screen!='sales':raise ValueError('Finish the unrelated open eTIMS form before continuing')
     def register_products(self,path,registrations,buyer,checkpoint):
         # Validate absence immediately before import: native import can overwrite stock.
         state=read_state(buyer)

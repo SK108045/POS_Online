@@ -1,0 +1,2 @@
+@echo off
+powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -WindowStyle Hidden -Command "$cfg=Get-Content -LiteralPath (Join-Path $env:LOCALAPPDATA 'OraforgePOS\etims\config.json') -Raw|ConvertFrom-Json; if(-not (Test-Path -LiteralPath $cfg.helper_exe)){throw 'Configured helper EXE is missing'}; Start-Process -FilePath $cfg.helper_exe -ArgumentList '--repair-access' -WindowStyle Hidden"

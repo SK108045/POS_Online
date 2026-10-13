@@ -4,7 +4,7 @@ const fs=require('node:fs'),path=require('node:path'),http=require('node:http');
 const {spawn}=require('node:child_process');
 const home=()=>process.env.ORAFORGE_ETIMS_HOME || path.join(process.env.LOCALAPPDATA || process.env.HOME || '.', 'OraforgePOS','etims');
 let starting=null;
-const HELPER_BUILD='20261013.7';
+const HELPER_BUILD='20261013.9';
 function config(){try{return JSON.parse(fs.readFileSync(path.join(home(),'config.json'),'utf8').replace(/^\uFEFF/,''));}catch{return {};}}
 function launchTarget(){
   const exe=process.env.ORAFORGE_ETIMS_EXE || config().helper_exe || path.resolve(__dirname,'../../runtime/etims/OraforgeEtims/OraforgeEtims.exe');
@@ -41,7 +41,12 @@ async function ensure(){
     if(process.platform!=='win32')throw Error('Invoice issuance requires Oraforge on the Windows eTIMS computer.');
     if(starting)return starting;
     starting=(async()=>{
-      const {command,args}=launchTarget();
+      let {command,args}=launchTarget();
+      const startup=config();
+      if(startup.startup_mode==='scheduled_highest'){
+        if(typeof startup.startup_task!=='string' || !/^Oraforge eTIMS Helper-S-1-[0-9-]+$/.test(startup.startup_task))throw Error('Repair the eTIMS helper Windows startup configuration.');
+        command='schtasks.exe';args=['/Run','/TN',startup.startup_task];
+      }
       const child=spawn(command,args,{windowsHide:true,detached:true,stdio:'ignore',env:{...process.env,ORAFORGE_ETIMS_HOME:home()}});
       let failed=false;child.on('error',()=>{failed=true;});child.unref();
       for(let i=0;i<40;i++){

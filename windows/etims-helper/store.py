@@ -74,3 +74,9 @@ class Store:
     def interrupted(self):
         with self.connect() as db:
             return [self.decode(r) for r in db.execute("SELECT * FROM jobs WHERE state NOT IN ('complete','needs_details','review_required','failed')")]
+    def completed_invoice(self,invoice):
+        with self.connect() as db:
+            for row in db.execute("SELECT result FROM jobs WHERE state='complete' AND result IS NOT NULL"):
+                result=json.loads(row['result'])
+                if result.get('local_invoice_id')==invoice:return result
+        return None

@@ -8,6 +8,7 @@ $handle=if($WindowHandle){[IntPtr]$WindowHandle}else{$p.MainWindowHandle}
 $root=[Windows.Automation.AutomationElement]::FromHandle($handle)
 if($root.Current.ProcessId -ne $TargetProcessId){throw 'Unexpected capture target'}
 $bounds=$root.Current.BoundingRectangle
+if([double]::IsInfinity($bounds.Width) -or [double]::IsInfinity($bounds.Height) -or [double]::IsNaN($bounds.Width) -or [double]::IsNaN($bounds.Height) -or $bounds.Width -le 0 -or $bounds.Height -le 0){throw 'Window bounds unavailable; verify helper administrator access'}
 $bitmap=New-Object Drawing.Bitmap([int]$bounds.Width,[int]$bounds.Height)
 $graphics=[Drawing.Graphics]::FromImage($bitmap)
 $dc=$graphics.GetHdc()

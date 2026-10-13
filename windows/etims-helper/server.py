@@ -12,7 +12,7 @@ from urllib.parse import urlparse
 from engine import Engine
 from settings import HOME, settings
 
-BUILD = '20261013.7'
+BUILD = '20261013.9'
 
 
 class LocalServer(ThreadingHTTPServer):
@@ -26,9 +26,10 @@ class LocalServer(ThreadingHTTPServer):
         super().server_bind()
 
 def health():
+    from windows_access import is_elevated
     frozen=bool(getattr(sys,'frozen',False))
     return {'app':'oraforge-etims-helper','version':2,'platform':sys.platform,
-            'build':BUILD,'runtime_mode':'frozen' if frozen else 'source',
+            'build':BUILD,'runtime_mode':'frozen' if frozen else 'source','elevated':is_elevated(),
             'runtime_executable':str(Path(sys.executable).resolve()),
             'runtime_entry':str(Path(sys.executable if frozen else __file__).resolve())}
 
@@ -57,6 +58,20 @@ def serve():
                 return self.send(403,{'error':'Companion authorization required'})
             try:
                 body={}
+                if route=='/access' and self.command=='GET':
+                    from offline import require_offline
+                    from settings import require_identity
+                    from workflow import read_state
+                    from windows_access import require_ui_access
+                    from client import Client
+                    config=require_identity()
+                    require_offline(config)
+                    native=read_state('')
+                    if len(native['process_ids'])!=1:
+                        raise ValueError('Open one eTIMS client and log in normally')
+                    require_ui_access(native['process_ids'][0])
+                    screen=Client(native['process_ids'][0]).detect()
+                    return self.send(200,{'ui_access_ready':True,'screen':screen,'offline_verified':True})
                 if self.command=='POST':
                     if self.headers.get_content_type()!='application/json':raise ValueError('JSON required')
                     length=int(self.headers.get('Content-Length','0'))
@@ -94,7 +109,10 @@ def serve():
 
 if __name__=='__main__':
     try:
-        if '--configure' in sys.argv:
+        if '--repair-access' in sys.argv:
+            from repair_access import run
+            run()
+        elif '--configure' in sys.argv:
             from configure import configure
             configure()
         else:serve()

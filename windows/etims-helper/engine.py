@@ -13,6 +13,7 @@ import workflow
 from client import Client
 from session_lock import exclusive_client, reclaim_dead_lock
 from offline import require_offline
+from windows_access import require_ui_access
 
 def verify_device(state, config):
     registered={(str(row['TIN']),str(row['BHF_ID'])) for row in state.get('registered_devices',[])}
@@ -47,6 +48,7 @@ class Engine:
         verify_device(state,config)
         if len(state['process_ids'])!=1:
             raise ValueError('Open one eTIMS Windows client and log in normally')
+        require_ui_access(state['process_ids'][0])
         if state['default_printer']!=['Microsoft Print to PDF']:
             raise ValueError('Set the existing default Windows printer to Microsoft Print to PDF for original invoice capture')
         if state['customers'] and (len(state['customers'])!=1 or state['customers'][0]['CUST_NM']!=sale['customer']['name']):
@@ -144,6 +146,14 @@ class Engine:
         if job['state']=='recovering' and screen in ('item-management','customer','stock-status','stock-adjustment'):
             client.navigate('sales')
             screen=client.detect()
+        if screen in ('print','detail'):
+            point=(330,324) if screen=='print' else (240,216)
+            displayed=int(client.value(screen,*point))
+            owned=self.store.completed_invoice(displayed)
+            native=workflow.read_state('',displayed)
+            if not owned or len(native['receipts'])!=1 or native['receipts'][0]['CU_INVOICE_NUMBER']!=owned['fiscal']['cu_invoice_number']:
+                raise ValueError('The open native invoice is not a verified completed POS invoice; finish its view before continuing')
+            client.finish_invoice(displayed);screen=client.detect()
         if screen not in ('menu','sales'):
             raise ValueError('Finish the unrelated open eTIMS form once, then recover this same POS sale')
         def checkpoint(stage):self.store.update(key,stage)
@@ -164,6 +174,8 @@ class Engine:
         raw=workflow.issue(request,request['buyer_pin'],request['buyer_name'],request['payment_code'],key,True,
                            lambda stage:self.store.update(key,progress_state(stage)))
         self.store.update(key,'complete',result=self.result(raw,sale))
+        try:client.finish_invoice(raw['local_invoice_id'])
+        except Exception:pass # Fiscal completion remains valid if read-only view cleanup is unavailable.
     def resume(self,key,recorded,request,sale):
         invoice=recorded.get('invoice_id')
         if invoice is None:
@@ -191,6 +203,9 @@ class Engine:
             return raw
         if state['sales'][0].get('REMARK')!='Oraforge:'+key:
             raise ValueError('The stored invoice is not bound to this POS sale reference')
+        if len(state['process_ids'])!=1:
+            raise ValueError('Open one eTIMS Windows client and log in normally')
+        require_ui_access(state['process_ids'][0])
         client=Client(state['process_ids'][0]);client.normalize()
         client.navigate('sales')
         client.text('sales',600,179,str(invoice));client.click('sales',1070,179)
