@@ -3,7 +3,7 @@ name: Build Windows POS EXE
 on:
   workflow_dispatch:
   push:
-    branches: [improved-ui, windows-exe-automation, feat/windows-etims-checkout]
+    branches: [improved-ui, windows-exe-automation, feat/windows-etims-checkout, Etims_Client_Integration]
     tags: ['windows-v*']
   pull_request:
     branches: [improved-ui]
