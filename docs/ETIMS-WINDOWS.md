@@ -18,6 +18,8 @@ An existing paid sale can be invoiced through **Manage eTIMS invoice** on its re
 
 ## Windows setup and startup
 
+For this source installation, double-click **Start Oraforge POS.cmd** in the project root, or the **Oraforge POS (eTIMS)** desktop shortcut. It starts the local server when needed and opens the saved Oraforge browser profile at `http://localhost:3000/pos`. Repeated launches reuse the server. It keeps port 3000 and the saved browser, preserving access to existing sales. The helper starts through local IPC; eTIMS itself must be opened and logged into normally. This launcher does not enable eTIMS Internet access. `windows/start-source-pos.ps1 -NoBrowser` checks startup and connectivity without opening a browser.
+
 Use **Configure Oraforge eTIMS Helper** from the packaged Start menu, or `python windows/etims-helper/configure.py` from source. Enter this device's existing seller PIN, branch, installation folder and existing database path. This does not change KRA registration. Login passwords are neither requested nor stored.
 
 Open one eTIMS client and log in normally. The verified profile is build `20240411.NEW.0138`, DLL SHA-256 `8869363751e79f0c4a8b97f5877ec2d5b83cb4b784c9e46f95bb91ca376eff75`. Changed builds stop before UI writes and require profile validation. The helper normalizes the outer window to 1384 × 786 pixels and requires at least a 1366 × 768 display. Unexpected forms stop the job. An interactive, unlocked Windows desktop is required.
