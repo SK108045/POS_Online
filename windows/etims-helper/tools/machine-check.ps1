@@ -1,4 +1,4 @@
-param([Parameter(Mandatory=$true)][string]$DiagnosticDirectory)
+param([string]$DiagnosticDirectory = (Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) 'OraforgePOS\etims\diagnostics'))
 $ErrorActionPreference='Stop'
 . "$PSScriptRoot\display-geometry.ps1"
 $previous=[OraforgeDisplay]::Enter()
