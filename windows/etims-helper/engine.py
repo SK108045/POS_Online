@@ -1,4 +1,5 @@
 """Serialized, durable POS -> native eTIMS -> original fiscal PDF workflow."""
+from ui_map import point, payment_points
 import base64
 import hashlib
 import json
@@ -51,6 +52,8 @@ class Engine:
         if len(state['process_ids'])!=1:
             raise ValueError('Open one eTIMS Windows client and log in normally')
         require_ui_access(state['process_ids'][0])
+        from display import require_display
+        require_display(state['process_ids'][0],state.get('display'))
         if state['default_printer']!=['Microsoft Print to PDF']:
             raise ValueError('Set the existing default Windows printer to Microsoft Print to PDF for original invoice capture')
         if state['customers'] and (len(state['customers'])!=1 or state['customers'][0]['CUST_NM']!=sale['customer']['name']):
@@ -243,27 +246,26 @@ class Engine:
             if file_state['file_dialog']:
                 raise ValueError('An unrelated file dialog is open; no input was sent')
             client.navigate('sales')
-            client.text('sales',600,179,str(invoice));client.click('sales',1070,179)
-            client.click('sales',410,262);client.click('sales',1194,560)
-            client.expect('detail',240,216,str(invoice));client.expect('detail',240,252,request['buyer_pin'])
+            client.text('sales',*point('sales','invoice'),str(invoice));client.click('sales',*point('sales','search'))
+            client.click('sales',*point('sales','first_result'));client.click('sales',*point('sales','detail'))
+            client.expect('detail',*point('detail','invoice'),str(invoice));client.expect('detail',*point('detail','buyer_pin'),request['buyer_pin'])
         if not approved:
-            client.click('detail',70,179);client.click('approve-confirm',705,530)
-            client.wait_screen('payment');client.expect('payment',100,216,request['buyer_pin'])
+            client.click('detail',*point('detail','approve'));client.click('approve-confirm',*point('approve-confirm','yes'))
+            client.wait_screen('payment');client.expect('payment',*point('payment','buyer_pin'),request['buyer_pin'])
             recorded['stage']='approval_requested';workflow.write_ledger(workflow.ledger_path(key),recorded)
-            points={'01':(84,307),'02':(236,307),'03':(390,307),'04':(540,379),'05':(236,379),'06':(390,379),'07':(540,307)}
-            client.click('payment',*points[request['payment_code']])
+            client.click('payment',*payment_points[request['payment_code']])
             state=workflow.wait_database(request['buyer_pin'],invoice,True)
             workflow.verify_sale(state,request,True)
             client.wait_screen('print')
         elif not reuse_print:
             # Printing an existing approved invoice creates no second fiscal record.
-            client.click('detail',1194,89);client.wait_screen('print')
+            client.click('detail',*point('detail','print'));client.wait_screen('print')
         folder=HOME/'output'/workflow.ledger_path(key).stem
         folder.mkdir(parents=True,exist_ok=True)
         import time
         result_pdf=folder/('recovered-'+str(time.time_ns())+'.pdf')
         if not reuse_print or file_state['file_dialog'] is None:
-            client.click('print',390,198)
+            client.click('print',*point('print','print_a4'))
         recorded.update(stage='pdf_requested',pdf=str(result_pdf))
         workflow.write_ledger(workflow.ledger_path(key),recorded)
         workflow.choose_print_path(client,result_pdf)

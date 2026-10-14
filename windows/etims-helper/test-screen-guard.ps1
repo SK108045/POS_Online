@@ -30,5 +30,19 @@ try{
   [IO.File]::SetLastWriteTimeUtc($temp,[DateTime]::UtcNow.AddSeconds(2))
   if([OraforgeScreenGuard]::MatchesFile($actual,$temp,10,10,10,10)){throw 'Updated reference reused stale pixels'}
  }finally{if(Test-Path -LiteralPath $temp){Remove-Item -LiteralPath $temp -Force}}
+ $diagnostic=Join-Path ([IO.Path]::GetTempPath()) ('oraforge-guard-pair-'+[Guid]::NewGuid().ToString('N'))
+ $ref=Join-Path $diagnostic 'sales.png'
+ [void][IO.Directory]::CreateDirectory($diagnostic)
+ try{
+  $reference.Save($ref,[Drawing.Imaging.ImageFormat]::Png)
+  $pair=[OraforgeScreenGuard]::SaveComparison($actual,$ref,10,10,10,10,$diagnostic)
+  $image=New-Object Drawing.Bitmap($pair)
+  try{if($image.Width -ne 36 -or $image.Height -ne 10){throw 'Diagnostic retained more than the fixed profile crop'}}finally{$image.Dispose()}
+  $metadata=Get-Content -LiteralPath ([IO.Path]::ChangeExtension($pair,'.json')) -Raw|ConvertFrom-Json
+  if($metadata.profile -cne 'sales' -or $metadata.score -ge 0.996){throw 'Diagnostic profile or match score missing'}
+ }finally{
+  foreach($file in [IO.Directory]::GetFiles($diagnostic)){[IO.File]::Delete($file)}
+  [IO.Directory]::Delete($diagnostic)
+ }
  Write-Output 'PASS: compiled screen guard preserves tolerance, mismatch, bounds and window geometry checks.'
 }finally{$actual.Dispose();$reference.Dispose()}

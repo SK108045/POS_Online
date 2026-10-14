@@ -1,0 +1,766 @@
+{
+  "schema": 1,
+  "client_sha256": "8869363751e79f0c4a8b97f5877ec2d5b83cb4b784c9e46f95bb91ca376eff75",
+  "layout": {
+    "width": 1384,
+    "height": 786,
+    "minimum_monitor_width": 1366,
+    "minimum_monitor_height": 768,
+    "candidate_scale_percent": [
+      100,
+      125,
+      150
+    ],
+    "validation": "Exact physical-pixel profile and actual content bounds before every input; candidate scaling is not a compatibility claim",
+    "coordinate_space": "physical_window_frame"
+  },
+  "dialogs": [
+    "close-confirm",
+    "stock-confirm",
+    "customer-confirm",
+    "new-customer",
+    "new-confirm",
+    "approve-confirm",
+    "saved",
+    "printed",
+    "import-success"
+  ],
+  "screens": {
+    "system-settings": {
+      "region": [35,57,500,60],
+      "points": {},
+      "runtime": false
+    },
+    "sales": {
+      "region": [
+        35,
+        57,
+        500,
+        60
+      ],
+      "points": {
+        "new": [
+          1070,
+          560
+        ],
+        "invoice": [
+          600,
+          179
+        ],
+        "search": [
+          1070,
+          179
+        ],
+        "first_result": [
+          410,
+          262
+        ],
+        "detail": [
+          1194,
+          560
+        ]
+      },
+      "navigation": {
+        "profile": "toolbar-close-plain",
+        "region": [
+          1258,
+          57,
+          115,
+          60
+        ],
+        "point": [
+          1314,
+          89
+        ]
+      }
+    },
+    "registration": {
+      "region": [
+        35,
+        57,
+        500,
+        60
+      ],
+      "points": {
+        "invoice": [
+          270,
+          180
+        ],
+        "buyer_pin": [
+          270,
+          216
+        ],
+        "choose_buyer": [
+          526,
+          216
+        ],
+        "choose_item": [
+          982,
+          180
+        ],
+        "item_code": [
+          870,
+          180
+        ],
+        "price": [
+          870,
+          288
+        ],
+        "quantity": [
+          1230,
+          288
+        ],
+        "reference": [
+          300,
+          433
+        ],
+        "confirm_line": [
+          844,
+          434
+        ],
+        "total": [
+          300,
+          360
+        ],
+        "save": [
+          1194,
+          89
+        ]
+      },
+      "navigation": {
+        "profile": "toolbar-close",
+        "region": [
+          1258,
+          57,
+          115,
+          60
+        ],
+        "point": [
+          1314,
+          89
+        ]
+      }
+    },
+    "customer-popup": {
+      "region": [
+        35,
+        57,
+        500,
+        60
+      ],
+      "points": {
+        "query": [
+          600,
+          179
+        ],
+        "search": [
+          1300,
+          179
+        ],
+        "first_result": [
+          410,
+          262
+        ],
+        "selected_code": [
+          1200,
+          252
+        ],
+        "confirm": [
+          1314,
+          89
+        ]
+      },
+      "navigation": {
+        "profile": "toolbar-cancel",
+        "region": [
+          1137,
+          57,
+          115,
+          60
+        ],
+        "point": [
+          1194,
+          89
+        ]
+      }
+    },
+    "item-popup": {
+      "region": [
+        35,
+        57,
+        500,
+        60
+      ],
+      "points": {
+        "query": [
+          600,
+          179
+        ],
+        "search": [
+          1300,
+          179
+        ],
+        "first_result": [
+          410,
+          262
+        ],
+        "selected_code": [
+          1200,
+          252
+        ],
+        "confirm": [
+          1314,
+          89
+        ]
+      },
+      "navigation": {
+        "profile": "toolbar-cancel",
+        "region": [
+          1137,
+          57,
+          115,
+          60
+        ],
+        "point": [
+          1194,
+          89
+        ]
+      }
+    },
+    "detail": {
+      "region": [
+        35,
+        57,
+        500,
+        60
+      ],
+      "points": {
+        "invoice": [
+          240,
+          216
+        ],
+        "buyer_pin": [
+          240,
+          252
+        ],
+        "approve": [
+          70,
+          179
+        ],
+        "print": [
+          1194,
+          89
+        ]
+      },
+      "navigation": {
+        "profile": "toolbar-close",
+        "region": [
+          1258,
+          57,
+          115,
+          60
+        ],
+        "point": [
+          1314,
+          89
+        ]
+      }
+    },
+    "print": {
+      "region": [
+        35,
+        57,
+        500,
+        60
+      ],
+      "points": {
+        "invoice": [
+          330,
+          324
+        ],
+        "print_a4": [
+          390,
+          198
+        ]
+      },
+      "navigation": {
+        "profile": "toolbar-close",
+        "region": [
+          1258,
+          57,
+          115,
+          60
+        ],
+        "point": [
+          1314,
+          89
+        ]
+      }
+    },
+    "customer": {
+      "region": [
+        35,
+        57,
+        500,
+        60
+      ],
+      "points": {
+        "new": [
+          950,
+          89
+        ],
+        "save": [
+          1070,
+          89
+        ],
+        "pin": [
+          300,
+          216
+        ],
+        "name": [
+          300,
+          252
+        ],
+        "phone": [
+          1200,
+          179
+        ],
+        "address": [
+          300,
+          324
+        ],
+        "remarks": [
+          750,
+          324
+        ]
+      },
+      "navigation": {
+        "profile": "toolbar-back",
+        "region": [
+          1258,
+          57,
+          115,
+          60
+        ],
+        "point": [
+          1314,
+          89
+        ]
+      }
+    },
+    "item-management": {
+      "region": [
+        35,
+        57,
+        500,
+        60
+      ],
+      "points": {
+        "import": [
+          705,
+          89
+        ]
+      },
+      "navigation": {
+        "profile": "toolbar-close-item",
+        "region": [
+          1258,
+          57,
+          115,
+          60
+        ],
+        "point": [
+          1314,
+          89
+        ]
+      }
+    },
+    "stock-status": {
+      "region": [
+        35,
+        57,
+        500,
+        60
+      ],
+      "points": {
+        "query": [
+          1000,
+          179
+        ],
+        "search": [
+          1300,
+          179
+        ],
+        "first_result": [
+          410,
+          262
+        ],
+        "adjust": [
+          1194,
+          89
+        ]
+      },
+      "navigation": {
+        "profile": "toolbar-close-plain",
+        "region": [
+          1258,
+          57,
+          115,
+          60
+        ],
+        "point": [
+          1314,
+          89
+        ]
+      }
+    },
+    "stock-adjustment": {
+      "region": [
+        35,
+        57,
+        500,
+        60
+      ],
+      "points": {
+        "item_code": [
+          300,
+          179
+        ],
+        "type": [
+          160,
+          506
+        ],
+        "reason": [
+          750,
+          506
+        ],
+        "quantity": [
+          450,
+          615
+        ],
+        "after": [
+          750,
+          615
+        ],
+        "save": [
+          1194,
+          89
+        ]
+      },
+      "navigation": {
+        "profile": "toolbar-close",
+        "region": [
+          1258,
+          57,
+          115,
+          60
+        ],
+        "point": [
+          1314,
+          89
+        ]
+      }
+    },
+    "menu": {
+      "region": [
+        10,
+        110,
+        270,
+        440
+      ],
+      "points": {
+        "sales": [
+          160,
+          325
+        ],
+        "items": [
+          160,
+          197
+        ],
+        "items_submenu": [
+          420,
+          255
+        ],
+        "customers": [
+          160,
+          261
+        ],
+        "customers_submenu": [
+          420,
+          319
+        ],
+        "stock": [
+          160,
+          520
+        ],
+        "stock_submenu": [
+          420,
+          625
+        ]
+      }
+    },
+    "payment": {
+      "region": [
+        35,
+        57,
+        500,
+        60
+      ],
+      "points": {
+        "buyer_pin": [
+          100,
+          216
+        ],
+        "01": [
+          84,
+          307
+        ],
+        "02": [
+          236,
+          307
+        ],
+        "03": [
+          390,
+          307
+        ],
+        "04": [
+          540,
+          379
+        ],
+        "05": [
+          236,
+          379
+        ],
+        "06": [
+          390,
+          379
+        ],
+        "07": [
+          540,
+          307
+        ]
+      },
+      "navigation": {
+        "profile": "toolbar-close",
+        "region": [
+          1258,
+          57,
+          115,
+          60
+        ],
+        "point": [
+          1314,
+          89
+        ]
+      }
+    },
+    "close-confirm": {
+      "region": [
+        405,
+        330,
+        580,
+        58
+      ],
+      "points": {
+        "yes": [
+          705,
+          530
+        ],
+        "no_or_ok": [
+          885,
+          530
+        ]
+      }
+    },
+    "stock-confirm": {
+      "region": [
+        405,
+        330,
+        580,
+        58
+      ],
+      "points": {
+        "yes": [
+          705,
+          530
+        ],
+        "no_or_ok": [
+          885,
+          530
+        ]
+      }
+    },
+    "customer-confirm": {
+      "region": [
+        405,
+        330,
+        580,
+        58
+      ],
+      "points": {
+        "yes": [
+          705,
+          530
+        ],
+        "no_or_ok": [
+          885,
+          530
+        ]
+      }
+    },
+    "new-customer": {
+      "region": [
+        405,
+        330,
+        580,
+        58
+      ],
+      "points": {
+        "yes": [
+          705,
+          530
+        ],
+        "no_or_ok": [
+          885,
+          530
+        ]
+      }
+    },
+    "new-confirm": {
+      "region": [
+        405,
+        330,
+        580,
+        58
+      ],
+      "points": {
+        "yes": [
+          705,
+          530
+        ],
+        "no_or_ok": [
+          885,
+          530
+        ]
+      }
+    },
+    "approve-confirm": {
+      "region": [
+        405,
+        330,
+        580,
+        58
+      ],
+      "points": {
+        "yes": [
+          705,
+          530
+        ],
+        "no_or_ok": [
+          885,
+          530
+        ]
+      }
+    },
+    "saved": {
+      "region": [
+        405,
+        330,
+        580,
+        58
+      ],
+      "points": {
+        "yes": [
+          705,
+          530
+        ],
+        "no_or_ok": [
+          885,
+          530
+        ]
+      }
+    },
+    "printed": {
+      "region": [
+        405,
+        330,
+        580,
+        58
+      ],
+      "points": {
+        "yes": [
+          705,
+          530
+        ],
+        "no_or_ok": [
+          885,
+          530
+        ]
+      }
+    },
+    "import-success": {
+      "region": [
+        405,
+        330,
+        580,
+        58
+      ],
+      "points": {
+        "yes": [
+          705,
+          530
+        ],
+        "no_or_ok": [
+          885,
+          530
+        ]
+      }
+    },
+    "toolbar-close": {
+      "region": [
+        1258,
+        57,
+        115,
+        60
+      ],
+      "points": {}
+    },
+    "toolbar-close-plain": {
+      "region": [
+        1258,
+        57,
+        115,
+        60
+      ],
+      "points": {}
+    },
+    "toolbar-close-item": {
+      "region": [
+        1258,
+        57,
+        115,
+        60
+      ],
+      "points": {}
+    },
+    "toolbar-back": {
+      "region": [
+        1258,
+        57,
+        115,
+        60
+      ],
+      "points": {}
+    },
+    "toolbar-cancel": {
+      "region": [
+        1137,
+        57,
+        115,
+        60
+      ],
+      "points": {}
+    }
+  },
+  "selector_notes": "Native file dialogs use verified UIA Edit 1001/1148 and Button 1/2. WPF canvas toolbars have no unique UIA peers; text entry retains observed Edit/ValuePattern/focus verification. No guessed UIA selectors."
+}

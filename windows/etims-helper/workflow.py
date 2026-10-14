@@ -13,15 +13,14 @@ import tempfile
 import time
 from urllib.parse import parse_qs, urlparse
 
+from ui_map import UI_MAP, point, region, payment_points
 from pdf_invoice import read_sale, extract
 from settings import ASSETS, HOME, require_identity
 from timing import span, mark, timed
 
 BASE = ASSETS
 DATA = HOME
-HEADER = [35, 57, 500, 60]
-DIALOG = [405, 330, 580, 58]
-CLIENT_HASH = '8869363751e79f0c4a8b97f5877ec2d5b83cb4b784c9e46f95bb91ca376eff75'
+CLIENT_HASH = UI_MAP['client_sha256']
 
 
 def ps(script: str, *args: str, timeout=90) -> str:
@@ -41,7 +40,16 @@ def ps(script: str, *args: str, timeout=90) -> str:
                           'Expected file dialog missing':'file dialog not ready'}
             safe_reasons['Target not ready before input']='target busy before input'
             safe_reasons['Observed page navigation button missing']='page navigation control mismatch'
+            safe_reasons['Unsupported display settings']='unsupported display settings: run the machine check; eTIMS content must fit on one monitor of at least 1366x768'
+            safe_reasons['Target window changed']='target moved or resized after observation'
+            safe_reasons['Observed UIA selector missing or ambiguous']='UIA selector missing or ambiguous'
             reason=next((' ('+description+')' for message,description in safe_reasons.items() if message in stderr),'')
+            detail=re.search(r'\[profile=([a-z-]{1,40}); score=(0\.[0-9]{6}|1\.000000)\]',stderr)
+            if detail:reason+=' '+detail[0]
+        elif Path(script).name in ('normalize-window.ps1','display-state.ps1'):
+            stderr=result.stderr.decode('utf-8-sig',errors='replace')
+            if 'Unsupported display settings' in stderr:reason=' (unsupported display settings: run the machine check; eTIMS content must fit on one monitor of at least 1366x768)'
+            elif 'Unverified window geometry' in stderr:reason=' (window geometry mismatch: normalized content must fit on one monitor)'
         raise RuntimeError(f'{Path(script).name} failed{reason}; stopped without retrying the action')
     return result.stdout.decode('utf-8-sig').strip()
 
@@ -120,6 +128,8 @@ def preflight(pdf: Path | dict, pin: str, name: str, payment: str, mappings: dic
     state = read_state(pin)
     if len(state['process_ids']) != 1:
         raise ValueError('Open exactly one eTIMS client and log in normally')
+    from display import require_display
+    require_display(state['process_ids'][0],state.get('display'))
     if state['default_printer'] != ['Microsoft Print to PDF']:
         raise ValueError('The Windows default printer must be Microsoft Print to PDF before this workflow')
     if len(state['customers']) != 1 or state['customers'][0]['CUST_NM'] != name:
@@ -149,7 +159,7 @@ class Ui:
     def action(self, screen: str, action: str, x=0, y=0, text=None):
         instruction = dict(pid=self.pid, action=action, x=x, y=y, text=text,
                            reference=str(BASE / 'profiles' / (screen + '.png')),
-                           regions=[DIALOG] if screen in ('new-confirm', 'approve-confirm', 'saved') else [HEADER])
+                           regions=[region(screen)])
         return self.send(instruction)
 
     def send(self, instruction: dict):
@@ -171,7 +181,23 @@ class Ui:
                         time.sleep(.1)
                         continue
                     screen=Path(instruction.get('reference','print-file')).stem
+                    if instruction.get('action')!='Detect' and '(screen mismatch)' in str(error):
+                        diagnostic=dict(instruction)
+                        if instruction.get('navigation_reference') and ('profile='+Path(instruction['navigation_reference']).stem+';') in str(error):
+                            diagnostic.update(reference=instruction['navigation_reference'],regions=[instruction['navigation_region']])
+                        self.diagnose(diagnostic)
                     raise RuntimeError(f"UI {instruction.get('action')} on {screen}: {error}") from None
+
+    def diagnose(self,instruction=None):
+        # Failure-only read. Never retry the original action to collect evidence.
+        profiles=([dict(screen=Path(instruction['reference']).stem,reference=instruction['reference'],region=instruction['regions'][0])]
+                  if instruction else [dict(screen=name,reference=str(BASE/'profiles'/(name+'.png')),region=profile['region'])
+                                       for name,profile in UI_MAP['screens'].items()])
+        with tempfile.TemporaryDirectory(prefix='etims-diagnostic-') as folder:
+            path=Path(folder)/'instruction.json'
+            path.write_text(json.dumps(dict(pid=self.pid,action='Diagnose',profiles=profiles,directory=str(DATA/'diagnostics'))),encoding='utf-8')
+            try:ps('ui-step.ps1','-Instruction',str(path),timeout=40)
+            except Exception:pass # Diagnostics cannot dispatch input or hide the original failure.
 
     def click(self, screen, x, y):
         self.action(screen, 'Click', x, y)
@@ -204,9 +230,8 @@ class Ui:
         while True:
             try:
                 # Read a harmless, already observed field to validate the page.
-                points = {'print': (330, 324), 'sales': (600, 179), 'payment': (100, 216),
-                          'registration': (270, 180)}
-                x, y = points[screen]
+                field = {'print':'invoice','sales':'invoice','payment':'buyer_pin','registration':'invoice'}[screen]
+                x,y=point(screen,field)
                 return self.value(screen, x, y)
             except (RuntimeError, ValueError):
                 if time.monotonic() >= end:
@@ -292,66 +317,64 @@ def _issue(pdf: Path, pin: str, name: str, payment: str, request_id: str,
     try:
         progress('Checking Sales Management page')
         ui.wait_screen('sales', 5)
-        ui.click('sales', 1070, 560)
-        ui.click('new-confirm', 705, 530)
+        ui.click('sales', *point('sales','new'))
+        ui.click('new-confirm', *point('new-confirm','yes'))
         invoice = int(ui.wait_screen('registration'))
         if read_state(pin, invoice)['sales']:
             raise ValueError('This invoice number already exists; stopped before save')
         checkpoint('entering_invoice', invoice_id=invoice)
-        ui.click('registration', 526, 216)
-        ui.text('customer-popup', 600, 179, pin)
-        ui.click('customer-popup', 1300, 179)
-        ui.click('customer-popup', 410, 262)
-        ui.expect('customer-popup', 1200, 252, pin)
-        ui.click('customer-popup', 1314, 89)
-        ui.expect('registration', 270, 216, pin)
+        ui.click('registration', *point('registration','choose_buyer'))
+        ui.text('customer-popup', *point('customer-popup','query'), pin)
+        ui.click('customer-popup', *point('customer-popup','search'))
+        ui.click('customer-popup', *point('customer-popup','first_result'))
+        ui.expect('customer-popup', *point('customer-popup','selected_code'), pin)
+        ui.click('customer-popup', *point('customer-popup','confirm'))
+        ui.expect('registration', *point('registration','buyer_pin'), pin)
         for line in request['lines']:
-            ui.click('registration', 982, 180)
-            ui.text('item-popup', 600, 179, line['item_code'])
-            ui.click('item-popup', 1300, 179)
-            ui.click('item-popup', 410, 262)
-            ui.expect('item-popup', 1200, 252, line['item_code'])
-            ui.click('item-popup', 1314, 89)
-            ui.expect('registration', 870, 180, line['item_code'])
+            ui.click('registration', *point('registration','choose_item'))
+            ui.text('item-popup', *point('item-popup','query'), line['item_code'])
+            ui.click('item-popup', *point('item-popup','search'))
+            ui.click('item-popup', *point('item-popup','first_result'))
+            ui.expect('item-popup', *point('item-popup','selected_code'), line['item_code'])
+            ui.click('item-popup', *point('item-popup','confirm'))
+            ui.expect('registration', *point('registration','item_code'), line['item_code'])
             # Masked amount fields format commas; verification compares Decimal.
-            ui.action('registration', 'Text', 870, 288, line['unit_price'])
-            ui.expect('registration', 870, 288, line['unit_price'], numeric=True)
-            ui.action('registration', 'Text', 1230, 288, line['quantity'])
-            ui.expect('registration', 1230, 288, line['quantity'], numeric=True)
+            ui.action('registration', 'Text', *point('registration','price'), line['unit_price'])
+            ui.expect('registration', *point('registration','price'), line['unit_price'], numeric=True)
+            ui.action('registration', 'Text', *point('registration','quantity'), line['quantity'])
+            ui.expect('registration', *point('registration','quantity'), line['quantity'], numeric=True)
             # Item selection refreshes the header from TranRecord and can clear
             # unsaved text. Confirm copies this entry to TranRecord.Remark.
-            ui.text('registration', 300, 433, 'Oraforge:' + request_id)
-            ui.click('registration', 844, 434)
-        ui.expect('registration', 300, 433, 'Oraforge:' + request_id)
-        ui.expect('registration', 300, 360, request['total'], numeric=True)
+            ui.text('registration', *point('registration','reference'), 'Oraforge:' + request_id)
+            ui.click('registration', *point('registration','confirm_line'))
+        ui.expect('registration', *point('registration','reference'), 'Oraforge:' + request_id)
+        ui.expect('registration', *point('registration','total'), request['total'], numeric=True)
         checkpoint('draft_save_requested')
-        ui.click('registration', 1194, 89)
+        ui.click('registration', *point('registration','save'))
         draft = wait_database(pin, invoice, False)
         verify_sale(draft, request)
         if draft['sales'][0].get('REMARK')!='Oraforge:'+request_id:
             raise ValueError('Stored draft lost its POS reference; stopped before fiscal approval')
         checkpoint('draft_saved')
-        ui.click('saved', 885, 530)
-        ui.text('sales', 600, 179, str(invoice))
-        ui.click('sales', 1070, 179)
-        ui.click('sales', 410, 262)
-        ui.click('sales', 1194, 560)
-        ui.expect('detail', 240, 216, str(invoice))
-        ui.expect('detail', 240, 252, pin)
-        ui.click('detail', 70, 179)
-        ui.click('approve-confirm', 705, 530)
+        ui.click('saved', *point('saved','no_or_ok'))
+        ui.text('sales', *point('sales','invoice'), str(invoice))
+        ui.click('sales', *point('sales','search'))
+        ui.click('sales', *point('sales','first_result'))
+        ui.click('sales', *point('sales','detail'))
+        ui.expect('detail', *point('detail','invoice'), str(invoice))
+        ui.expect('detail', *point('detail','buyer_pin'), pin)
+        ui.click('detail', *point('detail','approve'))
+        ui.click('approve-confirm', *point('approve-confirm','yes'))
         ui.wait_screen('payment')
-        ui.expect('payment', 100, 216, pin)
+        ui.expect('payment', *point('payment','buyer_pin'), pin)
         checkpoint('approval_requested')
-        payment_points = {'01': (84,307), '02': (236,307), '03': (390,307),
-                          '04': (540,379), '05': (236,379), '06': (390,379), '07': (540,307)}
         ui.click('payment', *payment_points[payment])
         approved = wait_database(pin, invoice, True)
         verify_sale(approved, request, approved=True)
         checkpoint('issued', receipt=approved['receipts'][0])
         ui.wait_screen('print')
-        ui.expect('print', 330, 324, str(invoice))
-        ui.click('print', 390, 198)
+        ui.expect('print', *point('print','invoice'), str(invoice))
+        ui.click('print', *point('print','print_a4'))
         result_pdf = folder / 'eTIMS-issued-invoice.pdf'
         # Persist the intended output before Save: recovery can reconcile a
         # completed file even if the worker stops before its acknowledgement.

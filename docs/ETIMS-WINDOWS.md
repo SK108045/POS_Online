@@ -137,6 +137,24 @@ Validation includes 74 isolated Python checks, 9 POS integration checks, an actu
 
 Installed .13 passed the authenticated read-only native access/benchmark and the actual POS startup connection check. On the responsive native window, the new pre-input check measured 0.0078 seconds; warm readiness diagnostics had a 0.1771-second median versus 0.1679 seconds before. These short samples are component measurements, not a new full-invoice duration. The Windows startup task points to the new frozen EXE with highest privileges. Companion transaction tables and the firewall rules were verified unchanged.
 
+### Display-scaling and multi-monitor automation (helper build 20261014.14)
+
+Automation reliability across varying screen resolutions, multi-monitor topologies, and Windows display scaling (100%, 125%, 150%) is improved while preserving original action order, click targets, and checkout speed.
+
+1. **Shared UI Map:** Centralized screen regions, popup bounds, toolbar controls, and payment coordinates are defined in `profiles/ui-map.json` and accessed through `ui_map.py` / `display-geometry.ps1`. Hardcoded coordinate literals were removed from workflow files while retaining identical physical hit points.
+2. **Per-Monitor Physical Coordinates:** Native screenshot capture and mouse clicks translate logical coordinates using monitor-specific DPI scaling and physical monitor bounds via `tools/display-geometry.cs` and `tools/display-geometry.ps1`.
+3. **Pre-Input Window and Display Verification:** Before dispatching input, the helper verifies that the target window has not moved, resized, or shifted across monitors. Read-only display preflight is integrated into existing state reads to prevent additional round-trip latency (measured at ~0.011 ms).
+4. **Private Screen Guard:** Screen validation failures perform bounded, private visual comparisons (`tools/screen-guard.cs`) without logging customer data or replaying mutating actions.
+5. **Read-Only Machine Check:** A standalone diagnostic command checks installed eTIMS client integrity (SHA-256), active display geometry/scaling, default printer, and screen profile availability:
+   ```powershell
+   python windows/etims-helper/configure.py --check
+   # or with the packaged executable:
+   .\dist\windows\OraforgePOS\runtime\etims\OraforgeEtims\OraforgeEtims.exe --check
+   ```
+   Diagnostics output is saved to `%LOCALAPPDATA%\OraforgePOS\etims\diagnostics\machine-check.json`.
+6. **Tested Display Cases:** Synthetic geometry suites pass across 12 configurations covering 1366×768 and 1920×1080 resolutions at 100%, 125%, and 150% scaling, including secondary monitors positioned to the left of the primary display.
+7. **Operating Constraints:** Firewall rules, database records, KRA configuration, and Windows display settings are never modified. No live invoices were created or altered during this update.
+
 ```powershell
 npm ci --prefix capacitor
 node --test capacitor/tests/*.cjs

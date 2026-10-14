@@ -78,6 +78,7 @@ class WindowsTransport(unittest.TestCase):
         shutil.copy2(Path(__file__).with_name('powershell-worker.ps1'), self.root)
         (self.root / 'read-state.ps1').write_text('''param([string]$BuyerPin)
 if($BuyerPin -eq 'failure'){throw 'PRIVATE-STORED-CREDENTIAL'}
+if($BuyerPin -eq 'layout'){throw 'Screen does not match the verified workflow [profile=sales; score=0.123456] PRIVATE-STORED-CREDENTIAL'}
 if($BuyerPin -eq 'slow'){Start-Sleep -Seconds 5}
 $global:fixtureCounter++
 @{counter=$global:fixtureCounter;pid=$PID;value=$BuyerPin}|ConvertTo-Json -Compress
@@ -118,6 +119,12 @@ $global:fixtureCounter++
         with self.assertRaises(OSError):
             second = LocalServer(first.server_address, BaseHTTPRequestHandler)
             second.server_close()
+
+    def test_screen_score_is_retained_without_arbitrary_exception_contents(self):
+        result=self.host.execute('read-state.ps1',('-BuyerPin','layout'))
+        self.assertEqual(result.returncode,1)
+        self.assertEqual(result.stderr,b'Screen does not match the verified workflow [profile=sales; score=0.123456]')
+        self.assertNotIn(b'PRIVATE',result.stderr)
 
 
 if __name__ == '__main__':

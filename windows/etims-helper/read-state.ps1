@@ -34,5 +34,12 @@ try{
  }
  $c=$conn.CreateCommand();$c.CommandText='SELECT coalesce(max(INVC_NO),0) FROM TRNS_SALE WHERE TIN=@tin AND BHF_ID=@branch';[void]$c.Parameters.AddWithValue('@tin',$TaxpayerPin);[void]$c.Parameters.AddWithValue('@branch',$BranchId);$max=$c.ExecuteScalar();$c.Dispose()
  $app=@(Get-Process -Name 'EBM2x.WPF' -ErrorAction SilentlyContinue|Select-Object -ExpandProperty Id)
- [pscustomobject]@{registered_devices=@($devices);customers=@($customers);items=@($items);sales=@($sales);lines=@($lines);receipts=@($receipts);codes=@($codes);classes=@($classes);max_invoice=[int]$max;default_printer=$default;process_ids=$app}|ConvertTo-Json -Depth 5 -Compress
+ $display=$null
+ if($Scope -eq 'Full' -and $app.Count -eq 1){
+  # Batch the lightweight display check into this existing read. No new worker
+  # request or screenshot, and invoice-only polling retains its fast path.
+  try{$display=(& "$PSScriptRoot\tools\display-state.ps1" -TargetProcessId $app[0])|ConvertFrom-Json}
+  catch{$display=@{ready=$false;problem='Display geometry unavailable; run the helper machine check'}}
+ }
+ [pscustomobject]@{registered_devices=@($devices);customers=@($customers);items=@($items);sales=@($sales);lines=@($lines);receipts=@($receipts);codes=@($codes);classes=@($classes);max_invoice=[int]$max;default_printer=$default;process_ids=$app;display=$display}|ConvertTo-Json -Depth 7 -Compress
 }finally{$conn.Dispose()}

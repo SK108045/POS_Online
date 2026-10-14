@@ -1,5 +1,8 @@
 param([Parameter(Mandatory=$true)][int]$TargetProcessId,[ValidateSet('None','Print','Detail')][string]$InvoiceScreen='None')
 $ErrorActionPreference='Stop'
+. "$PSScriptRoot\display-geometry.ps1"
+$previous=[OraforgeDisplay]::Enter()
+try{
 if((Get-Process -Id $TargetProcessId).ProcessName -ne 'EBM2x.WPF'){throw 'Unexpected process'}
 . "$PSScriptRoot\native-file-dialog.ps1"
 $titles=@(foreach($title in @('Open','Save Print Output As')){
@@ -14,10 +17,12 @@ if($InvoiceScreen -ne 'None'){
   [Windows.Automation.PropertyCondition]::new([Windows.Automation.AutomationElement]::NameProperty,'ETIMS1.0'))
  $roots=[Windows.Automation.AutomationElement]::RootElement.FindAll([Windows.Automation.TreeScope]::Children,$condition)
  if($roots.Count -ne 1){throw 'Main eTIMS window missing or ambiguous'}
- $root=$roots[0];$bounds=$root.Current.BoundingRectangle
- if($bounds.Width -ne 1384 -or $bounds.Height -ne 786){throw 'Unverified window geometry'}
- $x,$y=if($InvoiceScreen -eq 'Print'){@(330,324)}else{@(240,216)}
- $point=New-Object Windows.Point(($bounds.Left+$x),($bounds.Top+$y))
+ $root=$roots[0];$geometry=[OraforgeDisplay]::Observe([IntPtr]$root.Current.NativeWindowHandle)
+ Assert-OraforgeGeometry $geometry
+ $screen=if($InvoiceScreen -eq 'Print'){'print'}else{'detail'}
+ $x,$y=$global:OraforgeUiMap.screens.$screen.points.invoice
+ $physical=[OraforgeDisplay]::Target($geometry,$x,$y)
+ $point=New-Object Windows.Point($physical.X,$physical.Y)
  $edits=$root.FindAll([Windows.Automation.TreeScope]::Descendants,
   [Windows.Automation.PropertyCondition]::new([Windows.Automation.AutomationElement]::ControlTypeProperty,[Windows.Automation.ControlType]::Edit))
  # Read within the verified WPF subtree. FromPoint would hit the covering
@@ -29,3 +34,4 @@ if($InvoiceScreen -ne 'None'){
  $invoice=[int]$value
 }
 [pscustomobject]@{read_only=$true;file_dialog=if($titles.Count){$titles[0]}else{$null};invoice_id=$invoice}|ConvertTo-Json -Compress
+}finally{[OraforgeDisplay]::Leave($previous)}

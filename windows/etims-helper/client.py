@@ -1,34 +1,28 @@
 """Observed, guarded native application navigation; no application injection."""
+from ui_map import UI_MAP, point, region
 import json
 import time
 from workflow import Ui, BASE, ps, read_state
 from offline import require_offline
 from timing import timed
 
-DIALOGS = {'close-confirm','stock-confirm','customer-confirm','new-customer','new-confirm','approve-confirm','saved','printed','import-success'}
-REGIONS = {'menu':[10,110,270,440]}
-NAVIGATION = {
-    **{screen:('toolbar-close',1258,1314) for screen in ('registration','payment','stock-adjustment','detail','print')},
-    **{screen:('toolbar-close-plain',1258,1314) for screen in ('sales','stock-status')},
-    'item-management':('toolbar-close-item',1258,1314),
-    'customer':('toolbar-back',1258,1314),
-    **{screen:('toolbar-cancel',1137,1194) for screen in ('item-popup','customer-popup')},
-}
+DIALOGS = set(UI_MAP['dialogs'])
+NAVIGATION = {screen:profile['navigation'] for screen,profile in UI_MAP['screens'].items() if 'navigation' in profile}
 
 class Client(Ui):
     def region(self,screen):
-        return REGIONS.get(screen, [405,330,580,58] if screen in DIALOGS else [35,57,500,60])
+        return region(screen)
     def action(self,screen,action,x=0,y=0,text=None):
         instruction=dict(pid=self.pid,action=action,x=x,y=y,text=text,
                          reference=str(BASE/'profiles'/(screen+'.png')),regions=[self.region(screen)])
         if action=='Close':
-            profile,left,point=NAVIGATION[screen]
-            if (x,y)!=(point,89):raise ValueError('Unverified page navigation point')
+            navigation=NAVIGATION[screen]
+            if (x,y)!=tuple(navigation['point']):raise ValueError('Unverified page navigation point')
             # Xamarin draws these toolbar buttons on a canvas: no UIA Button
             # peer exists. Verify Close/Back/Cancel as well as the page,
             # especially beside the popups' distinct Confirm button.
-            instruction.update(navigation_reference=str(BASE/'profiles'/(profile+'.png')),
-                               navigation_region=[left,57,115,60])
+            instruction.update(navigation_reference=str(BASE/'profiles'/(navigation['profile']+'.png')),
+                               navigation_region=navigation['region'])
         return self.send(instruction)
     def detect(self):
         deadline=time.monotonic()+5
@@ -37,7 +31,9 @@ class Client(Ui):
             except ValueError as error:
                 # Closing a page can briefly expose a partially painted frame.
                 # Retry only this read; no click or other native action is replayed.
-                if not str(error).startswith('Unrecognized eTIMS screen.') or time.monotonic()>=deadline:raise
+                if not str(error).startswith('Unrecognized eTIMS screen.') or time.monotonic()>=deadline:
+                    if str(error).startswith('Unrecognized eTIMS screen.'):self.diagnose()
+                    raise
                 time.sleep(.15)
     def _detect_once(self):
         profiles=[dict(screen=screen,reference=str(BASE/'profiles'/(screen+'.png')),region=self.region(screen))
@@ -47,7 +43,7 @@ class Client(Ui):
             return json.loads(self.send(dict(pid=self.pid,action='Detect',profiles=profiles)))['screen']
         except RuntimeError as error:
             if '(unrecognized screen)' in str(error):
-                raise ValueError('Unrecognized eTIMS screen. Log in normally and finish any unrelated open form.') from None
+                raise ValueError('Unrecognized eTIMS screen. Log in normally and finish any unrelated open form. '+str(error)) from None
             if '(window geometry mismatch)' in str(error):
                 raise ValueError('Unverified client window geometry') from None
             raise
@@ -60,9 +56,9 @@ class Client(Ui):
             found=self.detect()
     def close_owned(self,screen):
         self.close_page(screen)
-        if self.detect()=='close-confirm':self.click('close-confirm',705,530)
+        if self.detect()=='close-confirm':self.click('close-confirm',*point('close-confirm','yes'))
     def close_page(self,screen):
-        self.action(screen,'Close',NAVIGATION[screen][2],89)
+        self.action(screen,'Close',*NAVIGATION[screen]['point'])
     def menu(self):
         screen=self.detect()
         if screen=='menu':return
@@ -84,11 +80,11 @@ class Client(Ui):
             screen=self.detect()
             if screen=='menu':return
             if screen in ('saved','printed','import-success'):
-                self.click(screen,885,530) # Informational OK only.
+                self.click(screen,*point(screen,'no_or_ok')) # Informational OK only.
             elif screen in ('new-confirm','approve-confirm','stock-confirm','customer-confirm','new-customer'):
-                self.click(screen,885,530) # No: never create/approve on takeover.
+                self.click(screen,*point(screen,'no_or_ok')) # No: never create/approve on takeover.
             elif screen=='close-confirm':
-                self.click(screen,705,530) # Yes, close without saving (explicit user instruction).
+                self.click(screen,*point(screen,'yes')) # Close without saving (explicit user instruction).
             elif screen in ('sales','registration','payment','item-popup','customer-popup','item-management','customer','stock-status','stock-adjustment','detail','print'):
                 self.close_page(screen)
             else:
@@ -99,13 +95,13 @@ class Client(Ui):
         if self.detect()==target:return
         self.menu()
         if target=='sales':
-            self.click('menu',160,325)
+            self.click('menu',*point('menu','sales'))
         elif target=='item-management':
-            self.click('menu',160,197);self.click('menu',420,255)
+            self.click('menu',*point('menu','items'));self.click('menu',*point('menu','items_submenu'))
         elif target=='customer':
-            self.click('menu',160,261);self.click('menu',420,319)
+            self.click('menu',*point('menu','customers'));self.click('menu',*point('menu','customers_submenu'))
         elif target=='stock-status':
-            self.click('menu',160,520);self.click('menu',420,625)
+            self.click('menu',*point('menu','stock'));self.click('menu',*point('menu','stock_submenu'))
         else:raise ValueError('Unsupported native destination')
         self.wait(target)
     def normalize(self):
@@ -120,12 +116,12 @@ class Client(Ui):
             # This is an informational print acknowledgement, not an approval.
             # Its overlay hides the underlying edit controls from hit testing.
             # Verify the invoice immediately after dismissing this exact message.
-            self.click(screen,885,530);screen=self.detect()
+            self.click(screen,*point(screen,'no_or_ok'));screen=self.detect()
         if screen=='print':
-            self.expect('print',330,324,str(invoice))
+            self.expect('print',*point('print','invoice'),str(invoice))
             self.close_owned('print');screen=self.detect()
         if screen=='detail':
-            self.expect('detail',240,216,str(invoice))
+            self.expect('detail',*point('detail','invoice'),str(invoice))
             self.close_owned('detail');screen=self.detect()
         if screen=='sales':self.close_owned('sales');screen=self.detect()
         if screen!='menu':raise ValueError('Finish the unrelated open eTIMS form before continuing')
@@ -137,7 +133,7 @@ class Client(Ui):
             raise ValueError('An import code already exists; reconcile before any import retry')
         self.navigate('item-management')
         checkpoint('native_product_import_requested')
-        self.click('item-management',705,89)
+        self.click('item-management',*point('item-management','import'))
         require_offline()
         ps('tools/choose-native-file.ps1','-TargetProcessId',str(self.pid),'-Path',str(path),'-DialogTitle','Open')
         end=time.monotonic()+60
@@ -154,7 +150,7 @@ class Client(Ui):
             from decimal import Decimal
             if any(str(actual[k])!=str(v) for k,v in checks.items()) or Decimal(str(actual['RSD_QTY']))!=Decimal(registration['quantity']):
                 raise ValueError('Imported product or actual opening stock differs from the approved registration')
-        self.wait('import-success');self.click('import-success',885,530)
+        self.wait('import-success');self.click('import-success',*point('import-success','no_or_ok'))
         checkpoint('products_registered')
     @timed('customer')
     def ensure_customer(self,customer,checkpoint):
@@ -163,15 +159,15 @@ class Client(Ui):
             if len(state['customers'])!=1 or state['customers'][0]['CUST_NM']!=customer['name']:
                 raise ValueError('Buyer PIN exists with a different registered name')
             return
-        self.navigate('customer');self.click('customer',950,89)
-        self.wait('new-customer');self.click('new-customer',705,530)
-        self.text('customer',300,216,customer['pin']);self.text('customer',300,252,customer['name'])
-        if customer.get('phone'):self.text('customer',1200,179,customer['phone'])
-        if customer.get('billing_address'):self.text('customer',300,324,customer['billing_address'])
+        self.navigate('customer');self.click('customer',*point('customer','new'))
+        self.wait('new-customer');self.click('new-customer',*point('new-customer','yes'))
+        self.text('customer',*point('customer','pin'),customer['pin']);self.text('customer',*point('customer','name'),customer['name'])
+        if customer.get('phone'):self.text('customer',*point('customer','phone'),customer['phone'])
+        if customer.get('billing_address'):self.text('customer',*point('customer','address'),customer['billing_address'])
         remarks='; '.join(filter(None,[customer.get('remarks'),('Email: '+customer['email']) if customer.get('email') else '']))
-        if remarks:self.text('customer',750,324,remarks)
+        if remarks:self.text('customer',*point('customer','remarks'),remarks)
         checkpoint('customer_save_requested')
-        self.click('customer',1070,89);self.wait('customer-confirm');self.click('customer-confirm',705,530)
+        self.click('customer',*point('customer','save'));self.wait('customer-confirm');self.click('customer-confirm',*point('customer-confirm','yes'))
         end=time.monotonic()+30
         while True:
             records=read_state(customer['pin'],scope='Customer')['customers']
@@ -180,7 +176,7 @@ class Client(Ui):
                 break
             if time.monotonic()>=end:raise RuntimeError('Customer save not confirmed')
             time.sleep(.5)
-        if self.detect()=='saved':self.click('saved',885,530)
+        if self.detect()=='saved':self.click('saved',*point('saved','no_or_ok'))
         checkpoint('customer_registered')
     @timed('stock_adjustment')
     def adjust_stock(self,code,adjustment,buyer,checkpoint):
@@ -188,26 +184,27 @@ class Client(Ui):
         current=next(i for i in read_state(buyer)['items'] if i['ITEM_CD']==code)
         if Decimal(str(current['RSD_QTY']))==Decimal(adjustment['after']):return
         if Decimal(str(current['RSD_QTY']))!=Decimal(adjustment['before']):raise ValueError('Stock changed since confirmation; review actual inventory')
-        self.navigate('stock-status');self.text('stock-status',1000,179,code)
-        self.click('stock-status',1300,179);self.click('stock-status',410,262);self.click('stock-status',1194,89)
-        self.wait('stock-confirm');self.click('stock-confirm',705,530);self.wait('stock-adjustment')
-        self.expect('stock-adjustment',300,179,code)
+        self.navigate('stock-status');self.text('stock-status',*point('stock-status','query'),code)
+        self.click('stock-status',*point('stock-status','search'));self.click('stock-status',*point('stock-status','first_result'));self.click('stock-status',*point('stock-status','adjust'))
+        self.wait('stock-confirm');self.click('stock-confirm',*point('stock-confirm','yes'));self.wait('stock-adjustment')
+        self.expect('stock-adjustment',*point('stock-adjustment','item_code'),code)
         require_offline()
-        ps('tools/select-observed-combo.ps1','-TargetProcessId',str(self.pid),'-X','160','-Y','506','-Option','Adjustment In')
-        self.text('stock-adjustment',750,506,adjustment['reason'])
-        self.action('stock-adjustment','Text',450,615,adjustment['quantity'])
+        x,y=point('stock-adjustment','type')
+        ps('tools/select-observed-combo.ps1','-TargetProcessId',str(self.pid),'-X',str(x),'-Y',str(y),'-Option','Adjustment In')
+        self.text('stock-adjustment',*point('stock-adjustment','reason'),adjustment['reason'])
+        self.action('stock-adjustment','Text',*point('stock-adjustment','quantity'),adjustment['quantity'])
         # StockAdjustmentPage calculates Qty After in Entry.Completed.
         # Enter completes this edit; Save is a separate, guarded action.
-        self.action('stock-adjustment','Complete',450,615)
-        self.expect('stock-adjustment',450,615,adjustment['quantity'],numeric=True)
-        self.expect('stock-adjustment',750,615,adjustment['after'],numeric=True)
+        self.action('stock-adjustment','Complete',*point('stock-adjustment','quantity'))
+        self.expect('stock-adjustment',*point('stock-adjustment','quantity'),adjustment['quantity'],numeric=True)
+        self.expect('stock-adjustment',*point('stock-adjustment','after'),adjustment['after'],numeric=True)
         checkpoint('stock_adjustment_requested')
-        self.click('stock-adjustment',1194,89)
+        self.click('stock-adjustment',*point('stock-adjustment','save'))
         end=time.monotonic()+30
         while True:
             item=next(i for i in read_state(buyer)['items'] if i['ITEM_CD']==code)
             if Decimal(str(item['RSD_QTY']))==Decimal(adjustment['after']):break
             if time.monotonic()>=end:raise RuntimeError('Inventory adjustment not confirmed; do not repeat')
             time.sleep(.5)
-        if self.detect()=='saved':self.click('saved',885,530)
+        if self.detect()=='saved':self.click('saved',*point('saved','no_or_ok'))
         checkpoint('stock_reconciled')

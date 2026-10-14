@@ -12,7 +12,7 @@ from urllib.parse import urlparse
 from engine import Engine
 from settings import HOME, settings
 
-BUILD = '20261013.13'
+BUILD = '20261014.14'
 
 
 class LocalServer(ThreadingHTTPServer):
@@ -132,6 +132,13 @@ if __name__=='__main__':
         elif '--configure' in sys.argv:
             from configure import configure
             configure()
+        elif '--check' in sys.argv:
+            from configure import check
+            parser=argparse.ArgumentParser()
+            parser.add_argument('--check',action='store_true')
+            parser.add_argument('--output',type=Path,default=HOME/'diagnostics/machine-check.json')
+            args=parser.parse_args()
+            raise SystemExit(check(args.output))
         else:serve()
     except Exception as error:
         # No traceback: provider errors can contain encrypted connection options.

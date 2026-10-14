@@ -1,11 +1,11 @@
 """Configure registered device identity without reading or storing logins."""
 import json
 from pathlib import Path
-import tkinter as tk
-from tkinter import filedialog, messagebox
 from settings import HOME, settings
 
 def configure():
+    import tkinter as tk
+    from tkinter import messagebox
     root=tk.Tk();root.title('Oraforge eTIMS Windows Helper');root.resizable(False,False)
     current=settings();values={}
     fields=[('taxpayer_pin','Registered seller KRA PIN'),('branch_id','Registered branch (two digits)'),
@@ -32,4 +32,22 @@ def configure():
     tk.Button(root,text='Save helper configuration',command=save).grid(row=len(fields),column=1,padx=12,pady=14,sticky='e')
     root.mainloop()
 
-if __name__=='__main__':configure()
+def check(output=None):
+    from display import machine_check
+    report=machine_check()
+    report['ready']=report['ready'] and report['build_matches']
+    text=json.dumps(report,indent=2)
+    if output:
+        output=Path(output);output.parent.mkdir(parents=True,exist_ok=True)
+        output.write_text(text,encoding='utf-8')
+    print(text)
+    return 0 if report['ready'] else 2
+
+if __name__=='__main__':
+    import argparse
+    parser=argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--check',action='store_true',help='Read-only display/build/printer/current-profile check')
+    parser.add_argument('--output',type=Path)
+    args=parser.parse_args()
+    if args.check:raise SystemExit(check(args.output))
+    configure()
