@@ -2216,7 +2216,6 @@ async function showCheckoutModal(order) {
           overlay.remove();showReceiptModal(paidOrder,false,true);
           window.OraforgeEtims?.afterPayment(paidOrder,state.settings);
           state.order=null;renderTicket();
-          if(typeof toast==='function')toast('Cash payment confirmed! Receipt generated.','success');
         }
       } catch(error) {
         msgEl.style.color='var(--danger)';msgEl.textContent=error.message;
@@ -2292,7 +2291,6 @@ async function showCheckoutModal(order) {
           window.OraforgeEtims?.afterPayment(paidOrder, state.settings);
           state.order = null;
           renderTicket();
-          toast('M-Pesa verified. Receipt generated automatically!', 'success');
           return;
         }
         if (verified.status === 'failed') {
