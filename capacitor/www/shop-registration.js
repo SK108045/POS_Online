@@ -399,8 +399,6 @@
         updateHeaderAndNav();
         posLayout();
         initSPARouter();
-        const label = selectedShopId ? (shopsCache.find(s => s.id === selectedShopId)?.name || 'shop') : profileForType(selectedDemoType).name;
-        toast(`Logged into ${label}!`, 'success');
       } catch (err) {
         error.textContent = err.message;
         error.style.display = 'block';

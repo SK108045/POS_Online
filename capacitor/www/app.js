@@ -171,13 +171,14 @@ function toast(msg, type = 'success') {
   const el = document.createElement('div');
   el.className = `toast ${type}`;
   el.innerHTML = `<span>${icons[type]||'•'}</span><span>${msg}</span>`;
-  const container = document.getElementById('toastContainer');
-  if (container) {
-    container.appendChild(el);
-    setTimeout(() => el.remove(), 3500);
-  } else {
-    alert(msg);
+  let container = document.getElementById('toastContainer');
+  if (!container) {
+    container = document.createElement('div');
+    container.id = 'toastContainer';
+    document.body.appendChild(container);
   }
+  container.appendChild(el);
+  setTimeout(() => el.remove(), 3500);
 }
 
 // ── SPA Pages ────────────────────────────────────────────────────────────────
@@ -3811,7 +3812,6 @@ function showLoginScreen() {
     await LocalPOS.switchProfile(selectedShop);
 
     screen.remove();
-    toast(`Logged into ${SHOP_PROFILES.find(p=>p.id===selectedShop)?.name || selectedShop}!`, 'success');
     await bootstrap();
     updateHeaderAndNav();
     posLayout();
