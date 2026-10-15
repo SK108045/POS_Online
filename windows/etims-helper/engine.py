@@ -170,7 +170,8 @@ class Engine:
         self.store.update(key,'complete',result=self.result(raw,sale))
         try:
             with span('cleanup'):client.finish_invoice(raw['local_invoice_id'])
-        except Exception:pass # Fiscal completion remains valid if read-only view cleanup is unavailable.
+        except Exception:
+            client.activate_pos()
     def finish(self,key):
         job=self.store.get(key)
         if not job or job['state']!='complete':

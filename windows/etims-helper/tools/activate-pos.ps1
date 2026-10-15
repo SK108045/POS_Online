@@ -1,30 +1,48 @@
+param([int]$EtimsPid = 0)
+
 $ErrorActionPreference = 'SilentlyContinue'
-Add-Type -AssemblyName UIAutomationClient
-if (-not ('PosFocus' -as [type])) {
+
+if (-not ('PosActivator' -as [type])) {
     Add-Type -TypeDefinition @'
 using System;
+using System.Text;
 using System.Runtime.InteropServices;
-public class PosFocus {
-    [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr hWnd);
-    [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
+
+public static class PosActivator {
+    public delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
+    [DllImport("user32.dll")] public static extern bool EnumWindows(EnumWindowsProc lpEnumFunc, IntPtr lParam);
     [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
     [DllImport("user32.dll")] public static extern bool ShowWindowAsync(IntPtr hWnd, int nCmdShow);
+    [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr hWnd);
+    [DllImport("user32.dll")] public static extern bool IsIconic(IntPtr hWnd);
+    [DllImport("user32.dll", CharSet = CharSet.Auto)] public static extern int GetWindowText(IntPtr hWnd, StringBuilder lpString, int nMaxCount);
+    [DllImport("user32.dll", CharSet = CharSet.Auto)] public static extern int GetClassName(IntPtr hWnd, StringBuilder lpString, int nMaxCount);
+    [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint lpdwProcessId);
+    [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr hWnd);
     [DllImport("user32.dll")] public static extern bool BringWindowToTop(IntPtr hWnd);
     [DllImport("user32.dll")] public static extern void SwitchToThisWindow(IntPtr hWnd, bool fAltTab);
-    [DllImport("user32.dll")] public static extern bool IsIconic(IntPtr hWnd);
-    [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint lpdwProcessId);
-    [DllImport("kernel32.dll")] public static extern uint GetCurrentThreadId();
-    [DllImport("user32.dll")] public static extern bool AttachThreadInput(uint idAttach, uint idAttachTo, bool fAttach);
     [DllImport("user32.dll")] public static extern void keybd_event(byte bVk, byte bScan, uint dwFlags, UIntPtr dwExtraInfo);
     [DllImport("user32.dll")] public static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int X, int Y, int cx, int cy, uint uFlags);
+    [DllImport("kernel32.dll")] public static extern uint GetCurrentThreadId();
+    [DllImport("user32.dll")] public static extern bool AttachThreadInput(uint idAttach, uint idAttachTo, bool fAttach);
+    [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
 
-    private static readonly IntPtr HWND_TOPMOST = new IntPtr(-1);
-    private static readonly IntPtr HWND_NOTOPMOST = new IntPtr(-2);
-    private const uint SWP_NOMOVE = 0x0002;
-    private const uint SWP_NOSIZE = 0x0001;
-    private const uint SWP_SHOWWINDOW = 0x0040;
+    public static IntPtr FindPosWindow() {
+        IntPtr found = IntPtr.Zero;
+        EnumWindows((hWnd, lParam) => {
+            var sb = new StringBuilder(512);
+            GetWindowText(hWnd, sb, 512);
+            string title = sb.ToString();
+            if (title.IndexOf("Oraforge POS", StringComparison.OrdinalIgnoreCase) >= 0) {
+                found = hWnd;
+                return false;
+            }
+            return true;
+        }, IntPtr.Zero);
+        return found;
+    }
 
-    public static void Activate(IntPtr hWnd) {
+    public static void FocusWindow(IntPtr hWnd) {
         if (hWnd == IntPtr.Zero) return;
 
         if (IsIconic(hWnd)) {
@@ -40,8 +58,10 @@ public class PosFocus {
         SetForegroundWindow(hWnd);
         SwitchToThisWindow(hWnd, true);
 
-        SetWindowPos(hWnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW);
-        SetWindowPos(hWnd, HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW);
+        IntPtr HWND_TOPMOST = new IntPtr(-1);
+        IntPtr HWND_NOTOPMOST = new IntPtr(-2);
+        SetWindowPos(hWnd, HWND_TOPMOST, 0, 0, 0, 0, 0x0043);
+        SetWindowPos(hWnd, HWND_NOTOPMOST, 0, 0, 0, 0, 0x0043);
         SetForegroundWindow(hWnd);
 
         IntPtr fg = GetForegroundWindow();
@@ -65,43 +85,31 @@ public class PosFocus {
 '@
 }
 
-$h = [IntPtr]::Zero
-
-# 1. Find by Edge process ID running OraforgePOS / localhost:3000
-$edgeProcs = Get-CimInstance Win32_Process | Where-Object {
-    $_.Name -eq 'msedge.exe' -and
-    $_.CommandLine -notmatch '--type=' -and
-    ($_.CommandLine -match 'localhost:3000' -or $_.CommandLine -match 'OraforgePOS')
+# 1. Minimize eTIMS window so it leaves the screen immediately
+Add-Type -AssemblyName UIAutomationClient
+if ($EtimsPid -le 0) {
+    $etimsProc = Get-Process -Name 'EBM2x.WPF' -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($etimsProc) { $EtimsPid = [int]$etimsProc.Id }
 }
-
-foreach ($ep in $edgeProcs) {
+if ($EtimsPid -gt 0) {
     try {
-        $cond = New-Object Windows.Automation.PropertyCondition([Windows.Automation.AutomationElement]::ProcessIdProperty, [int]$ep.ProcessId)
+        $cond = New-Object Windows.Automation.PropertyCondition([Windows.Automation.AutomationElement]::ProcessIdProperty, $EtimsPid)
         $wins = [Windows.Automation.AutomationElement]::RootElement.FindAll([Windows.Automation.TreeScope]::Children, $cond)
-        foreach ($w in $wins) {
-            $handle = [IntPtr]$w.Current.NativeWindowHandle
-            if ($handle -ne [IntPtr]::Zero -and -not [string]::IsNullOrWhiteSpace($w.Current.Name)) {
-                $h = $handle
-                break
+        $main = @($wins | Where-Object { $_.Current.Name -ceq 'ETIMS1.0' })
+        if ($main.Count -gt 0) {
+            $eH = [IntPtr]$main[0].Current.NativeWindowHandle
+            if ($eH -ne [IntPtr]::Zero) {
+                [void][PosActivator]::ShowWindow($eH, 6) # SW_MINIMIZE = 6
             }
         }
     } catch {}
-    if ($h -ne [IntPtr]::Zero) { break }
 }
 
-# 2. If not found, look by window title "Oraforge POS"
-if ($h -eq [IntPtr]::Zero) {
-    try {
-        $cond = New-Object Windows.Automation.PropertyCondition([Windows.Automation.AutomationElement]::NameProperty, 'Oraforge POS')
-        $wins = [Windows.Automation.AutomationElement]::RootElement.FindAll([Windows.Automation.TreeScope]::Children, $cond)
-        if ($wins.Count -gt 0) {
-            $h = [IntPtr]$wins[0].Current.NativeWindowHandle
-        }
-    } catch {}
-}
+# 2. Find POS window via EnumWindows
+$posHwnd = [PosActivator]::FindPosWindow()
 
-# 3. General scan for any window whose title contains "Oraforge POS"
-if ($h -eq [IntPtr]::Zero) {
+# 3. If not found by EnumWindows, try UIAutomation search
+if ($posHwnd -eq [IntPtr]::Zero) {
     try {
         $all = [Windows.Automation.AutomationElement]::RootElement.FindAll(
             [Windows.Automation.TreeScope]::Children,
@@ -109,13 +117,15 @@ if ($h -eq [IntPtr]::Zero) {
         )
         foreach ($w in $all) {
             if ($w.Current.Name -match 'Oraforge POS') {
-                $h = [IntPtr]$w.Current.NativeWindowHandle
+                $posHwnd = [IntPtr]$w.Current.NativeWindowHandle
+                try { $w.SetFocus() } catch {}
                 break
             }
         }
     } catch {}
 }
 
-if ($h -ne [IntPtr]::Zero) {
-    [PosFocus]::Activate($h)
+# 4. Bring the existing POS window to foreground
+if ($posHwnd -ne [IntPtr]::Zero) {
+    [PosActivator]::FocusWindow($posHwnd)
 }

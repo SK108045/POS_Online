@@ -129,7 +129,7 @@ class Client(Ui):
     def activate_pos(self):
         try:
             from workflow import ps
-            ps('tools/activate-pos.ps1')
+            ps('tools/activate-pos.ps1', '-EtimsPid', str(self.pid))
         except Exception:pass
     @timed('product_registration')
     def register_products(self,path,registrations,buyer,checkpoint):
