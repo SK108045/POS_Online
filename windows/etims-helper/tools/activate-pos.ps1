@@ -13,6 +13,8 @@ public class PosFocus {
     [DllImport("kernel32.dll")] public static extern uint GetCurrentThreadId();
     [DllImport("user32.dll")] public static extern bool AttachThreadInput(uint idAttach, uint idAttachTo, bool fAttach);
     [DllImport("user32.dll")] public static extern void SwitchToThisWindow(IntPtr h, bool fAltTab);
+    [DllImport("user32.dll")] public static extern void keybd_event(byte bVk, byte bScan, uint dwFlags, UIntPtr dwExtraInfo);
+    [DllImport("user32.dll")] public static extern bool IsIconic(IntPtr h);
 }
 '@
 }
@@ -27,7 +29,7 @@ $pos = @($windows | Where-Object { $_.Current.Name -eq 'Oraforge POS' -or $_.Cur
 
 # 2. If not found, look by Edge process running Oraforge profile
 if ($pos.Count -eq 0) {
-    $edgeProcesses = Get-CimInstance Win32_Process -Filter "Name = 'msedge.exe'" | Where-Object { $_.CommandLine -match 'OraforgePOS' }
+    $edgeProcesses = Get-CimInstance Win32_Process | Where-Object { $_.Name -eq 'msedge.exe' -and $_.CommandLine -match 'OraforgePOS' -and $_.CommandLine -notmatch '--type=' }
     if ($edgeProcesses) {
         $pids = @($edgeProcesses | ForEach-Object { $_.ProcessId })
         $pos = @($windows | Where-Object { $_.Current.ProcessId -in $pids -and $_.Current.Name -notmatch '^$' })
@@ -37,7 +39,16 @@ if ($pos.Count -eq 0) {
 if ($pos.Count -gt 0) {
     $h = [IntPtr]$pos[0].Current.NativeWindowHandle
     if ($h -ne [IntPtr]::Zero) {
-        [void][PosFocus]::ShowWindowAsync($h, 9)
+        if ([PosFocus]::IsIconic($h)) {
+            [void][PosFocus]::ShowWindowAsync($h, 9)
+        } else {
+            [void][PosFocus]::ShowWindowAsync($h, 5)
+        }
+
+        # Unlock foreground lock
+        [PosFocus]::keybd_event(0x12, 0, 0, [UIntPtr]::Zero)
+        [PosFocus]::keybd_event(0x12, 0, 2, [UIntPtr]::Zero)
+
         [void][PosFocus]::BringWindowToTop($h)
         [void][PosFocus]::SetForegroundWindow($h)
         [void][PosFocus]::SwitchToThisWindow($h, $true)
@@ -56,5 +67,20 @@ if ($pos.Count -gt 0) {
                 }
             }
         }
+    }
+}
+
+# 3. Also trigger browser single-instance focus invocation
+$local = $env:LOCALAPPDATA
+if ($local) {
+    $edgeExe = "$env:ProgramFiles (x86)\Microsoft\Edge\Application\msedge.exe"
+    if (-not (Test-Path $edgeExe)) {
+        $edgeExe = "$env:ProgramFiles\Microsoft\Edge\Application\msedge.exe"
+    }
+    $userDataDir = Join-Path $local "OraforgePOS\browser-edge"
+    if ((Test-Path $edgeExe) -and (Test-Path $userDataDir)) {
+        try {
+            Start-Process -FilePath $edgeExe -ArgumentList "--user-data-dir=`"$userDataDir`"", "--app=http://localhost:3000/pos" -WindowStyle Normal -ErrorAction SilentlyContinue
+        } catch {}
     }
 }

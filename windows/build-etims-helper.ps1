@@ -1,7 +1,11 @@
-param([string]$OutputDirectory)
+param([string]$OutputDirectory, [string]$Python)
 $ErrorActionPreference='Stop'
 $helperRoot=(Resolve-Path -LiteralPath (Join-Path $PSScriptRoot 'etims-helper')).Path
 $repoRoot=Split-Path $PSScriptRoot -Parent
+if(-not $Python){
+ $cachedPython=Join-Path $repoRoot 'windows\.cache\etims-build-env\Scripts\python.exe'
+ if(Test-Path $cachedPython){$Python=$cachedPython}else{$Python='python'}
+}
 if(-not $OutputDirectory){$OutputDirectory=Join-Path $repoRoot 'dist\windows\OraforgePOS\runtime\etims'}
 $buildRoot=Join-Path $repoRoot 'dist\windows\etims-build'
 # PyInstaller progress uses stderr. Windows PowerShell 5 treats redirected
@@ -9,7 +13,7 @@ $buildRoot=Join-Path $repoRoot 'dist\windows\etims-build'
 $previousPreference=$ErrorActionPreference
 try{
  $ErrorActionPreference='Continue'
- python -m PyInstaller --noconfirm --clean --onedir --noconsole --name OraforgeEtims --distpath $OutputDirectory --workpath $buildRoot --specpath $buildRoot --add-data "$helperRoot\tools;tools" --add-data "$helperRoot\profiles;profiles" --add-data "$helperRoot\read-state.ps1;." --add-data "$helperRoot\ui-step.ps1;." --add-data "$helperRoot\powershell-worker.ps1;." --add-data "$helperRoot\Install-Startup.ps1;." --add-data "$helperRoot\product_import;product_import" --additional-hooks-dir "$helperRoot\hooks" --paths $helperRoot --paths "$helperRoot\product_import" "$helperRoot\server.py" 2>&1 | ForEach-Object { $_.ToString() }
+ & $Python -m PyInstaller --noconfirm --clean --onedir --noconsole --name OraforgeEtims --distpath $OutputDirectory --workpath $buildRoot --specpath $buildRoot --add-data "$helperRoot\tools;tools" --add-data "$helperRoot\profiles;profiles" --add-data "$helperRoot\read-state.ps1;." --add-data "$helperRoot\ui-step.ps1;." --add-data "$helperRoot\powershell-worker.ps1;." --add-data "$helperRoot\Install-Startup.ps1;." --add-data "$helperRoot\product_import;product_import" --additional-hooks-dir "$helperRoot\hooks" --paths $helperRoot --paths "$helperRoot\product_import" "$helperRoot\server.py" 2>&1 | ForEach-Object { $_.ToString() }
  $buildExit=$LASTEXITCODE
 }finally{$ErrorActionPreference=$previousPreference}
 if($buildExit -ne 0){throw 'eTIMS helper packaging failed'}
