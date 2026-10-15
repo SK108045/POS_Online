@@ -149,12 +149,12 @@ class Engine:
                     if st and len(st.get('process_ids', [])) == 1:
                         Client(st['process_ids'][0]).activate_pos()
             return
-        config,state,registration=self.prepare(sale,job['details'])
-        monitor_bounds = None
-        if state.get('display') and isinstance(state['display'], dict):
-            monitor_bounds = state['display'].get('geometry', {}).get('Monitor')
-        with GhostOverlaySession(bounds=monitor_bounds) as overlay:
-            overlay.update(15, "Connecting to eTIMS fiscal engine...")
+        with GhostOverlaySession() as overlay:
+            overlay.update(10, "Connecting to eTIMS fiscal engine...")
+            config,state,registration=self.prepare(sale,job['details'])
+            if state.get('display') and isinstance(state['display'], dict):
+                monitor_bounds = state['display'].get('geometry', {}).get('Monitor')
+                overlay.set_bounds(monitor_bounds)
             client=Client(state['process_ids'][0]);client.normalize()
             self.store.update(key,'preparing')
             client.reset_menu()

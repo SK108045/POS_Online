@@ -81,6 +81,21 @@ class GhostOverlaySession:
         except Exception as ex:
             _log(f"Overlay progress error: {ex}")
 
+    def set_bounds(self, bounds):
+        if not self.proc or not self._started or not bounds or not isinstance(bounds, dict):
+            return
+        try:
+            left = bounds.get('Left', 0)
+            top = bounds.get('Top', 0)
+            width = bounds.get('Width', bounds.get('Right', 0) - left)
+            height = bounds.get('Height', bounds.get('Bottom', 0) - top)
+            if width > 0 and height > 0:
+                self.proc.stdin.write(f"BOUNDS:{int(left)}:{int(top)}:{int(width)}:{int(height)}\n")
+                self.proc.stdin.flush()
+                _log(f"Overlay bounds update: {left},{top},{width},{height}")
+        except Exception as ex:
+            _log(f"Overlay bounds error: {ex}")
+
     def close(self):
         if not self.proc:
             return

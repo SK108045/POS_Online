@@ -302,6 +302,19 @@ public class GhostOverlay : Form {
                             form.UpdateProgress(p, msg);
                         }
                     }
+                    if (line.StartsWith("BOUNDS:", StringComparison.OrdinalIgnoreCase)) {
+                        string[] parts = line.Split(':');
+                        if (parts.Length >= 5) {
+                            int bx, by, bw, bh;
+                            if (int.TryParse(parts[1], out bx) && int.TryParse(parts[2], out by) &&
+                                int.TryParse(parts[3], out bw) && int.TryParse(parts[4], out bh)) {
+                                form.BeginInvoke(new Action(() => {
+                                    form.Bounds = new Rectangle(bx, by, bw, bh);
+                                    SetWindowPos(form.Handle, HWND_TOPMOST, bx, by, bw, bh, SWP_SHOWWINDOW | SWP_NOACTIVATE);
+                                }));
+                            }
+                        }
+                    }
                 }
             } catch {
             } finally {
