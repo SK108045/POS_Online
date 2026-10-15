@@ -8,6 +8,14 @@ if(-not $Python){
 }
 if(-not $OutputDirectory){$OutputDirectory=Join-Path $repoRoot 'dist\windows\OraforgePOS\runtime\etims'}
 $buildRoot=Join-Path $repoRoot 'dist\windows\etims-build'
+$ghostCs=Join-Path $helperRoot 'tools\ghost-overlay.cs'
+$ghostExe=Join-Path $helperRoot 'tools\GhostOverlay.exe'
+if ((Test-Path $ghostCs) -and (-not (Test-Path $ghostExe) -or (Get-Item $ghostCs).LastWriteTime -gt (Get-Item $ghostExe).LastWriteTime)){
+ $csc='C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe'
+ if (Test-Path $csc){
+  & $csc /nologo /target:winexe /platform:x64 /out:$ghostExe /reference:System.Windows.Forms.dll,System.Drawing.dll $ghostCs | Out-Null
+ }
+}
 # PyInstaller progress uses stderr. Windows PowerShell 5 treats redirected
 # native stderr as ErrorRecords; preserve progress without aborting the build.
 $previousPreference=$ErrorActionPreference
