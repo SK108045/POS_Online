@@ -236,7 +236,7 @@ class Ui:
             except (RuntimeError, ValueError):
                 if time.monotonic() >= end:
                     raise RuntimeError('Expected page did not appear; no click was retried')
-                time.sleep(.3)
+                time.sleep(.1)
 
 
 def wait_database(pin: str, invoice: int, approved: bool, timeout=60) -> dict:
@@ -248,7 +248,7 @@ def wait_database(pin: str, invoice: int, approved: bool, timeout=60) -> dict:
                 return state
         if time.monotonic() >= end:
             raise RuntimeError('Database confirmation timed out; do not resubmit this sale')
-        time.sleep(.5)
+        time.sleep(.1)
 
 
 def choose_print_path(ui, path, seconds=30):

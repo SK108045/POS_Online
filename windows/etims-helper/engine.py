@@ -145,8 +145,9 @@ class Engine:
                     if len(state['process_ids'])==1:
                         with span('cleanup'):Client(state['process_ids'][0]).finish_invoice(invoice)
                 except Exception:
-                    if len(state.get('process_ids', [])) == 1:
-                        Client(state['process_ids'][0]).activate_pos()
+                    st = locals().get('state')
+                    if st and len(st.get('process_ids', [])) == 1:
+                        Client(st['process_ids'][0]).activate_pos()
             return
         config,state,registration=self.prepare(sale,job['details'])
         monitor_bounds = None

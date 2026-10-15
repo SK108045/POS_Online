@@ -52,7 +52,7 @@ class Client(Ui):
         found=self.detect()
         while found!=screen:
             if time.monotonic()>=end:raise RuntimeError(f'Expected eTIMS page {screen} did not appear; observed {found}. No click was retried.')
-            time.sleep(.3)
+            time.sleep(.1)
             found=self.detect()
     def close_owned(self,screen):
         self.close_page(screen)

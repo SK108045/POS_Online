@@ -25,7 +25,7 @@ function Find-OraforgeFileDialog {
   do{
    $roots=[Windows.Automation.AutomationElement]::RootElement.FindAll([Windows.Automation.TreeScope]::Children,$condition)
    $dialogs=@($roots|Where-Object {$_.Cached.Name -ceq $DialogTitle})
-   if($dialogs.Count -eq 0){
+   if($dialogs.Count -eq 0 -and $TimeoutSeconds -gt 0 -and [DateTime]::UtcNow.AddSeconds(1) -ge $end){
     $windowCondition=[Windows.Automation.AndCondition]::new([Windows.Automation.Condition[]]@(
      $condition,
      [Windows.Automation.PropertyCondition]::new([Windows.Automation.AutomationElement]::NameProperty,$DialogTitle),
