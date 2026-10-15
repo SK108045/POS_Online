@@ -232,6 +232,9 @@
       const fiscal = record?.fiscal;
       const ready = record?.status === 'generated' && ['portal','windows'].includes(fiscal?.source) &&
         ['cu_invoice_number','scu_id','receipt_signature','invoice_number','invoice_date','qr_image'].every(key => Boolean(fiscal[key]));
+      if (ready && overlay.dataset.etimsConfirmed !== 'true') {
+        try { window.focus(); } catch (_) {}
+      }
       overlay.dataset.etimsConfirmed = String(ready);
       const button = overlay.querySelector('#receiptPrintBtn');
       if (button) {

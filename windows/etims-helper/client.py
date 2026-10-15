@@ -125,6 +125,12 @@ class Client(Ui):
             self.close_owned('detail');screen=self.detect()
         if screen=='sales':self.close_owned('sales');screen=self.detect()
         if screen!='menu':raise ValueError('Finish the unrelated open eTIMS form before continuing')
+        self.activate_pos()
+    def activate_pos(self):
+        try:
+            from workflow import ps
+            ps('tools/activate-pos.ps1')
+        except Exception:pass
     @timed('product_registration')
     def register_products(self,path,registrations,buyer,checkpoint):
         # Validate absence immediately before import: native import can overwrite stock.

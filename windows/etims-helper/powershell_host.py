@@ -13,7 +13,8 @@ SCRIPTS = frozenset(('read-state.ps1', 'ui-step.ps1', 'tools/check-offline.ps1',
                      'tools/normalize-window.ps1', 'tools/select-observed-combo.ps1',
                      'tools/choose-native-file.ps1', 'tools/decode-qr.ps1', 'tools/check-ui-ready.ps1',
                      'tools/inspect-file-dialog.ps1', 'tools/cancel-file-dialog.ps1',
-                     'tools/display-state.ps1','tools/machine-check.ps1'))
+                     'tools/display-state.ps1','tools/machine-check.ps1',
+                     'tools/activate-pos.ps1'))
 
 
 class PowerShellHost:

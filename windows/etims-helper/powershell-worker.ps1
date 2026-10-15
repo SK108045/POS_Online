@@ -3,7 +3,7 @@ $ProgressPreference='SilentlyContinue'
 $encoding=New-Object System.Text.UTF8Encoding($false)
 [Console]::InputEncoding=$encoding
 $OutputEncoding=[Console]::OutputEncoding=$encoding
-$allowed=@('read-state.ps1','ui-step.ps1','tools/check-offline.ps1','tools/normalize-window.ps1','tools/select-observed-combo.ps1','tools/choose-native-file.ps1','tools/decode-qr.ps1','tools/check-ui-ready.ps1','tools/inspect-file-dialog.ps1','tools/cancel-file-dialog.ps1','tools/display-state.ps1','tools/machine-check.ps1')
+$allowed=@('read-state.ps1','ui-step.ps1','tools/check-offline.ps1','tools/normalize-window.ps1','tools/select-observed-combo.ps1','tools/choose-native-file.ps1','tools/decode-qr.ps1','tools/check-ui-ready.ps1','tools/inspect-file-dialog.ps1','tools/cancel-file-dialog.ps1','tools/display-state.ps1','tools/machine-check.ps1','tools/activate-pos.ps1')
 # Private stdin/stdout transport only. No listener, temporary request files,
 # transcript, command-line customer data, or arbitrary PowerShell evaluation.
 while($null -ne ($line=[Console]::ReadLine())){
