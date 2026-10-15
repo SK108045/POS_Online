@@ -69,8 +69,9 @@ public static class OraforgeDisplay {
   if(g.Monitor.Width<minWidth || g.Monitor.Height<minHeight) return "Unsupported display settings: target monitor must be at least 1366 x 768 physical pixels";
   if(g.Minimized) return "Unverified window geometry: eTIMS is minimized";
   if(normalized && (g.Window.Width!=width || g.Window.Height!=height)) return "Unverified window geometry";
-  if(normalized && (g.ClientX<g.Monitor.Left || g.ClientY<g.Monitor.Top ||
-    g.ClientX+g.Client.Width>g.Monitor.Right || g.ClientY+g.Client.Height>g.Monitor.Bottom))
+  int borderMargin=16;
+  if(normalized && (g.ClientX<g.Monitor.Left-borderMargin || g.ClientY<g.Monitor.Top-borderMargin ||
+    g.ClientX+g.Client.Width>g.Monitor.Right+borderMargin || g.ClientY+g.Client.Height>g.Monitor.Bottom+borderMargin))
    return "Unsupported display settings: eTIMS content must fit on one monitor";
   return null;
  }

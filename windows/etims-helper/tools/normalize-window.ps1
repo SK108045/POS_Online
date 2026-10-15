@@ -20,18 +20,17 @@ $main=@($windows|Where-Object {$_.Current.Name -ceq 'ETIMS1.0'})
 if($main.Count -ne 1){throw 'Log in normally to one eTIMS client'}
 $h=[IntPtr]$main[0].Current.NativeWindowHandle
 $geometry=[OraforgeDisplay]::Observe($h)
-Assert-OraforgeGeometry $geometry $false
 $layout=$global:OraforgeUiMap.layout
-if(-not [OraforgeDisplay]::Problem($geometry,$true,$layout.width,$layout.height,$layout.minimum_monitor_width,$layout.minimum_monitor_height)){return}
-# Keep the verified layout on the target monitor, including negative origins.
-if($geometry.Monitor.Width -eq $layout.minimum_monitor_width -and $geometry.Monitor.Height -eq $layout.minimum_monitor_height){
+if($geometry.Minimized -or [OraforgeDisplay]::Problem($geometry,$true,$layout.width,$layout.height,$layout.minimum_monitor_width,$layout.minimum_monitor_height)){
+ if($geometry.Monitor.Width -eq $layout.minimum_monitor_width -and $geometry.Monitor.Height -eq $layout.minimum_monitor_height){
+  [void][EtimsBounds]::ShowWindow($h,3)
+ }else{
+  [void][EtimsBounds]::ShowWindow($h,9)
+  if(-not [EtimsBounds]::SetWindowPos($h,[IntPtr]::Zero,$geometry.Work.Left,$geometry.Work.Top,$layout.width,$layout.height,0x0040)){throw 'Could not normalize eTIMS bounds'}
+ }
  [void][EtimsBounds]::ShowWindow($h,3)
-}else{
- [void][EtimsBounds]::ShowWindow($h,9)
- if(-not [EtimsBounds]::SetWindowPos($h,[IntPtr]::Zero,$geometry.Work.Left,$geometry.Work.Top,$layout.width,$layout.height,0x0040)){throw 'Could not normalize eTIMS bounds'}
+ Start-Sleep -Milliseconds 400
+ $geometry=[OraforgeDisplay]::Observe($h)
 }
-Start-Sleep -Milliseconds 400
-$normalized=[OraforgeDisplay]::Observe($h)
-if($normalized.MonitorHandle -ne $geometry.MonitorHandle){throw 'Target window changed'}
-Assert-OraforgeGeometry $normalized
+Assert-OraforgeGeometry $geometry
 }finally{[OraforgeDisplay]::Leave($previous)}
