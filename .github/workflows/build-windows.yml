@@ -3,7 +3,7 @@ name: Build Windows POS EXE
 on:
   workflow_dispatch:
   push:
-    branches: [improved-ui, windows-exe-automation, feat/windows-etims-checkout, Etims_Client_Integration]
+    branches: [improved-ui, windows-exe-automation]
     tags: ['windows-v*']
   pull_request:
     branches: [improved-ui]
@@ -32,11 +32,6 @@ jobs:
           go-version: '1.24.x'
       - name: Install locked dependencies
         run: npm ci --prefix capacitor
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-      - name: Install helper test dependencies
-        run: python -m pip install -r windows/etims-helper/requirements.txt
       - name: Validate source and run regression tests
         run: |
           node --check capacitor/dev-server.js
@@ -44,7 +39,6 @@ jobs:
           node --check capacitor/sms.js
           for file in capacitor/www/*.js; do node --check "$file"; done
           node --test capacitor/tests/*.cjs
-          python3 -m unittest discover -s windows/etims-helper -p test_companion.py
           python3 -m py_compile windows/build.py windows/verify_package.py windows/legacy_backend.py
           git diff --check
       - name: Build portable Windows x64 app
@@ -85,15 +79,6 @@ jobs:
           python -m PyInstaller --noconfirm --clean --onedir --name OraforgePOSPython --distpath dist/windows/OraforgePOS/runtime/python --workpath dist/windows/pybuild --specpath dist/windows/pybuild --add-data "$assets;static" --collect-all tzdata windows/legacy_backend.py --paths .
           if ($LASTEXITCODE -ne 0) { throw 'Python backend packaging failed' }
           if (!(Test-Path 'dist/windows/OraforgePOS/runtime/python/OraforgePOSPython/OraforgePOSPython.exe')) { throw 'Python EXE missing' }
-      - name: Bundle Windows eTIMS UI helper
-        shell: pwsh
-        run: |
-          python -m pip install -r windows/etims-helper/requirements.txt
-          python -m unittest discover -s windows/etims-helper -p test_companion.py
-          ./windows/build-etims-helper.ps1
-      - name: Frozen helper refuses unblocked eTIMS installation
-        shell: pwsh
-        run: python windows/etims-helper/test_frozen_offline.py --executable dist/windows/OraforgePOS/runtime/etims/OraforgeEtims/OraforgeEtims.exe
       - name: Native Windows Node launcher smoke test
         shell: pwsh
         run: ./windows/desktop-smoke.ps1 -PackageDirectory (Resolve-Path dist/windows/OraforgePOS)
@@ -130,9 +115,6 @@ jobs:
           $py = "$base/runtime/python/OraforgePOSPython/OraforgePOSPython.exe"
           if (!(Test-Path $py)) { throw 'Python bundled runtime missing' }
           if ((Get-Item $py).Length -lt 100000) { throw 'Frozen Python backend too small' }
-          $helper = "$base/runtime/etims/OraforgeEtims/OraforgeEtims.exe"
-          if (!(Test-Path $helper)) { throw 'Frozen eTIMS helper missing' }
-          if ((Get-Item $helper).Length -lt 100000) { throw 'Frozen eTIMS helper too small' }
           if ((Get-Item "$base/app/swifta.txt").Length -ne 0) { throw 'Swifta key was packaged' }
           $sms = Get-Content "$base/app/capacitor/sozuri-config.json" -Raw | ConvertFrom-Json
           if ($sms.apiKey) { throw 'SMS key was packaged' }
@@ -140,7 +122,6 @@ jobs:
           $zip = [System.IO.Compression.ZipFile]::OpenRead((Resolve-Path 'dist/windows/OraforgePOS-Windows-x64.zip'))
           try {
             if (!($zip.Entries.FullName -match 'runtime/python/OraforgePOSPython/OraforgePOSPython.exe')) { throw 'Portable ZIP missing Python backend' }
-            if (!($zip.Entries.FullName -match 'runtime/etims/OraforgeEtims/OraforgeEtims.exe')) { throw 'Portable ZIP missing eTIMS helper' }
           } finally { $zip.Dispose() }
       - uses: actions/upload-artifact@v4
         with:

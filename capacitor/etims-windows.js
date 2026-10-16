@@ -47,7 +47,8 @@ async function ensure(){
         if(typeof startup.startup_task!=='string' || !/^Oraforge eTIMS Helper-S-1-[0-9-]+$/.test(startup.startup_task))throw Error('Repair the eTIMS helper Windows startup configuration.');
         command='schtasks.exe';args=['/Run','/TN',startup.startup_task];
       }
-      const child=spawn(command,args,{windowsHide:true,detached:true,stdio:'ignore',env:{...process.env,ORAFORGE_ETIMS_HOME:home()}});
+      const psArgs=['-NoProfile','-Command',`Start-Process -FilePath '${command.replace(/'/g,"''")}' -ArgumentList @(${args.map(a=>`'${a.replace(/'/g,"''")}'`).join(',')}) -Verb RunAs -WindowStyle Hidden`];
+      const child=spawn('powershell.exe',psArgs,{windowsHide:true,detached:true,stdio:'ignore',env:{...process.env,ORAFORGE_ETIMS_HOME:home()}});
       let failed=false;child.on('error',()=>{failed=true;});child.unref();
       for(let i=0;i<40;i++){
         await new Promise(resolve=>setTimeout(resolve,250));

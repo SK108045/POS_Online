@@ -35,13 +35,10 @@ Source: "{#SourceDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs 
 [Icons]
 Name: "{autoprograms}\Oraforge POS"; Filename: "{app}\OraforgePOS.exe"
 Name: "{autoprograms}\Stop Oraforge POS"; Filename: "{app}\Stop POS.cmd"
-Name: "{autoprograms}\Configure Oraforge eTIMS Helper"; Filename: "{app}\runtime\etims\OraforgeEtims\OraforgeEtims.exe"; Parameters: "--configure"
 Name: "{autodesktop}\Oraforge POS"; Filename: "{app}\OraforgePOS.exe"; Tasks: desktopicon
-Name: "{userstartup}\Oraforge eTIMS Helper"; Filename: "{app}\runtime\etims\OraforgeEtims\OraforgeEtims.exe"; Tasks: etimsstartup
 
 [Tasks]
 Name: desktopicon; Description: "Create a desktop shortcut"; GroupDescription: "Additional shortcuts:"
-Name: etimsstartup; Description: "Start the eTIMS Windows Helper when I sign in"; GroupDescription: "Windows integration:"
 
 [Run]
 Filename: "{app}\OraforgePOS.exe"; Description: "Launch Oraforge POS"; Flags: nowait postinstall skipifsilent

@@ -21,9 +21,12 @@ public static class EtimsBounds {
  }
  $geometry=[OraforgeDisplay]::Observe($h)
  $layout=$global:OraforgeUiMap.layout
- $problem=[OraforgeDisplay]::Problem($geometry,$false,$layout.width,$layout.height,$layout.minimum_monitor_width,$layout.minimum_monitor_height)
- if($geometry.Minimized -and $problem -eq 'Unverified window geometry: eTIMS is minimized'){
-  $problem=$null
+ if($geometry.Minimized){
+  [void][EtimsBounds]::ShowWindow($h,3)
+  [void][EtimsBounds]::SetForegroundWindow($h)
+  Start-Sleep -Milliseconds 400
+  $geometry=[OraforgeDisplay]::Observe($h)
  }
+ $problem=[OraforgeDisplay]::Problem($geometry,$false,$layout.width,$layout.height,$layout.minimum_monitor_width,$layout.minimum_monitor_height)
  [pscustomobject]@{read_only=$true;geometry=$geometry;ready=(-not $problem);problem=$problem}|ConvertTo-Json -Depth 5 -Compress
 }finally{[OraforgeDisplay]::Leave($previous)}

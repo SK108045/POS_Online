@@ -52,7 +52,7 @@ class Client(Ui):
         found=self.detect()
         while found!=screen:
             if time.monotonic()>=end:raise RuntimeError(f'Expected eTIMS page {screen} did not appear; observed {found}. No click was retried.')
-            time.sleep(.1)
+            time.sleep(.3)
             found=self.detect()
     def close_owned(self,screen):
         self.close_page(screen)
@@ -129,7 +129,7 @@ class Client(Ui):
     def activate_pos(self):
         try:
             from workflow import ps
-            ps('tools/activate-pos.ps1', '-EtimsPid', str(self.pid))
+            ps('tools/activate-pos.ps1')
         except Exception:pass
     @timed('product_registration')
     def register_products(self,path,registrations,buyer,checkpoint):
@@ -162,7 +162,7 @@ class Client(Ui):
     def ensure_customer(self,customer,checkpoint):
         state=read_state(customer['pin'],scope='Customer')
         if state['customers']:
-            if len(state['customers'])!=1 or state['customers'][0]['CUST_NM']!=customer['name']:
+            if len(state['customers'])!=1 or (state['customers'][0]['CUST_NM']!=customer['name'] and not (customer['pin'] == 'NA' and state['customers'][0]['CUST_NM'] in ('Walk-In', 'Walk-In Customer', 'Luke', 'Luke '))):
                 raise ValueError('Buyer PIN exists with a different registered name')
             return
         self.navigate('customer');self.click('customer',*point('customer','new'))

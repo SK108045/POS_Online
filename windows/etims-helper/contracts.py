@@ -40,7 +40,8 @@ def validate(sale):
     if isinstance(sale.get('sale_id'), bool) or not isinstance(sale.get('sale_id'), int) or sale['sale_id'] <= 0:
         raise ValueError('Invalid POS sale identity')
     customer = sale.get('customer', {})
-    if not re.fullmatch(r'[A-Z]\d{9}[A-Z]', customer.get('pin', '')):
+    pin = customer.get('pin', '')
+    if pin != 'NA' and not re.fullmatch(r'[A-Z]\d{9}[A-Z]', pin):
         raise ValueError('Buyer KRA PIN is required')
     text(customer.get('name'), 'buyer name', 120)
     for key in ('phone', 'email', 'billing_address', 'remarks'):

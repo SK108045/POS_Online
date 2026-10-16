@@ -17,7 +17,7 @@
   }
   function customer(input = {}) {
     const pin = text(input.pin || input.customer_kra_pin, 11).toUpperCase();
-    if (pin && !/^[A-Z]\d{9}[A-Z]$/.test(pin)) throw Error('Enter a valid customer KRA PIN or leave it blank.');
+    if (pin && pin !== 'NA' && !/^[A-Z]\d{9}[A-Z]$/.test(pin)) throw Error('Enter a valid customer KRA PIN or leave it blank.');
     const email = text(input.email || input.customer_email, 120);
     if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw Error('Enter a valid customer email.');
     // The optional POS name is not a KRA-validated identity. Only include it

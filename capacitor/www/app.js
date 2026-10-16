@@ -806,7 +806,19 @@ const LocalPOS = {
     }
 
     if (cleanPath === '/api/orders' && method === 'GET') {
-      const orders = await this.getShop('orders', [], btype);
+      let orders = await this.getShop('orders', [], btype);
+      if (!orders || orders.length === 0) {
+        try {
+          const res = await fetch('/buildmart_catalog.json');
+          if (res.ok) {
+            const data = await res.json();
+            if (Array.isArray(data.orders) && data.orders.length > 0) {
+              orders = data.orders;
+              await this.setShop('orders', orders, btype);
+            }
+          }
+        } catch (_) {}
+      }
       const status = url.searchParams.get('status');
       const rows = status ? orders.filter(o => o.status === status) : orders;
       return window.OraforgeEtims ? window.OraforgeEtims.attach(rows) : rows;
@@ -824,7 +836,22 @@ const LocalPOS = {
       return q ? orders.filter(o => `${o.ticket_no} ${o.customer_name} ${o.employee_name}`.toLowerCase().includes(q)) : orders;
     }
 
-    if (cleanPath === '/api/suppliers') return await this.getShop('suppliers', [], btype);
+    if (cleanPath === '/api/suppliers') {
+      let suppliers = await this.getShop('suppliers', [], btype);
+      if (!suppliers || suppliers.length === 0) {
+        try {
+          const res = await fetch('/buildmart_catalog.json');
+          if (res.ok) {
+            const data = await res.json();
+            if (Array.isArray(data.suppliers) && data.suppliers.length > 0) {
+              suppliers = data.suppliers;
+              await this.setShop('suppliers', suppliers, btype);
+            }
+          }
+        } catch (_) {}
+      }
+      return suppliers;
+    }
     if (cleanPath === '/api/customers') return await this.getShop('customers', [], btype);
 
     if (cleanPath === '/api/admin/supplier' && method === 'POST') {
@@ -2123,7 +2150,21 @@ async function showCheckoutModal(order) {
     const etimsToggle = overlay.querySelector('#generateEtims');
     if (etimsToggle) {
       etimsToggle.checked = generateEtims;
-      overlay.querySelector('#etimsCustomerFields').hidden = !generateEtims;
+      const custOptions = overlay.querySelector('#etimsCustomerOptions');
+      const walkInRadio = overlay.querySelector('#etimsTypeWalkIn');
+      const regRadio = overlay.querySelector('#etimsTypeRegistered');
+      const walkInNotice = overlay.querySelector('#etimsWalkInNotice');
+      const custFields = overlay.querySelector('#etimsCustomerFields');
+      const updateEtimsVisibility = () => {
+        if (custOptions) custOptions.hidden = !generateEtims;
+        const isWalkIn = walkInRadio ? walkInRadio.checked : true;
+        if (walkInNotice) walkInNotice.hidden = !isWalkIn;
+        if (custFields) custFields.hidden = isWalkIn;
+      };
+      if (walkInRadio && regRadio) {
+        walkInRadio.onchange = updateEtimsVisibility;
+        regRadio.onchange = updateEtimsVisibility;
+      }
       overlay.querySelector('#etimsName').value = etimsCustomer.name || '';
       overlay.querySelector('#etimsPhone').value = etimsCustomer.phone || '';
       overlay.querySelector('#etimsPin').value = etimsCustomer.pin || '';
@@ -2131,9 +2172,10 @@ async function showCheckoutModal(order) {
       overlay.querySelector('#etimsAddress').value = etimsCustomer.billing_address || '';
       etimsToggle.onchange = () => {
         generateEtims = etimsToggle.checked;
-        overlay.querySelector('#etimsCustomerFields').hidden = !generateEtims;
+        updateEtimsVisibility();
         updateTaxInfo();
       };
+      updateEtimsVisibility();
     }
 
     customerPhoneInput.addEventListener('input', () => {
@@ -2193,12 +2235,20 @@ async function showCheckoutModal(order) {
           savedPhone=rawPhone;errorField=null;
         }
         if (generateEtims) {
-          etimsCustomer=window.OraforgeEtimsCore.customer({name:overlay.querySelector('#etimsName').value,
-            phone:overlay.querySelector('#etimsPhone').value.trim() || customerPhoneInput.value.trim(),
-            pin:overlay.querySelector('#etimsPin').value,email:overlay.querySelector('#etimsEmail').value,
-            billing_address:overlay.querySelector('#etimsAddress').value});
-          etimsCustomer.remarks=overlay.querySelector('#etimsRemarks').value.trim();
-          etimsRegistrationDetails=await window.OraforgeEtims.beforePayment(order,state.settings,etimsCustomer,selectedMethod,state.items,selectedTaxRate);
+          const isWalkIn = overlay.querySelector('#etimsTypeWalkIn')?.checked ?? true;
+          const custName = isWalkIn ? 'Walk-In' : overlay.querySelector('#etimsName').value.trim();
+          const custPin = isWalkIn ? 'NA' : overlay.querySelector('#etimsPin').value.trim().toUpperCase();
+          if (!custName) throw Error('Please enter the customer name.');
+          if (!custPin) throw Error('Please enter the customer KRA PIN.');
+          etimsCustomer = window.OraforgeEtimsCore.customer({
+            name: custName,
+            phone: isWalkIn ? '' : (overlay.querySelector('#etimsPhone').value.trim() || customerPhoneInput.value.trim()),
+            pin: custPin,
+            email: isWalkIn ? '' : overlay.querySelector('#etimsEmail').value.trim(),
+            billing_address: isWalkIn ? '' : overlay.querySelector('#etimsAddress').value.trim()
+          });
+          etimsCustomer.remarks = isWalkIn ? '' : overlay.querySelector('#etimsRemarks').value.trim();
+          etimsRegistrationDetails = await window.OraforgeEtims.beforePayment(order, state.settings, etimsCustomer, selectedMethod, state.items, selectedTaxRate);
         }
         if (selectedMethod==='mpesa') {
           setBusy(true,'Sending M-Pesa prompt…');

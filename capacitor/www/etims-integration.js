@@ -155,7 +155,7 @@
   }
   async function list() { return Object.values(await ledger()).filter(r=>r.shop_id===scope()).sort((a,b)=>b.created_at.localeCompare(a.created_at)); }
   function checkoutMarkup() {
-    return `<fieldset class="etims-checkout"><label><input type="checkbox" id="generateEtims"> Generate eTIMS Invoice</label><div id="etimsCustomerFields" hidden><label>Buyer name *<input id="etimsName" class="field" type="text" maxlength="120" autocomplete="name"></label><label>Buyer KRA PIN *<input id="etimsPin" class="field" maxlength="11" autocapitalize="characters"></label><details><summary>Optional buyer details</summary><label>Phone<input id="etimsPhone" class="field" type="tel" maxlength="40" autocomplete="tel"></label><label>Email<input id="etimsEmail" class="field" type="email" maxlength="120" autocomplete="email"></label><label>Address<input id="etimsAddress" class="field" maxlength="240"></label><label>Remarks<input id="etimsRemarks" class="field" maxlength="500"></label></details></div></fieldset>`;
+    return `<fieldset class="etims-checkout"><label style="display:flex;align-items:center;gap:8px;font-weight:600;cursor:pointer;"><input type="checkbox" id="generateEtims"> Generate eTIMS Invoice</label><div id="etimsCustomerOptions" hidden style="margin-top:12px;"><label style="display:block;margin-bottom:6px;font-weight:600;font-size:12px;">Customer Option</label><div class="etims-cust-type-group" style="display:flex;gap:16px;margin-bottom:10px;"><label style="display:inline-flex;align-items:center;gap:6px;cursor:pointer;font-weight:600;"><input type="radio" name="etimsCustomerType" id="etimsTypeWalkIn" value="walkin" checked> Walk-In</label><label style="display:inline-flex;align-items:center;gap:6px;cursor:pointer;font-weight:600;"><input type="radio" name="etimsCustomerType" id="etimsTypeRegistered" value="registered"> Registered</label></div><div id="etimsWalkInNotice" style="padding:8px 12px;background:var(--card,#f3f4f6);border:1px solid var(--line,#e5e7eb);border-radius:6px;margin-bottom:10px;font-size:12px;color:var(--muted,#4b5563);">⚡ Customer Name: <strong>Walk-In</strong> · PIN: <strong>NA</strong></div><div id="etimsCustomerFields" hidden><label>Buyer name *<input id="etimsName" class="field" type="text" maxlength="120" autocomplete="name" placeholder="Customer or business name"></label><label>Buyer KRA PIN *<input id="etimsPin" class="field" maxlength="11" autocapitalize="characters" placeholder="e.g. A012345678Z"></label><details style="margin-top:8px;"><summary style="cursor:pointer;font-size:12px;">Optional buyer details</summary><label>Phone<input id="etimsPhone" class="field" type="tel" maxlength="40" autocomplete="tel"></label><label>Email<input id="etimsEmail" class="field" type="email" maxlength="120" autocomplete="email"></label><label>Address<input id="etimsAddress" class="field" maxlength="240"></label><label>Remarks<input id="etimsRemarks" class="field" maxlength="500"></label></details></div></div></fieldset>`;
   }
   function enrich(order,products) {
     for(const item of order.items || []) {
@@ -289,14 +289,34 @@
     if(order.status!=='paid' || order.is_quote)throw Error('Select a completed genuine sale.');
     const overlay=document.createElement('div');overlay.className='qty-popup-overlay etims-dialog-overlay';
     overlay.innerHTML=`<form class="qty-popup etims-dialog"><h3>Invoice existing POS sale</h3><p>Receipt ${core.escape(order.ticket_no)} · KES ${(order.total_cents/100).toFixed(2)}. Payment and POS stock will remain as recorded.</p>${checkoutMarkup()}<label><input name="newSaleConfirmed" type="checkbox" required> I confirm this real sale has no existing eTIMS invoice.</label><p data-msg role="status"></p><div class="qty-popup-actions"><button type="button" data-cancel>Cancel</button><button class="primary">Issue this sale with eTIMS</button></div></form>`;
-    document.body.append(overlay);overlay.querySelector('.etims-checkout > label').remove();overlay.querySelector('#etimsCustomerFields').hidden=false;
+    document.body.append(overlay);overlay.querySelector('.etims-checkout > label').remove();
+    overlay.querySelector('#etimsCustomerOptions').hidden=false;
+    const walkInRadio = overlay.querySelector('#etimsTypeWalkIn');
+    const regRadio = overlay.querySelector('#etimsTypeRegistered');
+    const walkInNotice = overlay.querySelector('#etimsWalkInNotice');
+    const custFields = overlay.querySelector('#etimsCustomerFields');
+    const updateCustomerMode = () => {
+      const isWalkIn = walkInRadio.checked;
+      walkInNotice.hidden = !isWalkIn;
+      custFields.hidden = isWalkIn;
+      overlay.querySelector('#etimsName').required = !isWalkIn;
+      overlay.querySelector('#etimsPin').required = !isWalkIn;
+    };
+    walkInRadio.onchange = updateCustomerMode;
+    regRadio.onchange = updateCustomerMode;
+    updateCustomerMode();
     overlay.querySelector('[data-cancel]').onclick=()=>overlay.remove();
     overlay.querySelector('form').onsubmit=async event=>{
       event.preventDefault();const button=event.target.querySelector('button.primary');button.disabled=true;
       try {
-        const customer=core.customer({name:overlay.querySelector('#etimsName').value,pin:overlay.querySelector('#etimsPin').value,
-          phone:overlay.querySelector('#etimsPhone').value,email:overlay.querySelector('#etimsEmail').value,
-          billing_address:overlay.querySelector('#etimsAddress').value,remarks:overlay.querySelector('#etimsRemarks').value});
+        const isWalkIn = walkInRadio.checked;
+        const name = isWalkIn ? 'Walk-In' : overlay.querySelector('#etimsName').value.trim();
+        const pin = isWalkIn ? 'NA' : overlay.querySelector('#etimsPin').value.trim().toUpperCase();
+        if(!name) throw Error('Customer name is required.');
+        if(!pin) throw Error('Customer KRA PIN is required.');
+        const customer=core.customer({name,pin,
+          phone:isWalkIn ? '' : overlay.querySelector('#etimsPhone').value,email:isWalkIn ? '' : overlay.querySelector('#etimsEmail').value,
+          billing_address:isWalkIn ? '' : overlay.querySelector('#etimsAddress').value,remarks:isWalkIn ? '' : overlay.querySelector('#etimsRemarks').value});
         const products=await (await db()).get(`shop:${scope()}:items`,[]);
         const details=await beforePayment(order,settings,customer,order.payment_method,products);
         const key=`shop:${scope()}:orders`;

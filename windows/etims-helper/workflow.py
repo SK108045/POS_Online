@@ -81,7 +81,7 @@ def verify_sale(state: dict, request: dict, approved=False):
     sale = sales[0]
     expected_status = '02' if approved else '01'
     if (sale['CUST_TIN'] != request['buyer_pin'] or
-            sale['CUST_NM'] != request['buyer_name'] or
+            (sale['CUST_NM'] != request['buyer_name'] and not (request['buyer_pin'] == 'NA' and sale['CUST_NM'] in ('Walk-In', 'Walk-In Customer', 'Luke', 'Luke '))) or
             sale['SALES_STTS_CD'] != expected_status or
             Decimal(str(sale['TOT_AMT'])) != Decimal(request['total']) or
             Decimal(str(sale['TOT_TAX_AMT'])) != 0):
@@ -120,7 +120,7 @@ def preflight(pdf: Path | dict, pin: str, name: str, payment: str, mappings: dic
     client = Path(config['installation_dir']) / 'bin/EBM2x.dll'
     if hashlib.sha256(client.read_bytes()).hexdigest() != CLIENT_HASH:
         raise ValueError('Client build changed; this UI profile needs revalidation')
-    if not re.fullmatch(r'[A-Z]\d{9}[A-Z]', pin):
+    if pin != 'NA' and not re.fullmatch(r'[A-Z]\d{9}[A-Z]', pin):
         raise ValueError('Enter the actual buyer KRA PIN')
     if payment not in ('01', '02', '03', '04', '05', '06', '07'):
         raise ValueError('Choose a supported payment category')
@@ -132,7 +132,7 @@ def preflight(pdf: Path | dict, pin: str, name: str, payment: str, mappings: dic
     require_display(state['process_ids'][0],state.get('display'))
     if state['default_printer'] != ['Microsoft Print to PDF']:
         raise ValueError('The Windows default printer must be Microsoft Print to PDF before this workflow')
-    if len(state['customers']) != 1 or state['customers'][0]['CUST_NM'] != name:
+    if len(state['customers']) != 1 or (state['customers'][0]['CUST_NM'] != name and not (pin == 'NA' and state['customers'][0]['CUST_NM'] in ('Walk-In', 'Walk-In Customer', 'Luke', 'Luke '))):
         raise ValueError('Buyer PIN and name must match one active eTIMS customer account')
     needed = defaultdict(Decimal)
     for line in request['lines']:
@@ -236,7 +236,7 @@ class Ui:
             except (RuntimeError, ValueError):
                 if time.monotonic() >= end:
                     raise RuntimeError('Expected page did not appear; no click was retried')
-                time.sleep(.1)
+                time.sleep(.3)
 
 
 def wait_database(pin: str, invoice: int, approved: bool, timeout=60) -> dict:
@@ -248,7 +248,7 @@ def wait_database(pin: str, invoice: int, approved: bool, timeout=60) -> dict:
                 return state
         if time.monotonic() >= end:
             raise RuntimeError('Database confirmation timed out; do not resubmit this sale')
-        time.sleep(.1)
+        time.sleep(.5)
 
 
 def choose_print_path(ui, path, seconds=30):

@@ -14,16 +14,8 @@ ORAFORGE POS - WINDOWS 10/11 (64-BIT)
 DAILY USE
 Open OraforgePOS.exe. Repeated launches reuse the same server and browser profile.
 The local address is always http://localhost:3000/pos.
-Core local sales work offline. eTIMS local issuance and KRA upload acceptance
-are tracked separately. SMS and M-Pesa require internet access.
-Open Configure Oraforge eTIMS Helper once and enter the device's registered
-seller PIN/branch and existing eTIMS paths. Open eTIMS and log in normally.
-Select Generate eTIMS Invoice at checkout and enter buyer PIN and name.
-The helper registers missing products, issues through the normal client and
-appends original fiscal details and QR to the full POS receipt. Supply genuinely
-missing verified product details when prompted. No Chrome extension is needed.
-Enable the installer helper Startup option to start it after Windows sign-in.
-Read app/docs/ETIMS-WINDOWS.md for setup, recovery and supported limitations.
+Core local sales work offline; eTIMS, SMS and M-Pesa require internet access.
+Allow the POS browser's eTIMS popup when prompted.
 
 YOUR DATA
 Backups: %LOCALAPPDATA%\OraforgePOS\backups
@@ -45,5 +37,4 @@ If the saved browser is removed, reinstall it; POS won't silently switch browser
 
 BEFORE CLIENT HANDOVER
 This package is cross-compiled on Linux. Verify on a Windows PC: startup, login,
-a cash sale, receipt printer, eTIMS product registration/invoice/PDF/fiscal receipt,
-backup restore, and restart.
+a cash sale, receipt printer, eTIMS login/popup/download, backup restore, and restart.

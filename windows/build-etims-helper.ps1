@@ -1,27 +1,15 @@
-param([string]$OutputDirectory, [string]$Python)
+param([string]$OutputDirectory)
 $ErrorActionPreference='Stop'
 $helperRoot=(Resolve-Path -LiteralPath (Join-Path $PSScriptRoot 'etims-helper')).Path
 $repoRoot=Split-Path $PSScriptRoot -Parent
-if(-not $Python){
- $cachedPython=Join-Path $repoRoot 'windows\.cache\etims-build-env\Scripts\python.exe'
- if(Test-Path $cachedPython){$Python=$cachedPython}else{$Python='python'}
-}
 if(-not $OutputDirectory){$OutputDirectory=Join-Path $repoRoot 'dist\windows\OraforgePOS\runtime\etims'}
 $buildRoot=Join-Path $repoRoot 'dist\windows\etims-build'
-$ghostCs=Join-Path $helperRoot 'tools\ghost-overlay.cs'
-$ghostExe=Join-Path $helperRoot 'tools\GhostOverlay.exe'
-if ((Test-Path $ghostCs) -and (-not (Test-Path $ghostExe) -or (Get-Item $ghostCs).LastWriteTime -gt (Get-Item $ghostExe).LastWriteTime)){
- $csc='C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe'
- if (Test-Path $csc){
-  & $csc /nologo /target:winexe /platform:x64 /out:$ghostExe /reference:System.Windows.Forms.dll,System.Drawing.dll $ghostCs | Out-Null
- }
-}
 # PyInstaller progress uses stderr. Windows PowerShell 5 treats redirected
 # native stderr as ErrorRecords; preserve progress without aborting the build.
 $previousPreference=$ErrorActionPreference
 try{
  $ErrorActionPreference='Continue'
- & $Python -m PyInstaller --noconfirm --clean --onedir --noconsole --name OraforgeEtims --distpath $OutputDirectory --workpath $buildRoot --specpath $buildRoot --add-data "$helperRoot\tools;tools" --add-data "$helperRoot\profiles;profiles" --add-data "$helperRoot\read-state.ps1;." --add-data "$helperRoot\ui-step.ps1;." --add-data "$helperRoot\powershell-worker.ps1;." --add-data "$helperRoot\Install-Startup.ps1;." --add-data "$helperRoot\product_import;product_import" --additional-hooks-dir "$helperRoot\hooks" --paths $helperRoot --paths "$helperRoot\product_import" "$helperRoot\server.py" 2>&1 | ForEach-Object { $_.ToString() }
+ python -m PyInstaller --noconfirm --clean --onedir --noconsole --name OraforgeEtims --distpath $OutputDirectory --workpath $buildRoot --specpath $buildRoot --add-data "$helperRoot\tools;tools" --add-data "$helperRoot\profiles;profiles" --add-data "$helperRoot\read-state.ps1;." --add-data "$helperRoot\ui-step.ps1;." --add-data "$helperRoot\powershell-worker.ps1;." --add-data "$helperRoot\Install-Startup.ps1;." --add-data "$helperRoot\product_import;product_import" --additional-hooks-dir "$helperRoot\hooks" --paths $helperRoot --paths "$helperRoot\product_import" "$helperRoot\server.py" 2>&1 | ForEach-Object { $_.ToString() }
  $buildExit=$LASTEXITCODE
 }finally{$ErrorActionPreference=$previousPreference}
 if($buildExit -ne 0){throw 'eTIMS helper packaging failed'}

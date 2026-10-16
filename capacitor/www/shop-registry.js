@@ -148,13 +148,34 @@
   async function initializeShopStorage(shop) {
     const p = PROFILE_META[shop.business_type] || PROFILE_META.retail;
     const prefix = name => `shop:${shop.id}:${name}`;
-    const categories = shop.business_type === 'butchery'
+    let items = [];
+    let categories = shop.business_type === 'butchery'
       ? ['Beef', 'Goat & Mutton', 'Chicken', 'Other Meat']
       : shop.business_type === 'garage'
         ? ["Oils & Lubricants", "Filters", "Brakes & Suspension", "Engine Parts", "Batteries & Electrical", "Tyres & Wheels", "Workshop Services"]
+      : shop.business_type === 'hardware'
+        ? ['Electrical', 'Plumbing', 'Tools', 'Building Materials', 'Paint & Finishes', 'Fasteners', 'Safety']
       : shop.is_custom
         ? [shop.category_name, 'General']
         : ['General'];
+
+    let suppliers = [];
+    let orders = [];
+
+    if (shop.business_type === 'hardware') {
+      try {
+        const res = await fetch('/buildmart_catalog.json');
+        if (res.ok) {
+          const catData = await res.json();
+          if (Array.isArray(catData.categories) && Array.isArray(catData.items)) {
+            categories = catData.categories.map(c => c.name);
+            items = catData.items;
+          }
+          if (Array.isArray(catData.suppliers)) suppliers = catData.suppliers;
+          if (Array.isArray(catData.orders)) orders = catData.orders;
+        }
+      } catch (_) {}
+    }
 
     const categoryRows = categories.map((name, idx) => ({ id: idx + 1, name, sort_order: idx, business_type: shop.business_type }));
     const settings = {
@@ -181,10 +202,10 @@
     const initial = {
       settings,
       categories: categoryRows,
-      items: [],
-      orders: [],
+      items,
+      orders,
       customers: [{ id: 1, name: 'Walk-In Customer', phone: '' }],
-      suppliers: [],
+      suppliers,
       users,
       seeded: true,
     };
