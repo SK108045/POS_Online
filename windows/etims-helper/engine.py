@@ -16,6 +16,7 @@ from session_lock import exclusive_client, reclaim_dead_lock
 from offline import require_offline
 from windows_access import require_ui_access
 from timing import record_run, timed, span
+from overlay import GhostOverlaySession
 
 def verify_device(state, config):
     registered={(str(row['TIN']),str(row['BHF_ID'])) for row in state.get('registered_devices',[])}
@@ -134,43 +135,63 @@ class Engine:
             if request.get('pos_sale_digest')!=digest(sale):
                 raise ValueError('Interrupted invoice request differs from the immutable POS sale')
             # Recover only this exact POS identity and stored invoice, never issue anew.
-            raw=self.resume(key,recorded,request,sale)
+            with GhostOverlaySession() as overlay:
+                overlay.update(50, "Recovering fiscal invoice...")
+                raw=self.resume(key,recorded,request,sale)
+                self.store.update(key,'complete',result=self.result(raw,sale))
+                try:
+                    invoice=raw['local_invoice_id']
+                    state=workflow.read_state('',invoice)
+                    if len(state['process_ids'])==1:
+                        with span('cleanup'):Client(state['process_ids'][0]).finish_invoice(invoice)
+                except Exception:
+                    st = locals().get('state')
+                    if st and len(st.get('process_ids', [])) == 1:
+                        Client(st['process_ids'][0]).activate_pos()
+            return
+        with GhostOverlaySession() as overlay:
+            overlay.update(10, "Connecting to eTIMS fiscal engine...")
+            config,state,registration=self.prepare(sale,job['details'])
+            if state.get('display') and isinstance(state['display'], dict):
+                monitor_bounds = state['display'].get('geometry', {}).get('Monitor')
+                overlay.set_bounds(monitor_bounds)
+            client=Client(state['process_ids'][0]);client.normalize()
+            self.store.update(key,'preparing')
+            client.reset_menu()
+            if registration['requirements']:
+                self.store.update(key,'needs_details',result={'requirements':registration['requirements']})
+                return
+            overlay.update(30, "Verifying item catalog & tax classifications...")
+            def checkpoint(stage):self.store.update(key,stage)
+            # Persist intended codes BEFORE invoking an importer. Recovery discovers
+            # already imported records using the same mapping rather than re-importing.
+            for mapping_key,mapping in registration['mappings'].items():
+                self.store.map(mapping_key,mapping['code'],mapping['metadata'])
+            if registration['missing']:
+                overlay.update(45, "Registering products in eTIMS...")
+                import time
+                path=workbook(registration['missing'],HOME/'imports'/key/str(time.time_ns()),config['branch_id'])
+                client.register_products(path,registration['missing'],sale['customer']['pin'],checkpoint)
+            for code,adjustment in registration['adjustments'].items():
+                client.adjust_stock(code,adjustment,sale['customer']['pin'],checkpoint)
+            client.ensure_customer(sale['customer'],checkpoint)
+            overlay.update(60, "Issuing tax invoice...")
+            client.navigate('sales')
+            request=to_request(sale,registration['codes'])
+            def on_issue_stage(stage):
+                self.store.update(key,progress_state(stage))
+                if stage == 'payment_selected':
+                    overlay.update(75, "Recording fiscal tender & amounts...")
+                elif stage == 'pdf_requested':
+                    overlay.update(85, "Finalizing fiscal receipt...")
+            raw=workflow.issue(request,request['buyer_pin'],request['buyer_name'],request['payment_code'],key,True,on_issue_stage)
+            overlay.update(95, "Recording fiscal signature...")
             self.store.update(key,'complete',result=self.result(raw,sale))
+            overlay.update(100, "Invoice issued successfully")
             try:
-                invoice=raw['local_invoice_id']
-                state=workflow.read_state('',invoice)
-                if len(state['process_ids'])==1:
-                    with span('cleanup'):Client(state['process_ids'][0]).finish_invoice(invoice)
-            except Exception:pass # Published fiscal capture remains complete.
-            return
-        config,state,registration=self.prepare(sale,job['details'])
-        client=Client(state['process_ids'][0]);client.normalize()
-        self.store.update(key,'preparing')
-        client.reset_menu()
-        if registration['requirements']:
-            self.store.update(key,'needs_details',result={'requirements':registration['requirements']})
-            return
-        def checkpoint(stage):self.store.update(key,stage)
-        self.store.update(key,'preparing')
-        # Persist intended codes BEFORE invoking an importer. Recovery discovers
-        # already imported records using the same mapping rather than re-importing.
-        for mapping_key,mapping in registration['mappings'].items():
-            self.store.map(mapping_key,mapping['code'],mapping['metadata'])
-        if registration['missing']:
-            import time
-            path=workbook(registration['missing'],HOME/'imports'/key/str(time.time_ns()),config['branch_id'])
-            client.register_products(path,registration['missing'],sale['customer']['pin'],checkpoint)
-        for code,adjustment in registration['adjustments'].items():
-            client.adjust_stock(code,adjustment,sale['customer']['pin'],checkpoint)
-        client.ensure_customer(sale['customer'],checkpoint)
-        client.navigate('sales')
-        request=to_request(sale,registration['codes'])
-        raw=workflow.issue(request,request['buyer_pin'],request['buyer_name'],request['payment_code'],key,True,
-                           lambda stage:self.store.update(key,progress_state(stage)))
-        self.store.update(key,'complete',result=self.result(raw,sale))
-        try:
-            with span('cleanup'):client.finish_invoice(raw['local_invoice_id'])
-        except Exception:pass # Fiscal completion remains valid if read-only view cleanup is unavailable.
+                with span('cleanup'):client.finish_invoice(raw['local_invoice_id'])
+            except Exception:
+                client.activate_pos()
     def finish(self,key):
         job=self.store.get(key)
         if not job or job['state']!='complete':
