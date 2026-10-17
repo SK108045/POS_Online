@@ -39,10 +39,10 @@ def settings():
     database = Path(value.get('database_path') or
                     Path(os.environ.get('LOCALAPPDATA', Path.home())) / 'EBM2x/sqlite/RRA_EBM2x.db')
     detected = detect_etims_identity(database)
-    fallback_pin = detected.get('taxpayer_pin') or 'A018733640V'
+    fallback_pin = detected.get('taxpayer_pin') or ''
     fallback_branch = detected.get('branch_id') or '01'
 
-    if not path.exists():
+    if not path.exists() and fallback_pin:
         try:
             HOME.mkdir(parents=True, exist_ok=True)
             default_config = {

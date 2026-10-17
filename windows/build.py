@@ -43,7 +43,8 @@ def build_desktop_bridge():
     try:
         config_file.write_text(json.dumps(EMPTY_NATIVE) + "\n", encoding="utf-8")
         subprocess.run(
-            [str(esbuild), "src/sqlite-bridge.js", "--bundle", "--format=iife",
+            # On Windows npm leaves bin/esbuild as a Node script, so run it through node.
+            (["node"] if os.name == "nt" else []) + [str(esbuild), "src/sqlite-bridge.js", "--bundle", "--format=iife",
              "--platform=browser", "--outfile=www/sqlite-bridge.js"],
             cwd=CAP, check=True,
         )
@@ -83,7 +84,7 @@ def main():
     shutil.copytree(CAP / "www", app / "www", ignore=shutil.ignore_patterns("paystack.txt", "*.map"))
     shutil.copytree(ROOT / "chrome-extension", STAGE / "chrome-extension")
     for name in ("dev-server.js", "auto-backup.js", "sms.js", "swifta.js",
-                 "swifta-config.js", "swifta-contract.js"):
+                 "swifta-config.js", "swifta-contract.js", "etims-windows.js"):
         shutil.copy2(CAP / name, app / name)
     (STAGE / "app/swifta.txt").write_text("", encoding="utf-8")
     (app / "sozuri-config.json").write_text(json.dumps(EMPTY_SOZURI, indent=2) + "\n", encoding="utf-8")

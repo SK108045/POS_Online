@@ -4,33 +4,24 @@ const fs=require('node:fs'),path=require('node:path'),http=require('node:http');
 const {spawn}=require('node:child_process');
 const home=()=>process.env.ORAFORGE_ETIMS_HOME || path.join(process.env.LOCALAPPDATA || process.env.HOME || '.', 'OraforgePOS','etims');
 let starting=null;
-const HELPER_BUILD='20261014.14';
+const HELPER_BUILD='20261017.1';
 function config(){try{return JSON.parse(fs.readFileSync(path.join(home(),'config.json'),'utf8').replace(/^\uFEFF/,''));}catch{return {};}}
 function launchTarget(){
-  const source = path.resolve(__dirname, '../windows/etims-helper/server.py');
-  const envExe = process.env.ORAFORGE_ETIMS_EXE;
-
-  if (envExe && fs.existsSync(envExe)) {
-    return {command: envExe, args: [], entry: envExe, mode: 'frozen'};
-  }
-  if (fs.existsSync(source)) {
-    return {
-      command: process.env.ORAFORGE_ETIMS_PYTHON || 'pythonw.exe',
-      args: [source],
-      entry: source,
-      mode: 'source'
-    };
-  }
-  const localExe = path.resolve(__dirname, '../dist/windows/OraforgePOS/runtime/etims/OraforgeEtims/OraforgeEtims.exe');
-  if (fs.existsSync(localExe)) {
-    return {command: localExe, args: [], entry: localExe, mode: 'frozen'};
-  }
-  return {
-    command: process.env.ORAFORGE_ETIMS_PYTHON || 'pythonw.exe',
-    args: [source],
-    entry: source,
-    mode: 'source'
-  };
+  const source=path.resolve(__dirname,'../windows/etims-helper/server.py');
+  const frozen=file=>({command:file,args:[],entry:file,mode:'frozen'});
+  const envExe=process.env.ORAFORGE_ETIMS_EXE;
+  if(envExe && fs.existsSync(envExe))return frozen(envExe);
+  // Developer override: run the Python source on purpose.
+  if(process.env.ORAFORGE_ETIMS_PYTHON && fs.existsSync(source))
+    return {command:process.env.ORAFORGE_ETIMS_PYTHON,args:[source],entry:source,mode:'source'};
+  // Packaged app first, so a customer PC never needs Python.
+  const candidates=[
+    path.resolve(__dirname,'../../runtime/etims/OraforgeEtims/OraforgeEtims.exe'),
+    config().helper_exe,
+    path.resolve(__dirname,'../dist/windows/OraforgePOS/runtime/etims/OraforgeEtims/OraforgeEtims.exe')
+  ];
+  for(const exe of candidates){if(exe && fs.existsSync(exe))return frozen(exe);}
+  return {command:'python.exe',args:[source],entry:source,mode:'source'};
 }
 function verifyHealth(health,target=launchTarget()){
   const samePath=value=>typeof value==='string' && path.resolve(value).toLowerCase()===path.resolve(target.entry).toLowerCase();
@@ -38,7 +29,7 @@ function verifyHealth(health,target=launchTarget()){
      health.runtime_mode!==target.mode || !samePath(health.runtime_entry) ||
      (target.mode==='frozen' && !samePath(health.runtime_executable))){
     const error=Error('The active eTIMS helper differs from the installed build. Restart the Windows helper, then recover this same sale.');
-    error.code='ETIMS_HELPER_MISMATCH';throw error;
+    error.code='ETIMS_HELPER_MISMATCH';error.health=health;throw error;
   }
   return health;
 }
@@ -55,55 +46,59 @@ function call(route,method='GET',body,timeout=30000){
     if(raw)req.write(raw);req.end();
   });
 }
+function killPort(){
+  try{
+    require('node:child_process').execSync('powershell.exe -NoProfile -Command "Get-NetTCPConnection -LocalPort '+(Number(config().port)||17383)+' -ErrorAction SilentlyContinue | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue }"',{stdio:'ignore'});
+  }catch(_){}
+}
+function note(text){try{fs.appendFileSync(path.join(home(),'helper-start.log'),'['+new Date().toISOString()+'] '+text+'\n');}catch(_){}}
+function openStartLog(){
+  try{fs.mkdirSync(home(),{recursive:true});return fs.openSync(path.join(home(),'helper-start.log'),'a');}catch{return 'ignore';}
+}
 async function ensure(){
   const target = launchTarget();
   try{return verifyHealth(await call('/health','GET',undefined,800), target);}catch(error){
-    if(error.code==='ETIMS_HELPER_MISMATCH'){
-      try {
-        const { execSync } = require('node:child_process');
-        execSync('powershell.exe -NoProfile -Command "Get-NetTCPConnection -LocalPort 17383 -ErrorAction SilentlyContinue | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue }"', { stdio: 'ignore' });
-      } catch (_) {}
-    }
+    if(error.code==='ETIMS_HELPER_MISMATCH'){killPort();await new Promise(resolve=>setTimeout(resolve,300));}
     if(process.platform!=='win32')throw Error('Invoice issuance requires Oraforge on the Windows eTIMS computer.');
     if(starting)return starting;
     starting=(async()=>{
-      let {command,args}=target;
       const startup=config();
-      if(startup.startup_mode==='scheduled_highest' && target.mode==='frozen' && startup.startup_task){
-        command='schtasks.exe';args=['/Run','/TN',startup.startup_task];
-      }
+      const fastUi=startup.fast_ui!==false; // fast engine needs no administrator rights
+      const log=openStartLog();
+      const stdio=['ignore',log,log];
+      const env={...process.env,ORAFORGE_ETIMS_HOME:home()};
       let child;
-      if (target.mode === 'source') {
-        const pythonCmd = process.env.ORAFORGE_ETIMS_PYTHON || 'pythonw.exe';
-        child = spawn(pythonCmd, target.args, {
-          windowsHide: true,
-          detached: true,
-          stdio: 'ignore',
-          env: { ...process.env, ORAFORGE_ETIMS_HOME: home() }
-        });
-      } else {
+      if(target.mode==='source' || fastUi){
+        // Run directly. Output goes to helper-start.log so a crash is never silent.
+        child=spawn(target.command,target.args,{windowsHide:true,detached:true,stdio,env,cwd:path.dirname(target.entry)});
+      }else{
+        // Classic UI-automation mode: helper must run as administrator like the eTIMS client.
+        let {command,args}=target;
+        if(startup.startup_mode==='scheduled_highest' && startup.startup_task){command='schtasks.exe';args=['/Run','/TN',startup.startup_task];}
         const psArgs=['-NoProfile','-Command',`Start-Process -FilePath '${command.replace(/'/g,"''")}' -ArgumentList @(${args.map(a=>`'${a.replace(/'/g,"''")}'`).join(',')}) -Verb RunAs -WindowStyle Hidden`];
-        child = spawn('powershell.exe', psArgs, {
-          windowsHide: true,
-          detached: true,
-          stdio: 'ignore',
-          env: { ...process.env, ORAFORGE_ETIMS_HOME: home() }
-        });
+        child=spawn('powershell.exe',psArgs,{windowsHide:true,detached:true,stdio,env});
       }
-      let failed=false;child.on('error',()=>{failed=true;});child.unref();
+      const direct=target.mode==='source' || fastUi;
+      let failed=false,exited=null;
+      note('starting '+target.mode+' helper: '+target.command);
+      child.on('error',error=>{failed=true;note('could not start helper: '+error.message);});
+      child.on('exit',(code,signal)=>{if(direct){exited={code,signal};note('helper exited, code='+code+' signal='+signal);}});
+      child.unref();
+      if(typeof log==='number'){try{fs.closeSync(log);}catch(_){}}
+      let mismatch=null;
       for(let i=0;i<40;i++){
         await new Promise(resolve=>setTimeout(resolve,250));
-        if(failed)break;
+        if(failed||exited)break;
         try{return verifyHealth(await call('/health','GET',undefined,600), target);}catch(e){
-          if(e.code==='ETIMS_HELPER_MISMATCH'){
-            try {
-              const { execSync } = require('node:child_process');
-              execSync('powershell.exe -NoProfile -Command "Get-NetTCPConnection -LocalPort 17383 -ErrorAction SilentlyContinue | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue }"', { stdio: 'ignore' });
-            } catch (_) {}
-          }
+          if(e.code==='ETIMS_HELPER_MISMATCH'){mismatch=e;killPort();}
         }
       }
-      throw Error('Start the Windows eTIMS helper. Install its Python dependencies or use the packaged Windows build.');
+      if(mismatch){
+        const h=mismatch.health||{};
+        throw Error('An older eTIMS helper is still running ('+(h.runtime_mode||'?')+(h.elevated?', administrator':'')+': '+(h.runtime_entry||'unknown')+') and could not be stopped. Close it in Task Manager (run as administrator), then try again.');
+      }
+      if(exited)throw Error('The eTIMS helper stopped right after it started (exit code '+exited.code+'). Details: '+path.join(home(),'helper-start.log'));
+      throw Error('The eTIMS helper did not start. Reason is in '+path.join(home(),'helper-start.log')+'.');
     })().finally(()=>{starting=null;});
     return starting;
   }

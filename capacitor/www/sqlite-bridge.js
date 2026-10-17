@@ -1067,7 +1067,7 @@
   var import_swifta_contract = __toESM(require_swifta_contract());
 
   // src/provider-config.json
-  var provider_config_default = { swifta: "qk_e23ad9ada38abd839ec625aff167b608226ffe36e5c05f8e", sozuri: { project: "sk10", apiKey: "RYztxiLFa3x3EA4ZCFGVoEfzA0ThhocOVudGLkfILQZ1A4LUqHWF5J05p7q2", from: "Sozuri", channel: "sms", type: "promotional" } };
+  var provider_config_default = { swifta: "", sozuri: { project: "", apiKey: "", from: "", channel: "sms", type: "transactional" } };
 
   // src/native-providers.js
   function createNativeProviders(http) {

@@ -31,3 +31,6 @@ capacitor/.gradle/
 # Windows delivery archives contain configured provider files and bundled runtime.
 /dist/
 /windows/.cache/
+.venv-build
+
+.venv-build/

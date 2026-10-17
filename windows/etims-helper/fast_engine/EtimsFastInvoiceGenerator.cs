@@ -156,33 +156,7 @@ namespace EtimsProgrammatic
             }
             else
             {
-                string exeDir = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
-                string keysFile = Path.Combine(exeDir, "etims-keys.json");
-                if (File.Exists(keysFile))
-                {
-                    JObject keys = JObject.Parse(File.ReadAllText(keysFile, Encoding.UTF8));
-                    _tin = (string)keys["tin"] ?? "A018733640V";
-                    _branchId = (string)keys["branch_id"] ?? "01";
-                    _scuId = (string)keys["scu_id"] ?? "KRACU0100544492";
-                    _mrcCode = (string)keys["mrc_code"] ?? "0100544492";
-                    _signKey = (string)keys["sign_key"] ?? "843491686E7A4387A1CB86F42EF667FF1CC173F8A05E4C9F8699";
-                    _taxpayerName = (string)keys["taxpayer_name"] ?? "John Wakaba Kahuria";
-                    _userNm = (string)keys["user_name"] ?? "John Wakaba";
-                    _userId = (string)keys["user_id"] ?? "john01";
-                    _address = (string)keys["address"] ?? "Nairobi Starehe District CBD";
-                }
-                else
-                {
-                    _tin = "A018733640V";
-                    _branchId = "01";
-                    _scuId = "KRACU0100544492";
-                    _mrcCode = "0100544492";
-                    _signKey = "843491686E7A4387A1CB86F42EF667FF1CC173F8A05E4C9F8699";
-                    _taxpayerName = "John Wakaba Kahuria";
-                    _userNm = "John Wakaba";
-                    _userId = "john01";
-                    _address = "Nairobi Starehe District CBD";
-                }
+                throw new InvalidOperationException("eTIMS device data (RRA_EBM2x.db.RraSdc) was not found on this PC. Install and register the eTIMS client for this taxpayer first.");
             }
 
             // Query dynamic user info and business address from DB if available
