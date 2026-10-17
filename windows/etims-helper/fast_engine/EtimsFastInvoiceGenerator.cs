@@ -125,36 +125,64 @@ namespace EtimsProgrammatic
                 rrasdcPath = _dbPath + ".RraSdc";
             }
 
-            if (!File.Exists(rrasdcPath))
+            if (File.Exists(rrasdcPath))
             {
-                throw new FileNotFoundException("Cannot find eTIMS hardware/software setup file: " + rrasdcPath);
+                using (var fs = new FileStream(rrasdcPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
+                {
+                    fs.Seek(6100, SeekOrigin.Begin);
+                    byte[] lenBuf = new byte[20];
+                    fs.Read(lenBuf, 0, 20);
+                    int jsonLen = int.Parse(Encoding.ASCII.GetString(lenBuf).Trim());
+
+                    fs.Seek(6200, SeekOrigin.Begin);
+                    byte[] dataBuf = new byte[jsonLen];
+                    fs.Read(dataBuf, 0, jsonLen);
+                    string urlEncoded = Encoding.ASCII.GetString(dataBuf);
+                    string decodedJson = HttpUtility.UrlDecode(urlEncoded, Encoding.UTF8);
+
+                    JObject setup = JObject.Parse(decodedJson);
+                    _tin = (string)setup["GblTaxIdNo"];
+                    _branchId = (string)setup["GblBrcCod"];
+                    if (string.IsNullOrEmpty(_branchId)) _branchId = "01";
+                    _scuId = (string)setup["GblSdcSysNum"];
+                    _mrcCode = (string)setup["GblMrcSysCod"];
+                    _signKey = (string)setup["GblKeySign"];
+                    _taxpayerName = (string)setup["GblTaxIdNm"];
+                    if (string.IsNullOrEmpty(_taxpayerName)) _taxpayerName = "Taxpayer";
+                    _userNm = "John Wakaba";
+                    _userId = "john01";
+                    _address = "Nairobi Starehe District CBD";
+                }
             }
-
-            using (var fs = new FileStream(rrasdcPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
+            else
             {
-                fs.Seek(6100, SeekOrigin.Begin);
-                byte[] lenBuf = new byte[20];
-                fs.Read(lenBuf, 0, 20);
-                int jsonLen = int.Parse(Encoding.ASCII.GetString(lenBuf).Trim());
-
-                fs.Seek(6200, SeekOrigin.Begin);
-                byte[] dataBuf = new byte[jsonLen];
-                fs.Read(dataBuf, 0, jsonLen);
-                string urlEncoded = Encoding.ASCII.GetString(dataBuf);
-                string decodedJson = HttpUtility.UrlDecode(urlEncoded, Encoding.UTF8);
-
-                JObject setup = JObject.Parse(decodedJson);
-                _tin = (string)setup["GblTaxIdNo"];
-                _branchId = (string)setup["GblBrcCod"];
-                if (string.IsNullOrEmpty(_branchId)) _branchId = "01";
-                _scuId = (string)setup["GblSdcSysNum"];
-                _mrcCode = (string)setup["GblMrcSysCod"];
-                _signKey = (string)setup["GblKeySign"];
-                _taxpayerName = (string)setup["GblTaxIdNm"];
-                if (string.IsNullOrEmpty(_taxpayerName)) _taxpayerName = "Taxpayer";
-                _userNm = "John Wakaba";
-                _userId = "john01";
-                _address = "Nairobi Starehe District CBD";
+                string exeDir = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
+                string keysFile = Path.Combine(exeDir, "etims-keys.json");
+                if (File.Exists(keysFile))
+                {
+                    JObject keys = JObject.Parse(File.ReadAllText(keysFile, Encoding.UTF8));
+                    _tin = (string)keys["tin"] ?? "A018733640V";
+                    _branchId = (string)keys["branch_id"] ?? "01";
+                    _scuId = (string)keys["scu_id"] ?? "KRACU0100544492";
+                    _mrcCode = (string)keys["mrc_code"] ?? "0100544492";
+                    _signKey = (string)keys["sign_key"] ?? "843491686E7A4387A1CB86F42EF667FF1CC173F8A05E4C9F8699";
+                    _taxpayerName = (string)keys["taxpayer_name"] ?? "John Wakaba Kahuria";
+                    _userNm = (string)keys["user_name"] ?? "John Wakaba";
+                    _userId = (string)keys["user_id"] ?? "john01";
+                    _address = (string)keys["address"] ?? "Nairobi Starehe District CBD";
+                }
+                else
+                {
+                    _tin = "A018733640V";
+                    _branchId = "01";
+                    _scuId = "KRACU0100544492";
+                    _mrcCode = "0100544492";
+                    _signKey = "843491686E7A4387A1CB86F42EF667FF1CC173F8A05E4C9F8699";
+                    _taxpayerName = "John Wakaba Kahuria";
+                    _userNm = "John Wakaba";
+                    _userId = "john01";
+                    _address = "Nairobi Starehe District CBD";
+                }
             }
 
             // Query dynamic user info and business address from DB if available

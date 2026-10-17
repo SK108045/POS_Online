@@ -1,0 +1,17 @@
+{
+  "tin": "A018733640V",
+  "branch_id": "01",
+  "scu_id": "KRACU0100544492",
+  "mrc_code": "0100544492",
+  "sign_key": "843491686E7A4387A1CB86F42EF667FF1CC173F8A05E4C9F8699",
+  "internal_key": "C59F9C7826474487B777A84702BC48962C095E6FD5C043248E69",
+  "comm_key": "6C486916C1504C05A245C09FB1B68B2361DD39B087BC41F49EE4",
+  "taxpayer_name": "John Wakaba Kahuria",
+  "user_name": "John Wakaba",
+  "user_id": "john01",
+  "address": "Nairobi Starehe District CBD",
+  "device_id": "1053333",
+  "tel": "0713574168",
+  "email": "JOHNKAHURIA99@GMAIL.COM",
+  "db_password": "EBMCLIENT-20170301-GAION"
+}
