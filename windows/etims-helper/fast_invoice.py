@@ -20,7 +20,6 @@ def find_generator_exe() -> Path:
         Path(__file__).parent / 'fast_engine' / 'EtimsFastInvoiceGenerator.exe',
         HOME / 'fast_engine' / 'EtimsFastInvoiceGenerator.exe',
         ASSETS / 'fast_engine' / 'EtimsFastInvoiceGenerator.exe',
-        Path(r'C:\eTIMS-Analysis\POS-Invoice-Prgrammatic\POS_APK-improved-ui\windows\etims-helper\fast_engine\EtimsFastInvoiceGenerator.exe'),
     ]
     for c in candidates:
         if c.exists():

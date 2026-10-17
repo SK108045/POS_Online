@@ -1142,9 +1142,19 @@ INSERT INTO TAXPAYER_BHF_CUST (
             AppDomain.CurrentDomain.AssemblyResolve += (sender, resolveArgs) =>
             {
                 string assemblyName = resolveArgs.Name.Split(',')[0] + ".dll";
-                string binPath = Path.Combine(installDir, "bin");
-                string fullPath = Path.Combine(binPath, assemblyName);
-                if (File.Exists(fullPath)) return Assembly.LoadFrom(fullPath);
+                string exeDir = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
+                string localDll = Path.Combine(exeDir, assemblyName);
+                if (File.Exists(localDll)) return Assembly.LoadFrom(localDll);
+
+                if (!string.IsNullOrEmpty(installDir))
+                {
+                    string binPath = Path.Combine(installDir, "bin");
+                    string fullPath = Path.Combine(binPath, assemblyName);
+                    if (File.Exists(fullPath)) return Assembly.LoadFrom(fullPath);
+
+                    string directPath = Path.Combine(installDir, assemblyName);
+                    if (File.Exists(directPath)) return Assembly.LoadFrom(directPath);
+                }
                 return null;
             };
 
