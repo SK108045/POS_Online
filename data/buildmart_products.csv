@@ -1,7 +1,7 @@
 name,category,price,cost,stock,sku,barcode,unit,color,reorder_level,active
 Twin / Earth Cable  2.5mm,Electrical,200.00,160.00,37,1,,m,#b45309,5,1
 13A Single Socket - Tronics,Electrical,250.00,130.00,14,2,,pcs,#92400e,5,1
-MCB Breaker 32A -Tronic,Electrical,250.00,150.00,2,3,,pcs,#78350f,5,1
+MCB Breaker 32A -Tronic,Electrical,250.00,150.00,14,3,,pcs,#78350f,5,1
 LED bulb 9w cdl - Screw,Electrical,150.00,80.00,10,4,,pcs,#d97706,5,1
 gate valve 1/2,Plumbing,700.00,350.00,3,5,,pcs,#0369a1,5,1
 Single Cut Out,Electrical,550.00,350.00,2,6,,pcs,#0284c7,5,1
@@ -19,18 +19,18 @@ Tape Measure 7.5 meter,Tools,200.00,120.00,4,17,,pcs,#dc2626,5,1
 Tape measure 3meters,Tools,100.00,50.00,16,18,,pcs,#b91c1c,5,1
 Roofing Nails 1kg,Building Materials,300.00,180.00,47,19,,kg,#475569,5,1
 4,Tools,200.00,120.00,22,20,,kg,#334155,5,1
-Arabic Shower - metal (Silver),Plumbing,850.00,500.00,1,21,,pcs,#334155,5,1
+Arabic Shower - metal (Silver),Plumbing,850.00,500.00,3,21,,pcs,#334155,5,1
 Arabic Shower - crome,Plumbing,750.00,450.00,3,22,,pcs,#334155,5,1
 Arabic Shower - plastic,Plumbing,700.00,400.00,2,23,,pcs,#334155,5,1
 Arabic Shower - Valdeno plastic,Electrical,1100.00,600.00,5,24,,pcs,#334155,5,1
 LED Bulb 9w WW - Screw,Electrical,150.00,80.00,6,25,,pcs,#334155,5,1
 LED Bulb 9w WW - PIN,Electrical,150.00,80.00,9,26,,pcs,#334155,5,1
-LED bulb 9w cdl - PIN,Electrical,150.00,80.00,47,27,,pcs,#334155,5,1
+LED bulb 9w cdl - PIN,Electrical,150.00,80.00,46,27,,pcs,#334155,5,1
 13A Single Socket - Powermax,Electrical,250.00,150.00,2,28,,pcs,#334155,5,1
 "Diamond Disk 9""",Tools,850.00,500.00,1,29,,pcs,#334155,5,1
 13A Single Socket - Carl & Gilbert,Electrical,250.00,150.00,2,30,,pcs,#334155,5,1
 Gate valve 1/2 - lirlee,Plumbing,650.00,350.00,2,31,,pcs,#334155,5,1
-Gate valve 3/4,Plumbing,850.00,500.00,4,32,,pcs,#334155,5,1
+Gate valve 3/4,Plumbing,850.00,500.00,3,32,,pcs,#334155,5,1
 "Gate valve 3/4"" Lirlee",Plumbing,850.00,500.00,0,33,,pcs,#334155,5,1
 "Gate valve 1"" peglar",Plumbing,1400.00,780.00,3,34,,pcs,#334155,5,1
 Gate valve 1,Plumbing,1300.00,750.00,4,35,,pcs,#334155,5,1
@@ -40,9 +40,9 @@ Ball Cork Gi 3/4,Plumbing,650.00,370.00,2,37,,pcs,#334155,5,1
 Ball Cork Gi 1,Plumbing,900.00,550.00,1,38,,pcs,#334155,5,1
 Concelled Stop Cork 1/2'' - Lirlee,Plumbing,1100.00,680.00,2,39,,pcs,#334155,5,1
 Concelled Stop Cork 1/2'' - Cobra,Plumbing,1200.00,700.00,1,40,,pcs,#334155,5,1
-Adpt Socket 32x3/4 F,Plumbing,80.00,45.00,4,41,,pcs,#334155,5,1
+Adpt Socket 32x3/4 F,Plumbing,80.00,45.00,10,41,,pcs,#334155,5,1
 Bib tap 1/2,Plumbing,450.00,270.00,5,42,,pcs,#334155,5,1
-Garden tap 1/2,Plumbing,600.00,350.00,8,43,,pcs,#334155,5,1
+Garden tap 1/2,Plumbing,600.00,350.00,7,43,,pcs,#334155,5,1
 "Garden tap 3/4""",Plumbing,800.00,450.00,2,44,,pcs,#334155,5,1
 Lockable Tap 1/2,Plumbing,700.00,450.00,4,45,,pcs,#334155,5,1
 "Foot valve 1/2"" Lirlee",Plumbing,500.00,270.00,0,46,,pcs,#334155,5,1
@@ -65,7 +65,7 @@ Led tube 2ft,Electrical,250.00,130.00,17,62,,pcs,#334155,5,1
 Pillar tap knob - Lirlee,Plumbing,700.00,400.00,2,62,,pcs,#334155,5,1
 Led Panel Light 12W,Electrical,550.00,300.00,3,63,,pcs,#334155,5,1
 Pillar tap star - Lirlee,Plumbing,700.00,380.00,2,63,,pcs,#334155,5,1
-Led tube 4ft,Electrical,250.00,150.00,0,64,,pcs,#334155,5,1
+Led tube 4ft,Electrical,250.00,150.00,22,64,,pcs,#334155,5,1
 Pillar tap H/D - AQUA FLOW,Plumbing,1000.00,650.00,3,64,,pcs,#334155,5,1
 Wall tap /spout lirlee,Plumbing,1100.00,600.00,3,65,,pcs,#334155,5,1
 Wall tap /spout H/D,Plumbing,2500.00,1500.00,1,66,,pcs,#334155,5,1
@@ -79,15 +79,15 @@ Bed switch,Electrical,50.00,30.00,21,72,,pcs,#334155,5,1
 Led tube fitting 2ft,Electrical,250.00,100.00,7,73,,pcs,#334155,5,1
 Led Fixture Light 4ft,Electrical,550.00,300.00,7,74,,pcs,#334155,5,1
 Shower mixer - valdeno,Plumbing,5000.00,3000.00,0,75,,pcs,#334155,5,1
-Phase Tester,Electrical,50.00,25.00,20,76,,pcs,#334155,5,1
+Phase Tester,Electrical,50.00,25.00,19,76,,pcs,#334155,5,1
 Top plugs - power max,Electrical,180.00,105.00,9,77,,pcs,#334155,5,1
-Top plug - Tronics,Electrical,180.00,105.00,16,78,,pcs,#334155,5,1
+Top plug - Tronics,Electrical,180.00,105.00,15,78,,pcs,#334155,5,1
 Paint brush 4,Tools,100.00,60.00,5,79,,pcs,#334155,5,1
 Paint brush 6,Tools,200.00,90.00,8,80,,pcs,#334155,5,1
 Paint brush 6,Tools,300.00,180.00,9,81,,pcs,#334155,5,1
 Paint brush 2,Tools,100.00,50.00,11,82,,pcs,#334155,5,1
 Paint brush 1,Tools,50.00,30.00,7,83,,pcs,#334155,5,1
-Paint Roller,Tools,200.00,100.00,11,84,,Pcs,#334155,5,1
+Paint Roller,Tools,200.00,100.00,10,84,,Pcs,#334155,5,1
 Spray paint - blue,Paint & Finishes,300.00,180.00,1,85,,pcs,#334155,5,1
 Paint brush 2,Tools,50.00,30.00,10,86,,pcs,#334155,5,1
 Kitchen Mixture -Lirlee,Plumbing,2000.00,1200.00,2,87,,pcs,#334155,5,1
@@ -108,27 +108,27 @@ Spray paint  - Grey,Paint & Finishes,300.00,180.00,5,100,,pcs,#334155,5,1
 Spray paint  - Gold,Paint & Finishes,300.00,180.00,4,101,,pcs,#334155,5,1
 Spray paint  - Silver,Paint & Finishes,300.00,180.00,3,102,,pcs,#334155,5,1
 Pur Form,Paint & Finishes,750.00,450.00,3,103,,pcs,#334155,5,1
-Travel Adaptor,Electrical,100.00,50.00,8,104,,pcs,#334155,5,1
+Travel Adaptor,Electrical,100.00,50.00,4,104,,pcs,#334155,5,1
 Hammer - coated,Tools,350.00,270.00,5,105,,pcs,#334155,5,1
 wire brush,Tools,150.00,80.00,7,106,,pcs,#334155,5,1
 Mulpha hinges Hydroulic,Building Materials,180.00,100.00,7,107,,pairs,#334155,5,1
 Mulpha hinges Non Hydroulic,Building Materials,100.00,50.00,24,108,,pairs,#334155,5,1
 Mulpha hinges - Bend,Building Materials,200.00,120.00,2,109,,pairs,#334155,5,1
-Greating round,Plumbing,50.00,30.00,7,110,,pcs,#334155,5,1
+Greating round,Plumbing,50.00,30.00,21,110,,pcs,#334155,5,1
 Rowl Bolts M10,Fasteners,50.00,30.00,10,110,,pcs,#334155,5,1
 Rawl Bolts M8,Building Materials,40.00,20.00,25,111,,pcs,#334155,5,1
 Rawl Bolts M6,Building Materials,30.00,15.00,90,112,,pcs,#334155,5,1
 Rawl Bolts M8 - Hooks,Fasteners,150.00,100.00,6,113,,pcs,#334155,5,1
 Angle Valve - H/D,Plumbing,450.00,170.00,5,114,,pcs,#334155,5,1
-Angle Valve L/D,Plumbing,250.00,100.00,10,115,,pcs,#334155,5,1
+Angle Valve L/D,Plumbing,250.00,100.00,9,115,,pcs,#334155,5,1
 Angle Valve - Lirlee,Plumbing,300.00,180.00,7,116,,pcs,#334155,5,1
 Angle Valve - Matt,Plumbing,350.00,180.00,4,117,,pcs,#334155,5,1
 Capacitor 20uf,Electrical,550.00,300.00,2,118,,pcs,#334155,5,1
 Capacitor 10uf,Electrical,500.00,250.00,3,119,,pcs,#334155,5,1
 Twin / Earth Cable 1.5mm,Electrical,150.00,100.00,60,120,,m,#334155,5,1
-Flex Cable 1.5mm,Electrical,80.00,40.00,23,122,,pcs,#334155,5,1
+Flex Cable 1.5mm,Electrical,80.00,40.00,88,122,,pcs,#334155,5,1
 Binding Wire 1/2kg,Building Materials,100.00,50.00,19,122,,pcs,#334155,5,1
-Flex Cable 1.0mm,Electrical,60.00,30.00,0,123,,pcs,#334155,5,1
+Flex Cable 1.0mm,Electrical,60.00,30.00,90,123,,pcs,#334155,5,1
 Single Cable 2.5mm - Red,Electrical,70.00,45.00,13,124,,m,#334155,5,1
 Double Pole 100A - Powermax,Electrical,900.00,600.00,1,125,,pcs,#334155,5,1
 Allan keys - Torks,Tools,350.00,250.00,0,126,,pcs,#334155,5,1
@@ -144,7 +144,7 @@ Single Cable 1.5mm - Grean,Electrical,50.00,30.00,40,135,,pcs,#334155,5,1
 Single Cable 4.0mm - Red,Electrical,120.00,80.00,55,136,,pcs,#334155,5,1
 Single Cable 4.0mm - Black,Electrical,120.00,80.00,55,137,,pcs,#334155,5,1
 Single Cable 4.0mm - Green,Electrical,120.00,80.00,89,138,,pcs,#334155,5,1
-Oxygen Free Cable,Electrical,40.00,20.00,10,139,,pcs,#334155,5,1
+Oxygen Free Cable,Electrical,50.00,20.00,65,139,,pcs,#334155,5,1
 Iron Cable,Electrical,60.00,30.00,2,140,,pcs,#334155,5,1
 Extention Socket - Marken,Electrical,800.00,500.00,2,141,,pcs,#334155,5,1
 Asbesto Cable,Electrical,100.00,50.00,8,142,,pcs,#334155,5,1
@@ -159,7 +159,7 @@ Tower Bolt 4,Building Materials,150.00,80.00,6,148,,pcs,#334155,5,1
 "Tower Bolt 2"" - Iron",Building Materials,50.00,25.00,6,151,,pcs,#334155,5,1
 "Tower Bolt 3"" - Iron",Building Materials,50.00,30.00,3,152,,pcs,#334155,5,1
 "Tower Bolt 4"" - Iron",Building Materials,100.00,50.00,11,153,,pcs,#334155,5,1
-Curtain Hooks,Building Materials,150.00,80.00,6,154,,pcs,#334155,5,1
+Curtain Hooks,Building Materials,150.00,80.00,5,154,,pcs,#334155,5,1
 Tissue Holder - plastic,Plumbing,400.00,250.00,3,155,,pcs,#334155,5,1
 Tissue Holder - Metal,Plumbing,350.00,250.00,3,156,,pcs,#334155,5,1
 Drill / Steel bits 10mm,Tools,250.00,150.00,4,157,,pcs,#334155,5,1
@@ -177,7 +177,7 @@ masion bit 8mm,Tools,150.00,80.00,7,168,,pcs,#334155,5,1
 masion bit 4mm,Tools,100.00,50.00,5,169,,pcs,#334155,5,1
 Hilti bit 10mm,Tools,250.00,150.00,7,170,,pcs,#334155,5,1
 Hilti bit 8mm,Tools,200.00,100.00,4,171,,pcs,#334155,5,1
-Hilti bit 6mm,Tools,150.00,80.00,2,172,,pcs,#334155,5,1
+Hilti bit 6mm,Tools,150.00,80.00,10,172,,pcs,#334155,5,1
 Chisel,Tools,250.00,150.00,1,173,,pcs,#334155,5,1
 File,Tools,200.00,120.00,5,174,,pcs,#334155,5,1
 Spirit level,Tools,200.00,100.00,1,175,,pcs,#334155,5,1
@@ -194,7 +194,7 @@ Window Handle  H/D,Building Materials,500.00,300.00,8,185,,pcs,#334155,5,1
 "Crome pipe fitting - round 1""",Building Materials,100.00,50.00,4,186,,pairs,#334155,5,1
 Crome pipe fitting - round 3/4,Building Materials,100.00,50.00,4,187,,pairs,#334155,5,1
 Twin patrace,Electrical,50.00,30.00,13,188,,pcs,#334155,5,1
-Single Patrace,Electrical,40.00,20.00,25,189,,pcs,#334155,5,1
+Single Patrace,Electrical,40.00,20.00,24,189,,pcs,#334155,5,1
 Broom / Handle,Building Materials,250.00,160.00,13,190,,pcs,#334155,5,1
 Press button - Big,Plumbing,300.00,180.00,5,191,,pcs,#334155,5,1
 Press button - Medium,Plumbing,250.00,150.00,1,192,,pcs,#334155,5,1
@@ -212,14 +212,14 @@ Manila rope 42ply,Building Materials,100.00,50.00,14,203,,pcs,#334155,5,1
 Ball valve 1 P,Plumbing,1800.00,1200.00,1,204,,pcs,#334155,5,1
 Ball valve 1/2 P,Plumbing,800.00,470.00,0,205,,pcs,#334155,5,1
 Ball valve 3/4 P,Plumbing,1200.00,780.00,3,206,,pcs,#334155,5,1
-Ppr plain elbows 20mm,Plumbing,20.00,10.00,5,207,,Pcs,#334155,5,1
+Ppr plain elbows 20mm,Plumbing,20.00,10.00,55,207,,Pcs,#334155,5,1
 Ppr plain elbows 25mm,Plumbing,20.00,8.00,22,208,,pcs,#334155,5,1
 Ppr plain elbows 32mm,Plumbing,40.00,15.00,29,209,,pcs1,#334155,5,1
 Ppr plain elbows 40mm,Plumbing,50.00,30.00,14,210,,pcs,#334155,5,1
 Ppr plain elbows 50mm,Plumbing,50.00,30.00,20,211,,pcs,#334155,5,1
 Ppr plain elbows 60mm,Plumbing,100.00,50.00,5,212,,pcs,#334155,5,1
 Ppr plain socket 25mm,Plumbing,20.00,10.00,22,213,,pcs,#334155,5,1
-Ppr Plain socket 20mm,Plumbing,20.00,10.00,11,214,,pcs,#334155,5,1
+Ppr Plain socket 20mm,Plumbing,20.00,10.00,61,214,,pcs,#334155,5,1
 Ppr plain socket 40mm,Plumbing,40.00,20.00,13,215,,pcs,#334155,5,1
 Ppr plain socket 50mm,Plumbing,50.00,30.00,7,216,,pcs,#334155,5,1
 Ppr plain socket 63mm,Plumbing,60.00,40.00,0,217,,pcs,#334155,5,1
@@ -240,8 +240,8 @@ Adpt Socket 20x1/2 M,Plumbing,40.00,20.00,16,230,,pcs,#334155,5,1
 Adpt Socket 20x1/2 F,Plumbing,40.00,20.00,45,231,,pcs,#334155,5,1
 Adpt socket 25x1/2 M,Plumbing,50.00,30.00,6,232,,pcs,#334155,5,1
 Adpt socket 25x1/2 F,Plumbing,50.00,30.00,25,233,,pcs,#334155,5,1
-Adpt Socket 25x3/4 F,Plumbing,50.00,30.00,31,234,,pcs,#334155,5,1
-Adpt Socket 25x3/4 M,Plumbing,50.00,30.00,43,235,,pcs,#334155,5,1
+Adpt Socket 25x3/4 F,Plumbing,50.00,30.00,29,234,,pcs,#334155,5,1
+Adpt Socket 25x3/4 M,Plumbing,50.00,30.00,41,235,,pcs,#334155,5,1
 Adpt Socket 32x1 M,Plumbing,100.00,50.00,14,236,,pcs,#334155,5,1
 Adpt Socket 32x1 F,Plumbing,100.00,50.00,5,237,,pcs,#334155,5,1
 Adpt Socket 40x1 1/4 M,Plumbing,200.00,120.00,9,238,,pcs,#334155,5,1
@@ -284,8 +284,8 @@ Toilet Seat Cover H/D,Building Materials,1200.00,850.00,1,273,,pcs,#334155,5,1
 Padlocks Tricircle 261,Building Materials,200.00,120.00,9,274,,pcs,#334155,5,1
 Padlocks Tricircle 262,Building Materials,250.00,150.00,7,275,,pcs,#334155,5,1
 Padlocks Tricircle 263,Building Materials,300.00,220.00,6,276,,pcs,#334155,5,1
-Padlocks Tricircle 264,Building Materials,400.00,300.00,3,277,,pcs,#334155,5,1
-Rawl Bolts M10,Building Materials,50.00,30.00,37,277,,pcs,#334155,5,1
+Padlocks Tricircle 264,Building Materials,400.00,300.00,2,277,,pcs,#334155,5,1
+Rawl Bolts M10,Building Materials,50.00,30.00,34,277,,pcs,#334155,5,1
 Padlocks Tricircle 265,Building Materials,750.00,500.00,2,278,,pcs,#334155,5,1
 Padlock Mindy 40mm,Building Materials,600.00,400.00,4,279,,pcs,#334155,5,1
 Padlock Mindy 50mm,Building Materials,800.00,500.00,4,280,,pcs,#334155,5,1
@@ -301,8 +301,8 @@ Pliers 10,Tools,400.00,300.00,3,288,,pcs,#334155,5,1
 Door Latch 6,Fasteners,180.00,80.00,12,289,,pcs,#334155,5,1
 "Door Latch 6"" ordinary",Fasteners,150.00,80.00,6,289,,pcs,#334155,5,1
 Door Latch - Jua kali,Fasteners,200.00,100.00,3,290,,pcs,#334155,5,1
-Silicon clear GP,Paint & Finishes,250.00,150.00,24,291,,pcs,#334155,5,1
-Silicon black GP,Paint & Finishes,250.00,150.00,8,292,,pcs,#334155,5,1
+Silicon clear GP,Paint & Finishes,250.00,150.00,20,291,,pcs,#334155,5,1
+Silicon black GP,Paint & Finishes,250.00,150.00,7,292,,pcs,#334155,5,1
 Silicon White GP,Paint & Finishes,250.00,150.00,3,293,,pcs,#334155,5,1
 Silicon clear High Tech,Paint & Finishes,500.00,350.00,2,294,,pcs,#334155,5,1
 Crome pipe,Building Materials,550.00,350.00,3,295,,pcs,#334155,5,1
@@ -311,8 +311,8 @@ Silicon Satchet - Black,Paint & Finishes,250.00,160.00,3,296,,pcs,#334155,5,1
 Silicon Satchet - Clear,Paint & Finishes,250.00,160.00,2,297,,pcs,#334155,5,1
 Araldyte - epoxy,Paint & Finishes,250.00,160.00,0,298,,pcs,#334155,5,1
 Araldyte Araldyte,Paint & Finishes,250.00,150.00,5,299,,pcs,#334155,5,1
-Araldyte - Mibao 20g,Paint & Finishes,150.00,60.00,10,300,,pcs,#334155,5,1
-Bottle Traps 1 1/2,Plumbing,250.00,150.00,7,301,,pcs,#334155,5,1
+Araldyte - Mibao 20g,Paint & Finishes,150.00,60.00,9,300,,pcs,#334155,5,1
+Bottle Traps 1 1/2,Plumbing,250.00,150.00,5,301,,pcs,#334155,5,1
 Bottle Traps 1 1/4,Plumbing,250.00,150.00,8,302,,pcs,#334155,5,1
 Magic Conn 4,Plumbing,350.00,200.00,7,303,,pcs,#334155,5,1
 Magic Conn 1 1/2,Plumbing,200.00,100.00,7,304,,pcs,#334155,5,1
@@ -322,33 +322,33 @@ Magic Conn 1 1/4,Plumbing,200.00,100.00,9,307,,pcs,#334155,5,1
 "Magic Conn 1 1/4"" grey",Plumbing,250.00,150.00,5,308,,pcs,#334155,5,1
 Silicon Gun H/D,Tools,400.00,270.00,4,309,,pcs,#334155,5,1
 Panga,Tools,400.00,200.00,1,310,,pcs,#334155,5,1
-Hack saw blade #1,Tools,150.00,120.00,6,311,,pcs,#334155,5,1
+Hack saw blade #1,Tools,150.00,120.00,3,311,,pcs,#334155,5,1
 Hack saw blade #2,Tools,100.00,50.00,13,312,,pcs,#334155,5,1
 Hack saw frame H/D,Tools,550.00,350.00,1,313,,pcs,#334155,5,1
-Hack saw frame L/D,Tools,350.00,170.00,2,314,,pcs,#334155,5,1
+Hack saw frame L/D,Tools,350.00,170.00,1,314,,pcs,#334155,5,1
 Hack saw frame just kali,Tools,350.00,150.00,2,315,,pcs,#334155,5,1
 Wood glue maroo 1/4,Paint & Finishes,120.00,60.00,2,316,,pcs,#334155,5,1
-Wood glue Ponal1/4L,Paint & Finishes,250.00,150.00,3,317,,pcs,#334155,5,1
+Wood glue Ponal1/4L,Paint & Finishes,250.00,150.00,2,317,,pcs,#334155,5,1
 Boss White,Plumbing,100.00,60.00,7,318,,pcs,#334155,5,1
 Masking tape 2,Tools,100.00,50.00,12,319,,pcs,#334155,5,1
 Masking Tape 1,Tools,50.00,25.00,28,320,,pcs,#334155,5,1
 Masking tape 3/4,Tools,40.00,20.00,47,321,,pcs,#334155,5,1
 Steel tape,Electrical,250.00,150.00,3,322,,pcs,#334155,5,1
-Double sided tape clear,Tools,250.00,150.00,10,323,,pcs,#334155,5,1
+Double sided tape clear,Tools,250.00,150.00,8,323,,pcs,#334155,5,1
 Arabic Flex - lirlee,Plumbing,400.00,250.00,9,324,,pcs,#334155,5,1
 Arabic Flex - Valdeno,Plumbing,700.00,400.00,1,325,,pcs,#334155,5,1
-Tangit glue 50mm,Paint & Finishes,250.00,150.00,10,326,,pcs,#334155,5,1
-Tangit glue 250mm,Paint & Finishes,650.00,420.00,0,327,,pcs,#334155,5,1
-Tangit glue 500mm,Paint & Finishes,1000.00,750.00,2,328,,pcs,#334155,5,1
-Conta 50mm,Paint & Finishes,150.00,92.00,6,329,,pcs,#334155,5,1
+Tangit glue 50mm,Paint & Finishes,250.00,150.00,8,326,,pcs,#334155,5,1
+Tangit glue 250mm,Paint & Finishes,650.00,420.00,4,327,,pcs,#334155,5,1
+Tangit glue 500mm,Paint & Finishes,1000.00,750.00,1,328,,pcs,#334155,5,1
+Conta 50mm,Paint & Finishes,150.00,92.00,8,329,,pcs,#334155,5,1
 Conta glue 250mm,Paint & Finishes,400.00,250.00,2,330,,pcs,#334155,5,1
-Conta glue 100mm,Paint & Finishes,300.00,180.00,7,331,,pcs,#334155,5,1
+Conta glue 100mm,Paint & Finishes,300.00,180.00,6,331,,pcs,#334155,5,1
 Conta 500mm,Paint & Finishes,750.00,520.00,2,332,,pcs,#334155,5,1
 Insulation tape Globe- small,Electrical,60.00,40.00,20,333,,pcs,#334155,5,1
 Insulation tape - Red,Electrical,150.00,100.00,3,334,,pcs,#334155,5,1
 Insulation tape  - white,Electrical,150.00,100.00,4,335,,pcs,#334155,5,1
 Bondex - Lodex 300gm,Paint & Finishes,250.00,150.00,3,336,,pcs,#334155,5,1
-Bondex 200gm,Paint & Finishes,100.00,50.00,4,337,,pcs,#334155,5,1
+Bondex 200gm,Paint & Finishes,100.00,50.00,3,337,,pcs,#334155,5,1
 Door Hinges 4,Building Materials,50.00,30.00,44,338,,pcs,#334155,5,1
 "Door Hinges 3""",Building Materials,40.00,20.00,16,339,,pcs,#334155,5,1
 "Door Hinges 2 1/2""",Building Materials,30.00,15.00,18,340,,pcs,#334155,5,1
@@ -376,13 +376,13 @@ Pvc pipe 3,Plumbing,650.00,370.00,6,361,,pcs,#334155,5,1
 Pvc pipe 2,Plumbing,500.00,270.00,4,362,,pcs,#334155,5,1
 Pvc pipe 1 1/2,Plumbing,350.00,200.00,4,363,,pcs,#334155,5,1
 Pvc pipe 1 1/4,Plumbing,300.00,180.00,4,364,,pcs,#334155,5,1
-1gang switch power max,Electrical,150.00,85.00,6,365,,pcs,#334155,5,1
+1gang switch power max,Electrical,150.00,85.00,5,365,,pcs,#334155,5,1
 1gang switch Tronics,Electrical,150.00,85.00,0,366,,pcs,#334155,5,1
 2gang switch power max,Electrical,200.00,120.00,1,367,,pcs,#334155,5,1
 2gang switch TRONIC,Electrical,150.00,90.00,14,368,,pcs,#334155,5,1
 3gang switch power max,Electrical,250.00,150.00,0,369,,pcs,#334155,5,1
 Allan keys - Hex,Tools,350.00,250.00,4,370,,pcs,#334155,5,1
-Thread tape small,Plumbing,30.00,12.00,117,371,,pcs,#334155,5,1
+Thread tape small,Plumbing,30.00,12.00,115,371,,pcs,#334155,5,1
 Magic Conn 1 1/4,Plumbing,300.00,200.00,7,372,,pcs,#334155,5,1
 Miter liner - plastic (pc),Plumbing,100.00,50.00,7,373,,pcs,#334155,5,1
 Miter liner - Metal (pc),Plumbing,100.00,50.00,8,374,,pcs,#334155,5,1
@@ -394,7 +394,7 @@ Drawer Rail 20,Building Materials,450.00,300.00,4,379,,pair,#334155,5,1
 Ball valve 1/2 L,Plumbing,800.00,460.00,5,380,,pcs,#334155,5,1
 Ball valve 3/4 L,Plumbing,1200.00,730.00,2,381,,pcs,#334155,5,1
 Ball valve 1 L,Plumbing,2000.00,1500.00,2,382,,pcs,#334155,5,1
-Thread tape - big,Plumbing,100.00,50.00,17,383,,pcs,#334155,5,1
+Thread tape - big,Plumbing,100.00,50.00,16,383,,pcs,#334155,5,1
 Pop up waste 1 1/2,Plumbing,400.00,250.00,3,384,,pcs,#334155,5,1
 Pop up waste 1 1/4,Plumbing,400.00,250.00,3,385,,pcs,#334155,5,1
 Cooker Coil,Electrical,250.00,150.00,9,386,,pcs,#334155,5,1
@@ -412,7 +412,7 @@ Straight holder L/D,Electrical,100.00,50.00,0,398,,pcs,#334155,5,1
 Straight holder H/D,Electrical,150.00,80.00,16,399,,pcs,#334155,5,1
 Angle Holder,Electrical,150.00,100.00,1,400,,pcs,#334155,5,1
 Hanging Holder,Electrical,150.00,80.00,12,401,,pcs,#334155,5,1
-Ceiling Rose Holder,Electrical,250.00,150.00,12,402,,pcs,#334155,5,1
+Ceiling Rose Holder,Electrical,250.00,150.00,10,402,,pcs,#334155,5,1
 Single socket Universal,Electrical,250.00,150.00,5,403,,pcs,#334155,5,1
 Twin Socket Screwless,Electrical,450.00,280.00,4,404,,pcs,#334155,5,1
 Twin Socket Carl & Gilbert,Electrical,400.00,350.00,6,405,,pcs,#334155,5,1
@@ -424,7 +424,7 @@ Single Blanking Cover,Electrical,30.00,15.00,17,410,,pcs,#334155,5,1
 Twin Blanking Cover,Electrical,40.00,20.00,18,411,,pcs,#334155,5,1
 Ppr Pain socket 20mm,Plumbing,20.00,10.00,51,412,,pcs,#334155,5,1
 Ppr Union 32mm L/D,Plumbing,60.00,30.00,18,413,,pcs,#334155,5,1
-Gi Stand Pipe 1 ft,Plumbing,100.00,55.00,9,414,,pcs,#334155,5,1
+Gi Stand Pipe 1 ft,Plumbing,100.00,55.00,8,414,,pcs,#334155,5,1
 Towel holder,Plumbing,800.00,500.00,1,415,,pcs,#334155,5,1
 Gi Stand Pipe 1 1/2 ft,Plumbing,150.00,80.00,5,415,,pcs,#334155,5,1
 Gi Stand Pipe 2ft,Plumbing,200.00,100.00,5,416,,pcs,#334155,5,1
@@ -433,20 +433,20 @@ Hasp 2'',Building Materials,50.00,25.00,7,418,,pcs,#334155,5,1
 Hasp 3'',Building Materials,50.00,30.00,6,419,,pcs,#334155,5,1
 Hasp 4'',Building Materials,70.00,40.00,0,420,,pcs,#334155,5,1
 Araldyte - Steel,Paint & Finishes,250.00,160.00,1,421,,pcs,#334155,5,1
-Super glue - Alteco,Paint & Finishes,50.00,30.00,11,422,,pcs,#334155,5,1
+Super glue - Alteco,Paint & Finishes,50.00,30.00,10,422,,pcs,#334155,5,1
 Super glue - Clear,Paint & Finishes,40.00,20.00,59,423,,pcs,#334155,5,1
 Arabic Flex - H/D,Electrical,800.00,500.00,2,424,,pcs,#334155,5,1
 Mdf Screws 3,Fasteners,500.00,270.00,2,425,,pcs,#334155,5,1
 Mdf Screws 1 1/2,Fasteners,250.00,150.00,6,426,,pkt,#334155,5,1
 Mdf Screws 1,Fasteners,250.00,120.00,4,427,,pkt,#334155,5,1
 "Mdf Screws 3/4""",Fasteners,200.00,90.00,4,428,,pkt,#334155,5,1
-Mdf Screws 1/2,Fasteners,150.00,95.00,3,429,,pkt,#334155,5,1
+Mdf Screws 1/2,Fasteners,150.00,95.00,7,429,,pkt,#334155,5,1
 Gypsum Screws 1,Fasteners,200.00,120.00,5,430,,pkt,#334155,5,1
 "Gypsum Screws 2""",Fasteners,300.00,170.00,6,431,,pkt,#334155,5,1
 Gypsum Screws 11/2,Fasteners,250.00,140.00,6,432,,pkt,#334155,5,1
 "Gypsum Screws 1/2""",Fasteners,150.00,80.00,0,433,,pkt,#334155,5,1
-"Gypsum Screws 3/4""",Fasteners,200.00,95.00,6,434,,pkt,#334155,5,1
-Gypsum Fillar powder,Paint & Finishes,100.00,50.00,33,435,,kg,#334155,5,1
+Gypsum Screws 3/4,Fasteners,200.00,95.00,5,434,,pkt,#334155,5,1
+Gypsum Fillar powder,Paint & Finishes,100.00,50.00,28,435,,kg,#334155,5,1
 Multi plug Universal - L/D,Electrical,150.00,80.00,10,436,,pcs,#334155,5,1
 Multi plug Universal - H/D,Electrical,300.00,180.00,3,437,,pcs,#334155,5,1
 Multi plug 3 side Plugs,Electrical,300.00,180.00,0,438,,pcs,#334155,5,1
@@ -459,7 +459,7 @@ Cable clips 10mm - Round,Electrical,150.00,70.00,3,444,,pcs,#334155,5,1
 Cable clips 9mm - Flat,Electrical,100.00,50.00,5,445,,pcs,#334155,5,1
 Cable clips 10mm - Flat,Electrical,110.00,60.00,7,446,,pcs,#334155,5,1
 Cable clips 12mm - Flat,Electrical,120.00,60.00,6,447,,pcs,#334155,5,1
-Tangit 100ml,Paint & Finishes,350.00,230.00,6,448,,pcs,#334155,5,1
+Tangit 100ml,Paint & Finishes,350.00,230.00,5,448,,pcs,#334155,5,1
 Corner Brackets #1,Fasteners,50.00,30.00,9,449,,pcs,#334155,5,1
 Corner Brackets #2,Fasteners,30.00,20.00,34,450,,pcs,#334155,5,1
 Corner Brackets #3,Fasteners,30.00,15.00,29,451,,pcs,#334155,5,1
@@ -490,9 +490,9 @@ Lipping Cherry,Building Materials,30.00,15.00,2,475,,pcs,#334155,5,1
 Lipping---,Building Materials,30.00,15.00,1,476,,pcs,#334155,5,1
 WD 40 - 450ml,Paint & Finishes,350.00,220.00,5,477,,pcs,#334155,5,1
 WD 40 - 250ml,Paint & Finishes,250.00,160.00,4,478,,pcs,#334155,5,1
-WD 40 - 120ml,Paint & Finishes,180.00,110.00,5,479,,pcs,#334155,5,1
-Carb Cleaner -120mm,Paint & Finishes,180.00,110.00,6,480,,pcs,#334155,5,1
-Carb Cleaner -250mm,Paint & Finishes,250.00,160.00,4,481,,pcs,#334155,5,1
+WD 40 - 120ml,Paint & Finishes,180.00,110.00,4,479,,pcs,#334155,5,1
+Carb Cleaner -120mm,Paint & Finishes,180.00,110.00,5,480,,pcs,#334155,5,1
+Carb Cleaner -250mm,Paint & Finishes,250.00,160.00,3,481,,pcs,#334155,5,1
 Carb Cleaner -450mm,Paint & Finishes,350.00,220.00,7,482,,pcs,#334155,5,1
 Car Jumper Complete,Tools,700.00,450.00,1,483,,pcs,#334155,5,1
 Car Jumper - pegs,Tools,120.00,60.00,3,484,,pair,#334155,5,1
@@ -511,32 +511,32 @@ Screw Driver Combined,Tools,150.00,90.00,4,494,,pcs,#334155,5,1
 "Adpt Socket 32mmx3/4"" F",Electrical,80.00,45.00,9,498,,pcs,#334155,5,1
 "Screw Spanner 12""",Tools,600.00,350.00,3,498,,pcs,#334155,5,1
 Insulation tape - Black (Globe),Electrical,150.00,90.00,10,499,,pcs,#334155,5,1
-Insulation tape - Black (Tronics),Electrical,100.00,50.00,1,500,,pcs,#334155,5,1
+Insulation tape - Black (Tronics),Electrical,120.00,85.00,49,500,,pcs,#334155,5,1
 "Screw Spanner 10""",Tools,550.00,300.00,2,501,,pcs,#334155,5,1
 Screw Spanner 8,Tools,500.00,250.00,4,502,,pcs,#334155,5,1
 Dust Mask,Safety,20.00,10.00,53,503,,pcs,#334155,5,1
-Gi socket 1/2,Plumbing,30.00,18.00,47,504,,pcs,#334155,5,1
-Gi Socket 3/4,Plumbing,50.00,30.00,11,505,,pcs,#334155,5,1
+Gi socket 1/2,Plumbing,30.00,18.00,44,504,,pcs,#334155,5,1
+Gi Socket 3/4,Plumbing,50.00,30.00,9,505,,pcs,#334155,5,1
 Gi Socket 1,Plumbing,70.00,40.00,10,506,,pcs,#334155,5,1
-Gi Hex nipple 1/2,Plumbing,30.00,18.00,42,507,,pcs,#334155,5,1
+Gi Hex nipple 1/2,Plumbing,30.00,18.00,34,507,,pcs,#334155,5,1
 Gi Hex Nipple 3/4,Plumbing,50.00,30.00,9,508,,pcs,#334155,5,1
 Gi Hex Nipple 1,Plumbing,80.00,40.00,17,509,,pcs,#334155,5,1
-Gi Reduce Bush 3/4 x 1/2,Plumbing,30.00,16.00,7,510,,pcs,#334155,5,1
+Gi Reduce Bush 3/4 x 1/2,Plumbing,30.00,16.00,5,510,,pcs,#334155,5,1
 Gi Reduce Bush 1 x 1/2,Plumbing,50.00,30.00,6,511,,pcs,#334155,5,1
 Gi Reduce Bush 1 x 3/4,Plumbing,50.00,30.00,7,512,,pcs,#334155,5,1
 Gi Reduce Socket 3/4 X 1/2,Plumbing,50.00,30.00,11,513,,pcs,#334155,5,1
 "Gi Reduce Socket 1""x3/4""",Plumbing,70.00,40.00,8,514,,pcs,#334155,5,1
 Gi Reduce Socket 1,Plumbing,70.00,40.00,4,515,,pcs,#334155,5,1
-Gi Union 1/2,Plumbing,100.00,50.00,6,516,,pcs,#334155,5,1
+Gi Union 1/2,Plumbing,100.00,50.00,5,516,,pcs,#334155,5,1
 "Gi Union 3/4""",Plumbing,150.00,80.00,3,517,,pcs,#334155,5,1
 Gi Union 1,Plumbing,200.00,120.00,0,518,,pcs,#334155,5,1
 Gi Cup Plugs 1/2,Plumbing,30.00,16.00,15,519,,pcs,#334155,5,1
 Gi Cup Plugs 3/4,Plumbing,50.00,30.00,8,520,,pcs,#334155,5,1
 "Gi Cup Plugs 1""",Plumbing,60.00,30.00,13,521,,pcs,#334155,5,1
-Gi Elbow 1/2,Plumbing,30.00,18.00,19,522,,pcs,#334155,5,1
+Gi Elbow 1/2,Plumbing,30.00,18.00,13,522,,pcs,#334155,5,1
 Gi Elbow 3/4,Plumbing,50.00,30.00,9,523,,pcs,#334155,5,1
 "Gi Elbow 1""",Plumbing,60.00,35.00,17,524,,pcs,#334155,5,1
-Gi Tee 1/2,Plumbing,50.00,30.00,12,525,,pcs,#334155,5,1
+Gi Tee 1/2,Plumbing,50.00,30.00,11,525,,pcs,#334155,5,1
 Gi Tee 3/4,Plumbing,70.00,40.00,2,526,,pcs,#334155,5,1
 Gi Tee 1,Plumbing,100.00,50.00,11,527,,pcs,#334155,5,1
 Gi B/ Nipples 1/2,Plumbing,30.00,16.00,8,528,,pcs,#334155,5,1
@@ -563,7 +563,7 @@ Pvc Bends11/4,Plumbing,40.00,20.00,10,546,,pcs,#334155,5,1
 Pvc Bends 2,Plumbing,60.00,35.00,8,548,,pcs,#334155,5,1
 Pvc Bends 2 X 90,Plumbing,60.00,35.00,8,549,,pcs,#334155,5,1
 Roofing Nails 1/2kg,Building Materials,150.00,80.00,9,550,,pcs,#334155,5,1
-Pvc Bends 11/2 x 90,Plumbing,50.00,25.00,22,551,,pcs,#334155,5,1
+Pvc Bends 11/2 x 90,Plumbing,50.00,25.00,18,551,,pcs,#334155,5,1
 Gi Hex nipple 1/2,Plumbing,100.00,60.00,2,552,,pcs,#334155,5,1
 Adpt Socket 32 x 1/2 M,Plumbing,70.00,45.00,9,553,,pcs,#334155,5,1
 "Gi Elbow 1/2"" Stainless",Plumbing,100.00,60.00,3,553,,pcs,#334155,5,1
@@ -572,7 +572,7 @@ Adpt Socket 32 x 1/2 M,Plumbing,70.00,45.00,9,553,,pcs,#334155,5,1
 "Gi Reducer Bush 1/2""x 3/8"" female (Stainless)",Plumbing,100.00,60.00,6,557,,pcs,#334155,5,1
 "Gi Reducer Bush 1/2""x 3/8"" male (Stainless)",Plumbing,100.00,60.00,10,558,,pcs,#334155,5,1
 Pvc Tee 11/4,Plumbing,50.00,25.00,8,559,,pcs,#334155,5,1
-Pvc Tee 11/2,Plumbing,60.00,35.00,11,560,,pcs,#334155,5,1
+Pvc Tee 11/2,Plumbing,60.00,35.00,10,560,,pcs,#334155,5,1
 Pvc Tee 2,Plumbing,100.00,60.00,9,561,,pcs,#334155,5,1
 "Pvc bends 3""x45",Plumbing,170.00,90.00,6,562,,pcs,#334155,5,1
 Pvc Tee 3,Plumbing,200.00,100.00,9,563,,pcs,#334155,5,1
@@ -645,7 +645,7 @@ Tank Connector 1,Plumbing,250.00,150.00,6,628,,pcs,#334155,5,1
 "Tank Connector 3/4""",Plumbing,200.00,100.00,6,629,,pcs,#334155,5,1
 Silicon satchet - sparko,Paint & Finishes,100.00,40.00,9,630,,pcs,#334155,5,1
 Instant Shower - Lorezenti,Electrical,3500.00,2650.00,3,630,,pcs,#334155,5,1
-Mini Tracking,Electrical,120.00,70.00,39,631,,pcs,#334155,5,1
+Mini Tracking,Electrical,120.00,70.00,28,631,,pcs,#334155,5,1
 Ppr Pipes 40mm,Plumbing,700.00,500.00,10,632,,pcs,#334155,5,1
 Ppr Pipes 32mm,Plumbing,500.00,350.00,23,633,,pcs,#334155,5,1
 Ppr Pipes 25mm,Plumbing,300.00,220.00,42,634,,pcs,#334155,5,1
@@ -656,7 +656,7 @@ Pvc pipe 1 1/2,Plumbing,400.00,250.00,3,638,,pcs,#334155,5,1
 Ppr plain Socket 32mm,Plumbing,30.00,20.00,33,639,,pcs,#334155,5,1
 Cement *KG,Building Materials,30.00,15.00,12,640,,pcs,#334155,5,1
 Twin Cut Out,Electrical,700.00,350.00,2,641,,pcs,#334155,5,1
-Gi pin plugs 1/2,Plumbing,30.00,15.00,20,642,,pcs,#334155,5,1
+Gi pin plugs 1/2,Plumbing,30.00,15.00,18,642,,pcs,#334155,5,1
 Gi pin plugs 3/4,Plumbing,40.00,18.00,16,643,,pcs,#334155,5,1
 "Gi pin plugs 1""",Plumbing,40.00,20.00,13,644,,pcs,#334155,5,1
 Sink Strainer,Plumbing,150.00,70.00,8,645,,pcs,#334155,5,1
@@ -694,9 +694,9 @@ Ppr Reducer 32mm x 20mm,Plumbing,30.00,20.00,12,673,,pcs,#334155,5,1
 Ppr Reducer 50mm x 32mm,Plumbing,50.00,30.00,5,673,,pcs,#334155,5,1
 Saddle Clips 20mm,Fasteners,10.00,5.00,20,674,,pcs,#334155,5,1
 Saddle Clips 25mm,Fasteners,10.00,5.00,30,675,,pcs,#334155,5,1
-Saddle Clips 32mm,Fasteners,20.00,10.00,30,676,,pcs,#334155,5,1
+Saddle Clips 32mm,Fasteners,20.00,10.00,29,676,,pcs,#334155,5,1
 Saddle Clips 11/4,Plumbing,30.00,15.00,1,677,,pcs,#334155,5,1
-Saddle Clips 11/2,Fasteners,30.00,20.00,10,678,,pcs,#334155,5,1
+Saddle Clips 11/2,Fasteners,30.00,20.00,9,678,,pcs,#334155,5,1
 "Saddle Clips 2""",Fasteners,40.00,20.00,10,679,,pcs,#334155,5,1
 "Saddle Clips 3""",Fasteners,50.00,30.00,10,680,,pcs,#334155,5,1
 "Saddle Clips 4""",Fasteners,50.00,30.00,10,681,,pcs,#334155,5,1
@@ -734,7 +734,7 @@ Sink waste 1 1/2,Plumbing,100.00,50.00,3,708,,pcs,#334155,5,1
 "Sink waste 1 1/4""",Plumbing,100.00,50.00,12,709,,pcs,#334155,5,1
 Cutting disk 4,Tools,100.00,50.00,26,710,,pcs,#334155,5,1
 Roofing Nails 1/4kg,Building Materials,100.00,50.00,8,711,,pcs,#334155,5,1
-Cutting disk 9 - Sali,Tools,200.00,100.00,7,711,,pcs,#334155,5,1
+Cutting disk 9 - Sali,Tools,200.00,100.00,2,711,,pcs,#334155,5,1
 wall Pass,Building Materials,2000.00,1350.00,0,712,,roll,#334155,5,1
 Spanner Combined No.10,Tools,150.00,80.00,5,713,,pcs,#334155,5,1
 White Cement,Building Materials,100.00,50.00,26,713,,pcs,#334155,5,1
@@ -752,12 +752,12 @@ Wall tap long neck - H/D,Plumbing,1000.00,600.00,1,722,,pcs,#334155,5,1
 Wall tap long neck - H/D,Plumbing,1000.00,600.00,1,722,,pcs,#334155,5,1
 Door Hinges Beige - Oxford,Building Materials,250.00,150.00,0,723,,pcs,#334155,5,1
 "Non Return Valve 3/4"" Lirlee",Plumbing,900.00,600.00,2,724,,pcs,#334155,5,1
-Cistern ball valve - Ordinary,Plumbing,250.00,150.00,7,725,,pcs,#334155,5,1
+Cistern ball valve - Ordinary,Plumbing,250.00,150.00,6,725,,pcs,#334155,5,1
 Cistern ball valve - cup L/D,Plumbing,250.00,130.00,4,726,,pcs,#334155,5,1
 Cistern ball vave Cup- H/D,Plumbing,500.00,250.00,2,727,,pcs,#334155,5,1
 cistern bal valve - Cross Corpal,Plumbing,650.00,350.00,5,728,,pcs,#334155,5,1
 Bib tap 1/2,Plumbing,450.00,270.00,2,729,,pcs,#334155,5,1
-Flash handle,Plumbing,300.00,200.00,2,730,,pcs,#334155,5,1
+Flash handle,Plumbing,300.00,200.00,1,730,,pcs,#334155,5,1
 Pvc plug 1 1/2,Plumbing,40.00,20.00,10,731,,pcs,#334155,5,1
 Pvc plug 1 1/4,Plumbing,30.00,15.00,38,731,,pcs,#334155,5,1
 Pvc Plug 2,Plumbing,50.00,30.00,9,732,,pcs,#334155,5,1
@@ -766,7 +766,7 @@ Pvc Plug 2,Plumbing,50.00,30.00,9,732,,pcs,#334155,5,1
 Re-chargable lamp,Electrical,600.00,350.00,2,734,,pcs,#334155,5,1
 Wall Plugs 12mm - big,Electrical,200.00,100.00,1,735,,pcs,#334155,5,1
 pliers - Cutter,Tools,300.00,200.00,2,736,,pcs,#334155,5,1
-Led bulb Domino 6W,Electrical,250.00,150.00,8,737,,pcs,#334155,5,1
+Led bulb Domino 6W,Electrical,250.00,150.00,4,737,,pcs,#334155,5,1
 Electric Door Bell,Electrical,600.00,350.00,3,738,,pcs,#334155,5,1
 Door Look - Moment,Safety,1500.00,850.00,1,739,,pcs,#334155,5,1
 Cylinder Lock - H/D,Building Materials,800.00,500.00,0,740,,pcs,#334155,5,1
@@ -800,7 +800,7 @@ Flexible Tube 1 ft - Brazil white,Plumbing,100.00,50.00,5,766,,pcs,#334155,5,1
 LED bulb 12w cdl - PIN (happy home),Electrical,100.00,50.00,4,767,,pcs,#334155,5,1
 Rake - plastic,Tools,500.00,280.00,0,768,,pcs,#334155,5,1
 Rake - plastic,Tools,500.00,280.00,0,768,,pcs,#334155,5,1
-Angle Valve - Cross,Plumbing,400.00,250.00,5,769,,pcs,#334155,5,1
+Angle Valve - Cross,Plumbing,400.00,250.00,4,769,,pcs,#334155,5,1
 Toilet Indicator,Building Materials,600.00,400.00,2,770,,pcs,#334155,5,1
 Conta 1Litre,Paint & Finishes,1500.00,950.00,1,771,,pcs,#334155,5,1
 Drawer Knobs - Silver (Round),Electrical,100.00,50.00,0,772,,pcs,#334155,5,1
@@ -824,8 +824,9 @@ Tile Spacer 2.5mm,Building Materials,100.00,50.00,4,786,,pcs,#334155,5,1
 Tile Spacer 3mm,Building Materials,100.00,50.00,5,787,,pcs,#334155,5,1
 Dog Chain,Tools,200.00,105.00,5,788,,pcs,#334155,5,1
 Dog Chain,Tools,200.00,105.00,5,788,,pcs,#334155,5,1
-"Diamond Disk 4"" - Wood cutting",Tools,400.00,200.00,3,789,,pcs,#334155,5,1
+"Diamond Disk 4"" - W",Tools,400.00,200.00,2,789,,pcs,#334155,5,1
 "Self Drilling Screws 1""",Fasteners,700.00,450.00,0,790,,pkt,#334155,5,1
 "Self Drilling Screws 1""",Fasteners,700.00,450.00,0,790,,pkt,#334155,5,1
 "Self Drilling Screws 1 1/2""",Fasteners,700.00,450.00,1,791,,pcs,#334155,5,1
 "Self Drilling Screws 2""",Electrical,700.00,450.00,0,792,,pkt,#334155,5,1
+Door Runner wheels,Building Materials,200.00,100.00,7,793,,pcs,#334155,5,1
