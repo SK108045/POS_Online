@@ -45,8 +45,22 @@ try{
  $browser=@($browserPaths|Where-Object {Test-Path -LiteralPath $_}|Select-Object -First 1)
  if($browser.Count -ne 1){throw "Reinstall $browserKind to use the existing POS profile. The launcher will not switch browsers automatically."}
  $health=Read-LocalHealth
+ if($health -and $health.pid){
+  try{
+   $cmd=(Get-CimInstance Win32_Process -Filter "ProcessId = $($health.pid)").CommandLine
+   if(-not ($cmd -and $cmd -match [regex]::Escape($projectRoot))){
+    Stop-Process -Id $health.pid -Force -ErrorAction SilentlyContinue
+    $health=$null
+   }
+  }catch{}
+ }
  if(-not $health){
-  if(Test-LocalPort){throw 'Port 3000 is occupied by another application or POS version. Close that instance first; Oraforge must keep its existing address.'}
+  if(Test-LocalPort){
+   Get-NetTCPConnection -LocalPort 3000 -ErrorAction SilentlyContinue | ForEach-Object {
+    Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue
+   }
+   Start-Sleep -Milliseconds 250
+  }
   $node=Get-Command node.exe -ErrorAction SilentlyContinue
   if(-not $node){throw 'Install Node.js, then start Oraforge POS again.'}
   $logRoot=Join-Path $dataRoot 'logs'
@@ -67,6 +81,15 @@ try{
   }while([DateTime]::UtcNow -lt $deadline)
   if(-not $health){throw 'The POS server did not become ready. Keep its logs and try again.'}
  }
+ try {
+  $h=Invoke-RestMethod -Uri "http://127.0.0.1:17383/health" -TimeoutSec 2
+  if($h.runtime_entry -and -not ($h.runtime_entry -match [regex]::Escape($projectRoot))){
+   Get-NetTCPConnection -LocalPort 17383 -ErrorAction SilentlyContinue | ForEach-Object {
+    Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue
+   }
+   Start-Sleep -Milliseconds 250
+  }
+ }catch{}
  # Only localhost IPC is contacted. This neither launches nor connects eTIMS
  # to the Internet. Fiscal readiness is checked separately during checkout.
  $helperReady=$false

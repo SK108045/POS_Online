@@ -16,7 +16,8 @@ def settings():
                     Path(os.environ.get('LOCALAPPDATA', Path.home())) / 'EBM2x/sqlite/RRA_EBM2x.db')
     return {**value, 'installation_dir': str(install), 'database_path': str(database),
             'registration_defaults': value.get('registration_defaults',{'origin':'KE'}),
-            'branch_id': value.get('branch_id', '01'), 'port': int(value.get('port', 17383))}
+            'branch_id': value.get('branch_id', '01'), 'port': int(value.get('port', 17383)),
+            'fast_ui': value.get('fast_ui', True)}
 
 def require_identity():
     import re

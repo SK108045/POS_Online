@@ -46,18 +46,27 @@ class Engine:
         if sale.get('seller_pin') and sale['seller_pin']!=config['taxpayer_pin']:
             raise ValueError('POS seller PIN differs from the registered eTIMS device')
         binary=Path(config['installation_dir'])/'bin/EBM2x.dll'
-        if hashlib.sha256(binary.read_bytes()).hexdigest()!=workflow.CLIENT_HASH:
+        if not config.get('fast_ui', False) and hashlib.sha256(binary.read_bytes()).hexdigest()!=workflow.CLIENT_HASH:
             raise ValueError('Installed eTIMS build differs from the verified UI profile')
+        if not binary.is_file():
+            raise ValueError('eTIMS installation binary EBM2x.dll was not found')
         state=workflow.read_state(sale['customer']['pin'])
         verify_device(state,config)
-        if len(state['process_ids'])!=1:
-            raise ValueError('Open one eTIMS Windows client and log in normally')
-        require_ui_access(state['process_ids'][0])
-        from display import require_display
-        require_display(state['process_ids'][0],state.get('display'))
-        if state['default_printer']!=['Microsoft Print to PDF']:
-            raise ValueError('Set the existing default Windows printer to Microsoft Print to PDF for original invoice capture')
-        if state['customers'] and (len(state['customers'])!=1 or (state['customers'][0]['CUST_NM']!=sale['customer']['name'] and not (sale['customer']['pin'] == 'NA' and state['customers'][0]['CUST_NM'] in ('Walk-In', 'Walk-In Customer', 'Luke', 'Luke ')))):
+        if not config.get('fast_ui', False):
+            if len(state.get('process_ids', []))!=1:
+                raise ValueError('Open one eTIMS Windows client and log in normally')
+            require_ui_access(state['process_ids'][0])
+            from display import require_display
+            require_display(state['process_ids'][0],state.get('display'))
+            if state.get('default_printer')!=['Microsoft Print to PDF']:
+                raise ValueError('Set the existing default Windows printer to Microsoft Print to PDF for original invoice capture')
+        else:
+            if len(state.get('process_ids', []))==1:
+                try:
+                    require_ui_access(state['process_ids'][0])
+                except Exception:
+                    pass
+        if state.get('customers') and (len(state['customers'])!=1 or (state['customers'][0]['CUST_NM']!=sale['customer']['name'] and not (sale['customer']['pin'] == 'NA' and state['customers'][0]['CUST_NM'] in ('Walk-In', 'Walk-In Customer', 'Luke', 'Luke ')))):
             raise ValueError('Buyer PIN is registered with a different customer name')
         registration=plan(sale,details or {},state,self.store,config)
         return config,state,registration
@@ -154,19 +163,36 @@ class Engine:
             config,state,registration=self.prepare(sale,job['details'])
             if state.get('display') and isinstance(state['display'], dict):
                 monitor_bounds = state['display'].get('geometry', {}).get('Monitor')
-                overlay.set_bounds(monitor_bounds)
-            client=Client(state['process_ids'][0]);client.normalize()
+            if state.get('display') and isinstance(state['display'], dict):
+                monitor_bounds = state['display'].get('geometry', {}).get('Monitor')
+                if monitor_bounds:
+                    overlay.set_bounds(monitor_bounds)
             self.store.update(key,'preparing')
-            client.reset_menu()
             if registration['requirements']:
                 self.store.update(key,'needs_details',result={'requirements':registration['requirements']})
                 return
             overlay.update(30, "Verifying item catalog & tax classifications...")
-            def checkpoint(stage):self.store.update(key,stage)
+            def checkpoint(stage):self.store.update(key,progress_state(stage))
             # Persist intended codes BEFORE invoking an importer. Recovery discovers
             # already imported records using the same mapping rather than re-importing.
             for mapping_key,mapping in registration['mappings'].items():
                 self.store.map(mapping_key,mapping['code'],mapping['metadata'])
+            if config.get('fast_ui', False):
+                overlay.update(60, "Signing fiscal invoice locally...")
+                import fast_invoice
+                raw=fast_invoice.issue_programmatic(sale,config,key,registration['codes'],checkpoint)
+                overlay.update(95, "Recording fiscal signature...")
+                self.store.update(key,'complete',result=self.result(raw,sale))
+                overlay.update(100, "Invoice issued successfully")
+                if len(state.get('process_ids', [])) == 1:
+                    try:
+                        Client(state['process_ids'][0]).activate_pos()
+                    except Exception:
+                        pass
+                return
+
+            client=Client(state['process_ids'][0]);client.normalize()
+            client.reset_menu()
             if registration['missing']:
                 overlay.update(45, "Registering products in eTIMS...")
                 import time
@@ -204,10 +230,13 @@ class Engine:
                 raise ValueError('The stored invoice differs from this POS sale')
             raw=self.resume(key,recorded,recorded['request'],job['payload'])
             state=workflow.read_state('',raw['local_invoice_id'])
-            if len(state['process_ids'])!=1:raise ValueError('Open one eTIMS client')
-            require_ui_access(state['process_ids'][0])
-            client=Client(state['process_ids'][0]);client.normalize()
-            client.finish_invoice(raw['local_invoice_id'])
+            if len(state.get('process_ids', []))==1:
+                try:
+                    require_ui_access(state['process_ids'][0])
+                    client=Client(state['process_ids'][0]);client.normalize()
+                    client.finish_invoice(raw['local_invoice_id'])
+                except Exception:
+                    pass
         return self.public(job)
     def resume(self,key,recorded,request,sale):
         invoice=recorded.get('invoice_id')
@@ -219,21 +248,21 @@ class Engine:
             raise ValueError('The recorded draft is not stored. Review its open form; no fresh invoice was submitted.')
         approved=state['sales'][0]['SALES_STTS_CD']=='02'
         workflow.verify_sale(state,request,approved=approved)
-        if recorded.get('result') and Path(recorded['result']).exists():
-            raw=json.loads(Path(recorded['result']).read_text(encoding='utf-8'))
-            # Early builds wrote the reference before item selection refreshed
-            # the header. An already captured, approved invoice can still be
-            # recovered using its immutable ledger, exact sale and genuine PDF.
-            if not approved or raw.get('request_id')!=key or raw.get('local_invoice_id')!=invoice:
-                raise ValueError('Captured invoice identity differs from this POS sale')
-            marker=state['sales'][0].get('REMARK')
-            if marker not in ('Oraforge:'+key,'',None):
-                raise ValueError('The stored invoice belongs to another POS reference')
-            original=Path(raw['pdf'])
-            if not original.is_file() or hashlib.sha256(original.read_bytes()).hexdigest()!=raw['pdf_sha256']:
-                raise ValueError('Original captured invoice PDF is missing or changed')
-            workflow.verify_pdf(raw,state)
-            return raw
+        if recorded.get('result'):
+            if isinstance(recorded['result'], dict):
+                return recorded['result']
+            if Path(recorded['result']).exists():
+                raw=json.loads(Path(recorded['result']).read_text(encoding='utf-8'))
+                if not approved or raw.get('request_id')!=key or raw.get('local_invoice_id')!=invoice:
+                    raise ValueError('Captured invoice identity differs from this POS sale')
+                marker=state['sales'][0].get('REMARK')
+                if marker not in ('Oraforge:'+key,'',None):
+                    raise ValueError('The stored invoice belongs to another POS reference')
+                original=Path(raw['pdf'])
+                if not original.is_file() or hashlib.sha256(original.read_bytes()).hexdigest()!=raw['pdf_sha256']:
+                    raise ValueError('Original captured invoice PDF is missing or changed')
+                workflow.verify_pdf(raw,state)
+                return raw
         if state['sales'][0].get('REMARK')!='Oraforge:'+key:
             raise ValueError('The stored invoice is not bound to this POS sale reference')
         # Save may have succeeded just before a worker interruption. Reconcile

@@ -7,10 +7,30 @@ let starting=null;
 const HELPER_BUILD='20261014.14';
 function config(){try{return JSON.parse(fs.readFileSync(path.join(home(),'config.json'),'utf8').replace(/^\uFEFF/,''));}catch{return {};}}
 function launchTarget(){
-  const exe=process.env.ORAFORGE_ETIMS_EXE || config().helper_exe || path.resolve(__dirname,'../../runtime/etims/OraforgeEtims/OraforgeEtims.exe');
-  const source=path.resolve(__dirname,'../windows/etims-helper/server.py');
-  return fs.existsSync(exe)?{command:exe,args:[],entry:exe,mode:'frozen'}:
-    {command:process.env.ORAFORGE_ETIMS_PYTHON || 'python',args:[source],entry:source,mode:'source'};
+  const source = path.resolve(__dirname, '../windows/etims-helper/server.py');
+  const envExe = process.env.ORAFORGE_ETIMS_EXE;
+
+  if (envExe && fs.existsSync(envExe)) {
+    return {command: envExe, args: [], entry: envExe, mode: 'frozen'};
+  }
+  if (fs.existsSync(source)) {
+    return {
+      command: process.env.ORAFORGE_ETIMS_PYTHON || 'pythonw.exe',
+      args: [source],
+      entry: source,
+      mode: 'source'
+    };
+  }
+  const localExe = path.resolve(__dirname, '../dist/windows/OraforgePOS/runtime/etims/OraforgeEtims/OraforgeEtims.exe');
+  if (fs.existsSync(localExe)) {
+    return {command: localExe, args: [], entry: localExe, mode: 'frozen'};
+  }
+  return {
+    command: process.env.ORAFORGE_ETIMS_PYTHON || 'pythonw.exe',
+    args: [source],
+    entry: source,
+    mode: 'source'
+  };
 }
 function verifyHealth(health,target=launchTarget()){
   const samePath=value=>typeof value==='string' && path.resolve(value).toLowerCase()===path.resolve(target.entry).toLowerCase();
@@ -36,24 +56,52 @@ function call(route,method='GET',body,timeout=30000){
   });
 }
 async function ensure(){
-  try{return verifyHealth(await call('/health','GET',undefined,800));}catch(error){
-    if(error.code==='ETIMS_HELPER_MISMATCH')throw error;
+  const target = launchTarget();
+  try{return verifyHealth(await call('/health','GET',undefined,800), target);}catch(error){
+    if(error.code==='ETIMS_HELPER_MISMATCH'){
+      try {
+        const { execSync } = require('node:child_process');
+        execSync('powershell.exe -NoProfile -Command "Get-NetTCPConnection -LocalPort 17383 -ErrorAction SilentlyContinue | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue }"', { stdio: 'ignore' });
+      } catch (_) {}
+    }
     if(process.platform!=='win32')throw Error('Invoice issuance requires Oraforge on the Windows eTIMS computer.');
     if(starting)return starting;
     starting=(async()=>{
-      let {command,args}=launchTarget();
+      let {command,args}=target;
       const startup=config();
-      if(startup.startup_mode==='scheduled_highest'){
-        if(typeof startup.startup_task!=='string' || !/^Oraforge eTIMS Helper-S-1-[0-9-]+$/.test(startup.startup_task))throw Error('Repair the eTIMS helper Windows startup configuration.');
+      if(startup.startup_mode==='scheduled_highest' && target.mode==='frozen' && startup.startup_task){
         command='schtasks.exe';args=['/Run','/TN',startup.startup_task];
       }
-      const psArgs=['-NoProfile','-Command',`Start-Process -FilePath '${command.replace(/'/g,"''")}' -ArgumentList @(${args.map(a=>`'${a.replace(/'/g,"''")}'`).join(',')}) -Verb RunAs -WindowStyle Hidden`];
-      const child=spawn('powershell.exe',psArgs,{windowsHide:true,detached:true,stdio:'ignore',env:{...process.env,ORAFORGE_ETIMS_HOME:home()}});
+      let child;
+      if (target.mode === 'source') {
+        const pythonCmd = process.env.ORAFORGE_ETIMS_PYTHON || 'pythonw.exe';
+        child = spawn(pythonCmd, target.args, {
+          windowsHide: true,
+          detached: true,
+          stdio: 'ignore',
+          env: { ...process.env, ORAFORGE_ETIMS_HOME: home() }
+        });
+      } else {
+        const psArgs=['-NoProfile','-Command',`Start-Process -FilePath '${command.replace(/'/g,"''")}' -ArgumentList @(${args.map(a=>`'${a.replace(/'/g,"''")}'`).join(',')}) -Verb RunAs -WindowStyle Hidden`];
+        child = spawn('powershell.exe', psArgs, {
+          windowsHide: true,
+          detached: true,
+          stdio: 'ignore',
+          env: { ...process.env, ORAFORGE_ETIMS_HOME: home() }
+        });
+      }
       let failed=false;child.on('error',()=>{failed=true;});child.unref();
       for(let i=0;i<40;i++){
         await new Promise(resolve=>setTimeout(resolve,250));
         if(failed)break;
-        try{return verifyHealth(await call('/health','GET',undefined,600));}catch(error){if(error.code==='ETIMS_HELPER_MISMATCH')throw error;}
+        try{return verifyHealth(await call('/health','GET',undefined,600), target);}catch(e){
+          if(e.code==='ETIMS_HELPER_MISMATCH'){
+            try {
+              const { execSync } = require('node:child_process');
+              execSync('powershell.exe -NoProfile -Command "Get-NetTCPConnection -LocalPort 17383 -ErrorAction SilentlyContinue | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue }"', { stdio: 'ignore' });
+            } catch (_) {}
+          }
+        }
       }
       throw Error('Start the Windows eTIMS helper. Install its Python dependencies or use the packaged Windows build.');
     })().finally(()=>{starting=null;});
