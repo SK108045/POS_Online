@@ -651,6 +651,20 @@ WHERE i.TIN=@tin AND lower(trim(i.ITEM_NM))=lower(trim(@itemNm)) LIMIT 1;";
                 {
                     long itemSeq = GetNextSequence(conn, tx, "SELECT coalesce(count(*), 0) + 1 FROM TAXPAYER_ITEM WHERE TIN='" + _tin + "'");
                     itemCd = string.Format("KE-2OUXNOX-{0:0000000}", itemSeq);
+                    while (true)
+                    {
+                        using (var chk = conn.CreateCommand())
+                        {
+                            chk.Transaction = tx;
+                            chk.CommandText = "SELECT COUNT(*) FROM TAXPAYER_ITEM WHERE TIN=@tin AND ITEM_CD=@cd";
+                            chk.Parameters.AddWithValue("@tin", _tin);
+                            chk.Parameters.AddWithValue("@cd", itemCd);
+                            long c = Convert.ToInt64(chk.ExecuteScalar());
+                            if (c == 0) break;
+                            itemSeq++;
+                            itemCd = string.Format("KE-2OUXNOX-{0:0000000}", itemSeq);
+                        }
+                    }
                 }
                 if (string.IsNullOrEmpty(itemNm))
                 {
@@ -666,15 +680,17 @@ WHERE i.TIN=@tin AND lower(trim(i.ITEM_NM))=lower(trim(@itemNm)) LIMIT 1;";
                     cmd.CommandText = @"
 INSERT OR IGNORE INTO TAXPAYER_ITEM (
     TIN, ITEM_CD, ITEM_CLS_CD, ITEM_TY_CD, ITEM_NM, ITEM_STD_NM,
-    ORGN_NAT_CD, PKG_UNIT_CD, QTY_UNIT_CD, TAX_TY_CD, BCD,
-    DFT_PRC, GRP_P1, GRP_P2, GRP_P3, GRP_P4, GRP_P5,
-    INITL_WH_UNTPC, IS_INVC_PRNT, USE_YN,
+    ORGN_NAT_CD, PKG_UNIT_CD, QTY_UNIT_CD, TAX_TY_CD, BCD, REG_BHF_ID,
+    USE_YN, RRA_MOD_YN, ADD_INFO, SFTY_QTY, ISRC_APLCB_YN,
+    DFT_PRC, GRP_PRC_L1, GRP_PRC_L2, GRP_PRC_L3, GRP_PRC_L4, GRP_PRC_L5,
+    INITL_WH_UNTPC, INITL_QTY, RM, USE_BARCODE, USE_ADI_YN, BATCH_NUM, EXPIRATION_YN,
     REGR_ID, REGR_NM, REG_DT, MODR_ID, MODR_NM, MOD_DT
 ) VALUES (
     @tin, @itemCd, @itemClsCd, '2', @itemNm, @itemNm,
-    'KE', @pkgUnitCd, @qtyUnitCd, @taxTyCd, '',
+    'KE', @pkgUnitCd, @qtyUnitCd, @taxTyCd, '', @branch,
+    'Y', 'N', '', 0, 'N',
     @prc, 0, 0, 0, 0, 0,
-    @prc, 'Y', 'Y',
+    @prc, @rsdQty, 'Auto-registered item', 'N', 'N', '', 'N',
     @userId, @userNm, @regDt, @userId, @userNm, @regDt
 );";
                     cmd.Parameters.AddWithValue("@tin", _tin);
@@ -684,7 +700,9 @@ INSERT OR IGNORE INTO TAXPAYER_ITEM (
                     cmd.Parameters.AddWithValue("@pkgUnitCd", pkgUnitCd);
                     cmd.Parameters.AddWithValue("@qtyUnitCd", qtyUnitCd);
                     cmd.Parameters.AddWithValue("@taxTyCd", taxTyCd);
+                    cmd.Parameters.AddWithValue("@branch", _branchId);
                     cmd.Parameters.AddWithValue("@prc", prc);
+                    cmd.Parameters.AddWithValue("@rsdQty", currentStock);
                     cmd.Parameters.AddWithValue("@userId", _userId);
                     cmd.Parameters.AddWithValue("@userNm", _userNm);
                     cmd.Parameters.AddWithValue("@regDt", rcptDt);
@@ -750,14 +768,14 @@ INSERT OR IGNORE INTO STOCK_MASTER (
                         {
                             ins.Transaction = tx;
                             ins.CommandText = @"
-INSERT INTO TAXPAYER_BHF_CUST (
-    TIN, BHF_ID, CUST_NO, CUST_TIN, CUST_NM, TEL_NO, ADRS, USE_YN,
+INSERT OR IGNORE INTO TAXPAYER_BHF_CUST (
+    TIN, BHF_ID, CUST_NO, CUST_TIN, CUST_NM, TEL_NO, CONTACT1, ADRS, USE_YN,
     REGR_ID, REGR_NM, REG_DT, MODR_ID, MODR_NM, MOD_DT,
-    REMARK, EMAIL, FAX_NO, CUST_REG_STATUS, SYNC_YN
+    RM, EMAIL, BCNC_TYPE, CUST_GROUP
 ) VALUES (
-    @tin, @bhfId, @custTin, @custTin, @custNm, @telNo, @adrs, 'Y',
+    @tin, @bhfId, @custTin, @custTin, @custNm, @telNo, @telNo, @adrs, 'Y',
     @userId, @userNm, @regDt, @userId, @userNm, @regDt,
-    'Oraforge auto-registration', @email, '', '01', 'N'
+    'Oraforge auto-registration', @email, '02', 'DF'
 );";
                             ins.Parameters.AddWithValue("@tin", _tin);
                             ins.Parameters.AddWithValue("@bhfId", _branchId);
