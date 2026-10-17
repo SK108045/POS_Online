@@ -76,10 +76,9 @@ def validate(sale):
     tax = amount(sale.get('tax_cents', 0), 'tax')
     if tax > sale['total_cents']:
         raise ValueError('POS tax exceeds its total')
-    # This installed Non-VAT profile has been validated with tax D only.
-    # Fail before any registration/write instead of issuing a different amount.
-    if discount or tax:
-        raise ValueError('This verified desktop profile currently requires zero discount and Non-VAT sales')
+    tax_rate = sale.get('tax_rate', 0)
+    if tax_rate not in (0, 16):
+        raise ValueError('Supported tax rates are Non-VAT (0%) and VAT (16%)')
     return sale
 
 def job_id(sale):
@@ -90,10 +89,11 @@ def product_key(sale, item, taxpayer, branch):
 
 def to_request(sale, item_codes):
     validate(sale)
+    default_tax = 'B' if sale.get('tax_rate') == 16 or sale.get('tax_cents', 0) > 0 else 'D'
     return dict(buyer_pin=sale['customer']['pin'], buyer_name=sale['customer']['name'],
                 pos_sale_digest=digest(sale),
                 payment_code=PAYMENTS[sale['payment_method']], total=str(Decimal(sale['total_cents']) / 100),
                 lines=[dict(name=i['name'], item_code=item_codes[i['product_key']],
                             quantity=str(decimal(i['quantity'], 'quantity', True)),
-                            unit_price=str(Decimal(i['unit_price_cents']) / 100), tax_code='D',
+                            unit_price=str(Decimal(i['unit_price_cents']) / 100), tax_code=i.get('tax_code', default_tax),
                             total=str(Decimal(i['line_total_cents']) / 100)) for i in sale['items']])

@@ -24,6 +24,9 @@ namespace EtimsProgrammatic
         public string Name { get; set; }
         public double Quantity { get; set; }
         public double UnitPrice { get; set; }
+        public double SupplyAmount { get; set; }
+        public double DiscountRate { get; set; }
+        public double DiscountAmount { get; set; }
         public double LineTotal { get; set; }
         public string TaxCode { get; set; }
     }
@@ -213,6 +216,11 @@ namespace EtimsProgrammatic
             public string TaxTypeCode { get; set; }
             public double Quantity { get; set; }
             public double UnitPrice { get; set; }
+            public double SupplyAmount { get; set; }
+            public double DiscountRate { get; set; }
+            public double DiscountAmount { get; set; }
+            public double TaxableAmount { get; set; }
+            public double TaxAmount { get; set; }
             public double TotalAmount { get; set; }
             public double CurrentStock { get; set; }
             public double NewStock { get; set; }
@@ -268,6 +276,17 @@ namespace EtimsProgrammatic
                         // 4. Resolve and Validate each item line
                         var resolvedItems = new List<ResolvedItem>();
                         double totalSaleAmt = 0;
+                        double totalDiscAmt = 0;
+                        double taxblAmtA = 0;
+                        double taxblAmtB = 0;
+                        double taxblAmtC = 0;
+                        double taxblAmtD = 0;
+                        double taxblAmtE = 0;
+                        double taxAmtA = 0;
+                        double taxAmtB = 0;
+                        double taxAmtC = 0;
+                        double taxAmtD = 0;
+                        double taxAmtE = 0;
                         int seq = 1;
 
                         foreach (var itemInput in req.Items)
@@ -275,7 +294,48 @@ namespace EtimsProgrammatic
                             var resolved = ResolveItem(conn, tx, itemInput, seq++, rcptDt);
                             resolvedItems.Add(resolved);
                             totalSaleAmt += resolved.TotalAmount;
+                            totalDiscAmt += resolved.DiscountAmount;
+
+                            switch (resolved.TaxTypeCode)
+                            {
+                                case "A":
+                                    taxblAmtA += resolved.TotalAmount;
+                                    taxAmtA += resolved.TaxAmount;
+                                    break;
+                                case "B":
+                                    taxblAmtB += resolved.TotalAmount;
+                                    taxAmtB += resolved.TaxAmount;
+                                    break;
+                                case "C":
+                                    taxblAmtC += resolved.TotalAmount;
+                                    taxAmtC += resolved.TaxAmount;
+                                    break;
+                                case "E":
+                                    taxblAmtE += resolved.TotalAmount;
+                                    taxAmtE += resolved.TaxAmount;
+                                    break;
+                                case "D":
+                                default:
+                                    taxblAmtD += resolved.TotalAmount;
+                                    taxAmtD += resolved.TaxAmount;
+                                    break;
+                            }
                         }
+
+                        totalSaleAmt = Math.Round(totalSaleAmt, 2);
+                        totalDiscAmt = Math.Round(totalDiscAmt, 2);
+                        taxblAmtA = Math.Round(taxblAmtA, 2);
+                        taxblAmtB = Math.Round(taxblAmtB, 2);
+                        taxblAmtC = Math.Round(taxblAmtC, 2);
+                        taxblAmtD = Math.Round(taxblAmtD, 2);
+                        taxblAmtE = Math.Round(taxblAmtE, 2);
+                        taxAmtA = Math.Round(taxAmtA, 2);
+                        taxAmtB = Math.Round(taxAmtB, 2);
+                        taxAmtC = Math.Round(taxAmtC, 2);
+                        taxAmtD = Math.Round(taxAmtD, 2);
+                        taxAmtE = Math.Round(taxAmtE, 2);
+                        double totTaxAmt = Math.Round(taxAmtA + taxAmtB + taxAmtC + taxAmtD + taxAmtE, 2);
+                        double totTaxblAmt = totalSaleAmt;
 
                         // 5. Compute Receipt Signature via official eTIMS algorithm
                         var receiptMaster = new TrnsSaleReceiptMaster();
@@ -289,12 +349,12 @@ namespace EtimsProgrammatic
                         sigParam.CurReceiptID = curRcptNo;
                         sigParam.TotReceiptID = totRcptNo;
                         sigParam.InvID = 0;
-                        sigParam.DblSpcpcA = 0;
-                        sigParam.DblVatA = 0;
-                        sigParam.DblSpcpcB = 0;
-                        sigParam.DblVatB = 0;
-                        sigParam.DblSpcpcC = 0;
-                        sigParam.DblVatC = 0;
+                        sigParam.DblSpcpcA = taxblAmtA;
+                        sigParam.DblVatA = taxAmtA;
+                        sigParam.DblSpcpcB = taxblAmtB;
+                        sigParam.DblVatB = taxAmtB;
+                        sigParam.DblSpcpcC = taxblAmtC;
+                        sigParam.DblVatC = taxAmtC;
 
                         string sigStr = receiptMaster.GetReceiptSignature(sigParam);
                         string rawSig = (string)Base32.Receipt_signature(sigStr, _signKey);
@@ -319,7 +379,7 @@ namespace EtimsProgrammatic
                         string qrBase64 = GenerateQrCodePng(qrPayload, qrPath, out qrSha256);
 
                         // 8. Format Electronic Journal (JRNL)
-                        string jrnl = BuildJournalText(displayDt, displayTime, buyerPin, buyerName, paymentCode, remark, resolvedItems, totalSaleAmt, cuInvoiceNo, formattedIntrl, formattedSig, rawSig);
+                        string jrnl = BuildJournalText(displayDt, displayTime, buyerPin, buyerName, paymentCode, remark, resolvedItems, totalSaleAmt, totalDiscAmt, taxblAmtA, taxblAmtB, taxAmtB, taxblAmtD, totTaxAmt, cuInvoiceNo, formattedIntrl, formattedSig, rawSig);
 
                         // 9. INSERT TRNS_SALE
                         using (var cmd = conn.CreateCommand())
@@ -340,10 +400,10 @@ INSERT INTO TRNS_SALE (
     @tin, @bhfId, @invcNo, 'N', 0, @taxprNm,
     @custTin, '00', @custNm, 'N', 'S', @pmtTyCd,
     '02', @cfmDt, @salesDt, '', '', '', '',
-    @totItemCnt, 0, 0, 0, @taxblAmtD, 0,
-    0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0,
-    @totTaxblAmt, 0, @totAmt, @remark,
+    @totItemCnt, @taxblAmtA, @taxblAmtB, @taxblAmtC, @taxblAmtD, @taxblAmtE,
+    0, @taxRtB, 0, 0, 0,
+    @taxAmtA, @taxAmtB, @taxAmtC, @taxAmtD, @taxAmtE,
+    @totTaxblAmt, @totTaxAmt, @totAmt, @remark,
     @userId, @userNm, @regDt, @userId, @userNm, @regDt,
     '', ''
 );";
@@ -357,8 +417,19 @@ INSERT INTO TRNS_SALE (
                             cmd.Parameters.AddWithValue("@cfmDt", rcptDt);
                             cmd.Parameters.AddWithValue("@salesDt", salesDt);
                             cmd.Parameters.AddWithValue("@totItemCnt", (double)resolvedItems.Count);
-                            cmd.Parameters.AddWithValue("@taxblAmtD", totalSaleAmt);
-                            cmd.Parameters.AddWithValue("@totTaxblAmt", totalSaleAmt);
+                            cmd.Parameters.AddWithValue("@taxblAmtA", taxblAmtA);
+                            cmd.Parameters.AddWithValue("@taxblAmtB", taxblAmtB);
+                            cmd.Parameters.AddWithValue("@taxblAmtC", taxblAmtC);
+                            cmd.Parameters.AddWithValue("@taxblAmtD", taxblAmtD);
+                            cmd.Parameters.AddWithValue("@taxblAmtE", taxblAmtE);
+                            cmd.Parameters.AddWithValue("@taxRtB", taxblAmtB > 0 ? 16 : 0);
+                            cmd.Parameters.AddWithValue("@taxAmtA", taxAmtA);
+                            cmd.Parameters.AddWithValue("@taxAmtB", taxAmtB);
+                            cmd.Parameters.AddWithValue("@taxAmtC", taxAmtC);
+                            cmd.Parameters.AddWithValue("@taxAmtD", taxAmtD);
+                            cmd.Parameters.AddWithValue("@taxAmtE", taxAmtE);
+                            cmd.Parameters.AddWithValue("@totTaxblAmt", totTaxblAmt);
+                            cmd.Parameters.AddWithValue("@totTaxAmt", totTaxAmt);
                             cmd.Parameters.AddWithValue("@totAmt", totalSaleAmt);
                             cmd.Parameters.AddWithValue("@remark", remark);
                             cmd.Parameters.AddWithValue("@userId", _userId);
@@ -383,8 +454,8 @@ INSERT INTO TRNS_SALE_ITEM (
 ) VALUES (
     @tin, @bhfId, @invcNo, @itemSeq, @itemCd, '', @itemClsCd, @itemNm,
     '', @pkgUnitCd, 0, @qtyUnitCd, @qty, @prc, @splyAmt,
-    0, 0, '', 0, 0, @taxTyCd,
-    @taxblAmt, 0, @totAmt,
+    @dcRt, @dcAmt, '', 0, 0, @taxTyCd,
+    @taxblAmt, @taxAmt, @totAmt,
     @userId, @userNm, @regDt, @userId, @userNm, @regDt
 );";
                                 cmd.Parameters.AddWithValue("@tin", _tin);
@@ -398,9 +469,12 @@ INSERT INTO TRNS_SALE_ITEM (
                                 cmd.Parameters.AddWithValue("@qtyUnitCd", item.QtyUnitCode);
                                 cmd.Parameters.AddWithValue("@qty", item.Quantity);
                                 cmd.Parameters.AddWithValue("@prc", item.UnitPrice);
-                                cmd.Parameters.AddWithValue("@splyAmt", item.TotalAmount);
+                                cmd.Parameters.AddWithValue("@splyAmt", item.SupplyAmount);
+                                cmd.Parameters.AddWithValue("@dcRt", item.DiscountRate);
+                                cmd.Parameters.AddWithValue("@dcAmt", item.DiscountAmount);
                                 cmd.Parameters.AddWithValue("@taxTyCd", item.TaxTypeCode);
-                                cmd.Parameters.AddWithValue("@taxblAmt", item.TotalAmount);
+                                cmd.Parameters.AddWithValue("@taxblAmt", item.TaxableAmount);
+                                cmd.Parameters.AddWithValue("@taxAmt", item.TaxAmount);
                                 cmd.Parameters.AddWithValue("@totAmt", item.TotalAmount);
                                 cmd.Parameters.AddWithValue("@userId", _userId);
                                 cmd.Parameters.AddWithValue("@userNm", _userNm);
@@ -453,7 +527,7 @@ INSERT INTO STOCK_IO (
     REMARK, REGR_ID, REGR_NM, REG_DT, MODR_ID, MODR_NM, MOD_DT
 ) VALUES (
     @tin, @bhfId, @sarNo, 0, 'A', @taxprNm, @custTin, '00',
-    @custNm, '11', @ocrnDt, @totItemCnt, @totTaxblAmt, 0, @totAmt,
+    @custNm, '11', @ocrnDt, @totItemCnt, @totTaxblAmt, @totTaxAmt, @totAmt,
     '', @userId, @userNm, @regDt, @userId, @userNm, @regDt
 );";
                             cmd.Parameters.AddWithValue("@tin", _tin);
@@ -465,6 +539,7 @@ INSERT INTO STOCK_IO (
                             cmd.Parameters.AddWithValue("@ocrnDt", salesDt);
                             cmd.Parameters.AddWithValue("@totItemCnt", resolvedItems.Count);
                             cmd.Parameters.AddWithValue("@totTaxblAmt", totalSaleAmt);
+                            cmd.Parameters.AddWithValue("@totTaxAmt", totTaxAmt);
                             cmd.Parameters.AddWithValue("@totAmt", totalSaleAmt);
                             cmd.Parameters.AddWithValue("@userId", _userId);
                             cmd.Parameters.AddWithValue("@userNm", _userNm);
@@ -486,8 +561,8 @@ INSERT INTO STOCK_IO_ITEM (
     REGR_ID, REGR_NM, REG_DT, MODR_ID, MODR_NM, MOD_DT
 ) VALUES (
     @tin, @bhfId, @sarNo, @itemSeq, @itemCd, @itemClsCd, @itemNm, '',
-    @pkgUnitCd, 0, @qtyUnitCd, @qty, '', @prc, @splyAmt, 0,
-    @taxblAmt, @taxTyCd, 0, @totAmt,
+    @pkgUnitCd, 0, @qtyUnitCd, @qty, '', @prc, @splyAmt, @totDcAmt,
+    @taxblAmt, @taxTyCd, @taxAmt, @totAmt,
     @userId, @userNm, @regDt, @userId, @userNm, @regDt
 );";
                                 cmd.Parameters.AddWithValue("@tin", _tin);
@@ -501,9 +576,11 @@ INSERT INTO STOCK_IO_ITEM (
                                 cmd.Parameters.AddWithValue("@qtyUnitCd", item.QtyUnitCode);
                                 cmd.Parameters.AddWithValue("@qty", item.Quantity);
                                 cmd.Parameters.AddWithValue("@prc", item.UnitPrice);
-                                cmd.Parameters.AddWithValue("@splyAmt", item.TotalAmount);
-                                cmd.Parameters.AddWithValue("@taxblAmt", item.TotalAmount);
+                                cmd.Parameters.AddWithValue("@splyAmt", item.SupplyAmount);
+                                cmd.Parameters.AddWithValue("@totDcAmt", item.DiscountAmount);
+                                cmd.Parameters.AddWithValue("@taxblAmt", item.TaxableAmount);
                                 cmd.Parameters.AddWithValue("@taxTyCd", item.TaxTypeCode);
+                                cmd.Parameters.AddWithValue("@taxAmt", item.TaxAmount);
                                 cmd.Parameters.AddWithValue("@totAmt", item.TotalAmount);
                                 cmd.Parameters.AddWithValue("@userId", _userId);
                                 cmd.Parameters.AddWithValue("@userNm", _userNm);
@@ -530,7 +607,7 @@ INSERT INTO STOCK_IO_ITEM (
                         tx.Commit();
 
                         // 14. Write Encrypted Outbox Queue Files
-                        WriteOutboxJson(now, invcNo, curRcptNo, totRcptNo, sarNo, buyerPin, buyerName, paymentCode, remark, resolvedItems, totalSaleAmt, rcptDt, salesDt, rawSig, rawIntrl, jrnl, dayCount);
+                        WriteOutboxJson(now, invcNo, curRcptNo, totRcptNo, sarNo, buyerPin, buyerName, paymentCode, remark, resolvedItems, totalSaleAmt, taxblAmtA, taxblAmtB, taxAmtB, taxblAmtD, totTaxAmt, rcptDt, salesDt, rawSig, rawIntrl, jrnl, dayCount);
 
                         sw.Stop();
                         res.Success = true;
@@ -570,14 +647,29 @@ INSERT INTO STOCK_IO_ITEM (
         {
             string itemCd = input.ItemCode;
             string itemNm = input.Name;
-            double qty = input.Quantity > 0 ? input.Quantity : 1;
-            double prc = input.UnitPrice > 0 ? input.UnitPrice : 0;
-            double total = input.LineTotal > 0 ? input.LineTotal : (qty * prc);
+            double qty = input.Quantity > 0 ? input.Quantity : 1.0;
+            double prc = input.UnitPrice >= 0 ? input.UnitPrice : 0.0;
+            double splyAmt = input.SupplyAmount > 0 ? input.SupplyAmount : Math.Round(qty * prc, 2);
+            double dcAmt = Math.Max(0.0, input.DiscountAmount);
+            double dcRt = Math.Max(0.0, input.DiscountRate);
 
+            if (dcAmt > 0 && dcRt == 0 && splyAmt > 0)
+            {
+                dcRt = Math.Round((dcAmt / splyAmt) * 100.0, 2);
+            }
+            else if (dcRt > 0 && dcAmt == 0 && splyAmt > 0)
+            {
+                dcAmt = Math.Round((splyAmt * dcRt) / 100.0, 2);
+            }
+
+            double total = input.LineTotal > 0 ? input.LineTotal : Math.Round(Math.Max(0.0, splyAmt - dcAmt), 2);
+            if (total > splyAmt) total = splyAmt;
+
+            string reqTax = !string.IsNullOrEmpty(input.TaxCode) ? input.TaxCode.Trim().ToUpper() : "";
             string itemClsCd = "60102300";
             string pkgUnitCd = "OU";
             string qtyUnitCd = "NO";
-            string taxTyCd = "D";
+            string taxTyCd = !string.IsNullOrEmpty(reqTax) ? reqTax : "D";
             double currentStock = 100.0;
 
             bool found = false;
@@ -605,7 +697,8 @@ WHERE i.TIN=@tin AND i.ITEM_CD=@itemCd LIMIT 1;";
                             itemClsCd = r["ITEM_CLS_CD"].ToString();
                             pkgUnitCd = r["PKG_UNIT_CD"].ToString();
                             qtyUnitCd = r["QTY_UNIT_CD"].ToString();
-                            taxTyCd = r["TAX_TY_CD"].ToString();
+                            string dbTax = r["TAX_TY_CD"].ToString();
+                            taxTyCd = !string.IsNullOrEmpty(reqTax) ? reqTax : dbTax;
                             currentStock = Convert.ToDouble(r["RSD_QTY"]);
                             found = true;
                         }
@@ -636,11 +729,26 @@ WHERE i.TIN=@tin AND lower(trim(i.ITEM_NM))=lower(trim(@itemNm)) LIMIT 1;";
                             itemClsCd = r["ITEM_CLS_CD"].ToString();
                             pkgUnitCd = r["PKG_UNIT_CD"].ToString();
                             qtyUnitCd = r["QTY_UNIT_CD"].ToString();
-                            taxTyCd = r["TAX_TY_CD"].ToString();
+                            string dbTax = r["TAX_TY_CD"].ToString();
+                            taxTyCd = !string.IsNullOrEmpty(reqTax) ? reqTax : dbTax;
                             currentStock = Convert.ToDouble(r["RSD_QTY"]);
                             found = true;
                         }
                     }
+                }
+            }
+
+            // If found, update TAXPAYER_ITEM if taxTyCd changed (e.g. merchant registered as D but selling as B)
+            if (found && !string.IsNullOrEmpty(reqTax))
+            {
+                using (var up = conn.CreateCommand())
+                {
+                    up.Transaction = tx;
+                    up.CommandText = "UPDATE TAXPAYER_ITEM SET TAX_TY_CD=@taxTyCd WHERE TIN=@tin AND ITEM_CD=@itemCd;";
+                    up.Parameters.AddWithValue("@taxTyCd", taxTyCd);
+                    up.Parameters.AddWithValue("@tin", _tin);
+                    up.Parameters.AddWithValue("@itemCd", itemCd);
+                    up.ExecuteNonQuery();
                 }
             }
 
@@ -734,6 +842,14 @@ INSERT OR IGNORE INTO STOCK_MASTER (
 
             double newStock = Math.Max(0.0, currentStock - qty);
 
+            // Calculate tax
+            double taxAmt = 0.0;
+            double taxblAmt = total;
+            if (taxTyCd == "B")
+            {
+                taxAmt = Math.Round((total * 16.0) / 116.0, 2);
+            }
+
             var item = new ResolvedItem();
             item.Seq = seq;
             item.ItemCode = itemCd;
@@ -744,6 +860,11 @@ INSERT OR IGNORE INTO STOCK_MASTER (
             item.TaxTypeCode = taxTyCd;
             item.Quantity = qty;
             item.UnitPrice = prc;
+            item.SupplyAmount = splyAmt;
+            item.DiscountRate = dcRt;
+            item.DiscountAmount = dcAmt;
+            item.TaxableAmount = taxblAmt;
+            item.TaxAmount = taxAmt;
             item.TotalAmount = total;
             item.CurrentStock = currentStock;
             item.NewStock = newStock;
@@ -861,7 +982,13 @@ INSERT OR IGNORE INTO TAXPAYER_BHF_CUST (
             }
         }
 
-        private string BuildJournalText(string displayDt, string displayTime, string buyerPin, string buyerName, string paymentCode, string remark, List<ResolvedItem> items, double totalAmt, string cuInvoiceNo, string intrlDataChunked, string rcptSignChunked, string rawSig)
+        private string BuildJournalText(string displayDt, string displayTime, string buyerPin, string buyerName,
+                                        string paymentCode, string remark, List<ResolvedItem> items,
+                                        double totalAmt, double totalDiscAmt,
+                                        double taxblAmtA, double taxblAmtB, double taxAmtB,
+                                        double taxblAmtD, double totTaxAmt,
+                                        string cuInvoiceNo, string intrlDataChunked,
+                                        string rcptSignChunked, string rawSig)
         {
             var sb = new StringBuilder();
             sb.AppendLine();
@@ -878,17 +1005,29 @@ INSERT OR IGNORE INTO TAXPAYER_BHF_CUST (
             {
                 sb.AppendLine(item.ItemName);
                 sb.AppendLine(item.ItemCode);
-                sb.AppendLine(string.Format("{0:N2}x{1}            {2:N2}TAX {3}", item.UnitPrice, item.Quantity, item.TotalAmount, item.TaxTypeCode));
+                if (item.DiscountAmount > 0)
+                {
+                    sb.AppendLine(string.Format("{0:N2}x{1}            {2:N2}TAX {3}", item.UnitPrice, item.Quantity, item.SupplyAmount, item.TaxTypeCode));
+                    sb.AppendLine(string.Format("   DISCOUNT ({0:0.##}%)      -{1:N2}", item.DiscountRate, item.DiscountAmount));
+                }
+                else
+                {
+                    sb.AppendLine(string.Format("{0:N2}x{1}            {2:N2}TAX {3}", item.UnitPrice, item.Quantity, item.TotalAmount, item.TaxTypeCode));
+                }
             }
 
             sb.AppendLine("-----------------------------------");
             sb.AppendLine(string.Format("TOTAL                      {0:N2}", totalAmt));
-            sb.AppendLine("TOTAL A-EX                     0.00");
-            sb.AppendLine("TOTAL B-16%                    0.00");
-            sb.AppendLine("TOTAL TAX-B                    0.00");
-            sb.AppendLine(string.Format("TOTAL D                    {0:N2}", totalAmt));
+            if (totalDiscAmt > 0)
+            {
+                sb.AppendLine(string.Format("TOTAL DISCOUNT AMOUNT      {0:N2}", totalDiscAmt));
+            }
+            sb.AppendLine(string.Format("TOTAL A-EX                 {0:N2}", taxblAmtA));
+            sb.AppendLine(string.Format("TOTAL B-16%                {0:N2}", taxblAmtB));
+            sb.AppendLine(string.Format("TOTAL TAX-B                {0:N2}", taxAmtB));
+            sb.AppendLine(string.Format("TOTAL D                    {0:N2}", taxblAmtD));
             sb.AppendLine("TOTAL TAX-D                    0.00");
-            sb.AppendLine("TOTAL TAX                      0.00");
+            sb.AppendLine(string.Format("TOTAL TAX                  {0:N2}", totTaxAmt));
             sb.AppendLine("-----------------------------------");
             string tenderName = paymentCode == "06" ? "MOBILE MONEY" : "CASH";
             sb.AppendLine(string.Format("{0}                       {1:N2}", tenderName, totalAmt));
@@ -918,7 +1057,9 @@ INSERT OR IGNORE INTO TAXPAYER_BHF_CUST (
 
         private void WriteOutboxJson(DateTime now, long invcNo, long curRcptNo, long totRcptNo, long sarNo,
                                     string buyerPin, string buyerName, string paymentCode, string remark,
-                                    List<ResolvedItem> items, double totalAmt, string rcptDt, string salesDt,
+                                    List<ResolvedItem> items, double totalAmt,
+                                    double taxblAmtA, double taxblAmtB, double taxAmtB, double taxblAmtD, double totTaxAmt,
+                                    string rcptDt, string salesDt,
                                     string rawSig, string rawIntrl, string jrnl, long dayCount)
         {
             if (!Directory.Exists(_outboxDir))
@@ -944,16 +1085,16 @@ INSERT OR IGNORE INTO TAXPAYER_BHF_CUST (
                 sItem.Add("qtyUnitCd", item.QtyUnitCode);
                 sItem.Add("qty", item.Quantity);
                 sItem.Add("prc", item.UnitPrice);
-                sItem.Add("splyAmt", item.TotalAmount);
-                sItem.Add("dcRt", 0.0);
-                sItem.Add("dcAmt", 0.0);
+                sItem.Add("splyAmt", item.SupplyAmount);
+                sItem.Add("dcRt", item.DiscountRate);
+                sItem.Add("dcAmt", item.DiscountAmount);
                 sItem.Add("isrccCd", "");
                 sItem.Add("isrccNm", "");
                 sItem.Add("isrcRt", 0.0);
                 sItem.Add("isrcAmt", 0.0);
                 sItem.Add("taxTyCd", item.TaxTypeCode);
-                sItem.Add("taxblAmt", item.TotalAmount);
-                sItem.Add("taxAmt", 0.0);
+                sItem.Add("taxblAmt", item.TaxableAmount);
+                sItem.Add("taxAmt", item.TaxAmount);
                 sItem.Add("totAmt", item.TotalAmount);
                 salesItemsArray.Add(sItem);
             }
@@ -977,23 +1118,23 @@ INSERT OR IGNORE INTO TAXPAYER_BHF_CUST (
             salesReq.Add("cnclDt", "");
             salesReq.Add("rfdDt", "");
             salesReq.Add("totItemCnt", (double)items.Count);
-            salesReq.Add("taxblAmtA", 0.0);
-            salesReq.Add("taxblAmtB", 0.0);
+            salesReq.Add("taxblAmtA", taxblAmtA);
+            salesReq.Add("taxblAmtB", taxblAmtB);
             salesReq.Add("taxblAmtC", 0.0);
-            salesReq.Add("taxblAmtD", totalAmt);
+            salesReq.Add("taxblAmtD", taxblAmtD);
             salesReq.Add("taxblAmtE", 0.0);
             salesReq.Add("taxRtA", 0);
-            salesReq.Add("taxRtB", 0);
+            salesReq.Add("taxRtB", taxblAmtB > 0 ? 16 : 0);
             salesReq.Add("taxRtC", 0);
             salesReq.Add("taxRtD", 0);
             salesReq.Add("taxRtE", 0);
             salesReq.Add("taxAmtA", 0.0);
-            salesReq.Add("taxAmtB", 0.0);
+            salesReq.Add("taxAmtB", taxAmtB);
             salesReq.Add("taxAmtC", 0.0);
             salesReq.Add("taxAmtD", 0.0);
             salesReq.Add("taxAmtE", 0.0);
             salesReq.Add("totTaxblAmt", totalAmt);
-            salesReq.Add("totTaxAmt", 0.0);
+            salesReq.Add("totTaxAmt", totTaxAmt);
             salesReq.Add("totAmt", totalAmt);
             salesReq.Add("prchrAcptcYn", "N");
             salesReq.Add("remark", remark);
@@ -1048,11 +1189,11 @@ INSERT OR IGNORE INTO TAXPAYER_BHF_CUST (
                 ioItem.Add("qty", item.Quantity);
                 ioItem.Add("itemExprDt", "");
                 ioItem.Add("prc", item.UnitPrice);
-                ioItem.Add("splyAmt", item.TotalAmount);
-                ioItem.Add("totDcAmt", 0.0);
-                ioItem.Add("taxblAmt", item.TotalAmount);
+                ioItem.Add("splyAmt", item.SupplyAmount);
+                ioItem.Add("totDcAmt", item.DiscountAmount);
+                ioItem.Add("taxblAmt", item.TaxableAmount);
                 ioItem.Add("taxTyCd", item.TaxTypeCode);
-                ioItem.Add("taxAmt", 0.0);
+                ioItem.Add("taxAmt", item.TaxAmount);
                 ioItem.Add("totAmt", item.TotalAmount);
                 stockIoItemsArray.Add(ioItem);
             }
@@ -1070,7 +1211,7 @@ INSERT OR IGNORE INTO TAXPAYER_BHF_CUST (
             stockIoReq.Add("ocrnDt", salesDt);
             stockIoReq.Add("totItemCnt", items.Count);
             stockIoReq.Add("totTaxblAmt", totalAmt);
-            stockIoReq.Add("totTaxAmt", 0.0);
+            stockIoReq.Add("totTaxAmt", totTaxAmt);
             stockIoReq.Add("totAmt", totalAmt);
             stockIoReq.Add("remark", "");
             stockIoReq.Add("regrId", _userId);

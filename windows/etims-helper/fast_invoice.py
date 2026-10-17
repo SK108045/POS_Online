@@ -27,22 +27,79 @@ def find_generator_exe() -> Path:
     raise FileNotFoundError('EtimsFastInvoiceGenerator.exe not found in fast_engine directory')
 
 
+def allocate_discounts(items: list, discount: dict, subtotal_cents: int) -> list:
+    discount_cents = discount.get('amount_cents', 0) if discount else 0
+    if not discount_cents or not subtotal_cents or not items:
+        return [(0, 0.0) for _ in items]
+
+    disc_type = discount.get('type', 'fixed')
+    disc_val = float(discount.get('value', 0))
+
+    if disc_type == 'percent':
+        rounded = [round(i.get('line_total_cents', 0) * disc_val / 100.0) for i in items]
+        if sum(rounded) == discount_cents:
+            return [(r, round(disc_val, 2)) for r in rounded]
+
+    parts = []
+    for idx, i in enumerate(items):
+        line_tot = i.get('line_total_cents', 0)
+        num = line_tot * discount_cents
+        den = subtotal_cents
+        base = num // den
+        rem = num % den
+        parts.append({'index': idx, 'amount': base, 'rem': rem, 'total': line_tot})
+
+    left = discount_cents - sum(p['amount'] for p in parts)
+    sorted_parts = sorted(parts, key=lambda x: (-x['rem'], x['index']))
+    for p in sorted_parts:
+        if left <= 0:
+            break
+        p['amount'] += 1
+        left -= 1
+
+    res = []
+    for p in parts:
+        dc_cents = p['amount']
+        line_tot = p['total']
+        dc_rate = round((dc_cents / line_tot) * 100.0, 2) if line_tot > 0 else 0.0
+        res.append((dc_cents, dc_rate))
+    return res
+
+
 def sale_to_request(sale: dict, mappings: dict | None = None) -> dict:
     mappings = mappings or {}
+    sale_items = sale.get('items', [])
+    discount = sale.get('discount', {})
+    subtotal_cents = sale.get('subtotal_cents', 0)
+    allocated = allocate_discounts(sale_items, discount, subtotal_cents)
+
+    tax_rate = sale.get('tax_rate', 0)
+    tax_cents = sale.get('tax_cents', 0)
+    default_tax_code = 'B' if (tax_rate == 16 or tax_cents > 0) else 'D'
+
     items = []
-    for item in sale.get('items', []):
+    for idx, item in enumerate(sale_items):
         pos_key = item.get('product_key', '')
         code = mappings.get(pos_key) or item.get('item_code') or ''
         qty = float(item.get('quantity', 1))
         unit_price = float(item.get('unit_price_cents', 0)) / 100.0
-        line_total = float(item.get('line_total_cents', 0)) / 100.0
-        tax_code = item.get('tax_code', 'D')
+        sply_amt = round(qty * unit_price, 2)
+
+        item_dc_cents, item_dc_rate = allocated[idx] if idx < len(allocated) else (0, 0.0)
+        dc_amt = round(float(item_dc_cents) / 100.0, 2)
+        line_net_total = round(max(0.0, sply_amt - dc_amt), 2)
+
+        tax_code = item.get('tax_code') or default_tax_code
+
         items.append({
             'ItemCode': code,
             'Name': item.get('name', 'Item'),
             'Quantity': qty,
             'UnitPrice': unit_price,
-            'LineTotal': line_total,
+            'SupplyAmount': sply_amt,
+            'DiscountRate': item_dc_rate,
+            'DiscountAmount': dc_amt,
+            'LineTotal': line_net_total,
             'TaxCode': tax_code
         })
 
@@ -137,6 +194,7 @@ def issue_programmatic(sale: dict, config: dict, key: str,
         # Build raw dict conforming to Engine.result requirements
         qr_obj = gen_res.get('QrCode') or {}
         raw = {
+            'success': True,
             'local_invoice_id': gen_res['LocalInvoiceId'],
             'invoice_number': gen_res.get('InvoiceNumber') or str(gen_res['LocalInvoiceId']),
             'cu_invoice_number': gen_res['CuInvoiceNumber'],

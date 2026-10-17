@@ -57,8 +57,8 @@ def plan(sale, supplied, state, store, config):
             raise ValueError('Expiry-controlled products require a verified native batch/expiry workflow; no product or invoice was written')
         needed = []
         if existing:
-            if existing['TAX_TY_CD'] != 'D':
-                raise ValueError('Registered product tax differs from this verified Non-VAT sale profile')
+            if existing['TAX_TY_CD'] not in ('B', 'D'):
+                raise ValueError('Registered product tax differs from supported tax profiles (B or D)')
             for field, column in FIELD_MAP.items():
                 if meta.get(field) and str(meta[field]) != str(existing[column]):
                     raise ValueError('Saved POS product registration differs from the active eTIMS product')
@@ -79,8 +79,8 @@ def plan(sale, supplied, state, store, config):
                     raise ValueError('Registration code is not active in the installed eTIMS code tables: ' + field)
             if meta.get('class_code') and meta['class_code'] not in classes:
                 raise ValueError('Item classification is not active in the installed eTIMS client')
-            if meta.get('tax_code') and meta['tax_code'] != 'D':
-                raise ValueError('This desktop profile requires the actual Non-VAT tax category D')
+            if meta.get('tax_code') and meta['tax_code'] not in ('B', 'D'):
+                raise ValueError('This profile requires tax category B (VAT 16%) or D (Non-VAT)')
             if 'unit_cost_cents' not in meta:
                 needed.append('unit_cost_cents')
             elif isinstance(meta['unit_cost_cents'], bool) or not isinstance(meta['unit_cost_cents'], int) or meta['unit_cost_cents'] < 0:

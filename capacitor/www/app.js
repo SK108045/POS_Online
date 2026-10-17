@@ -741,7 +741,6 @@ const LocalPOS = {
       if(explicitTax && ![0,16].includes(Number(body.tax_rate)))throw Error('Choose Non-VAT (0%) or VAT (16%).');
       const taxRate = explicitTax ? Number(body.tax_rate) : configuredSettings.tax_rate_confirmed===true &&
         Number.isFinite(configuredRate) && configuredRate>0 && configuredRate<=100 ? configuredRate : 0;
-      if(body.generate_etims && taxRate!==0)throw Error('VAT eTIMS invoicing is unavailable on this device. Select Non-VAT or switch off Generate eTIMS Invoice.');
       let verifiedMpesa = null;
       if (body.payment_method === 'mpesa') {
         // Never allow cashier taps or an STK acceptance to mark M-Pesa paid.
@@ -2125,10 +2124,10 @@ async function showCheckoutModal(order) {
       overlay.querySelector('#checkoutTaxSummary').textContent = selectedTaxRate
         ? 'VAT included: '+money(tax)+' · Excl. VAT: '+money(order.total_cents-tax)+'. Total stays '+money(order.total_cents)+'.'
         : 'No VAT charged. Total: '+money(order.total_cents)+'.';
-      const unsupported = generateEtims && selectedTaxRate !== 0;
+      const unsupported = generateEtims && ![0, 16].includes(selectedTaxRate);
       const notice = overlay.querySelector('#checkoutTaxNotice');
       notice.hidden = !unsupported;
-      notice.textContent = unsupported ? 'VAT eTIMS invoicing is unavailable on this device. Select Non-VAT or switch off Generate eTIMS Invoice.' : '';
+      notice.textContent = unsupported ? 'Only Non-VAT (0%) and VAT (16%) are supported for eTIMS.' : '';
       confirmBtn.disabled = checkoutBusy || unsupported;
     }
     function setBusy(busy, message='Processing your sale…') {

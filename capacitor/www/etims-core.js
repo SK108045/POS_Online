@@ -110,15 +110,17 @@
   }
   function windowsSnapshot(order, shopId, settings = {}, details = {}) {
     const sale=snapshot(order,shopId,settings,details);
-    if (!sale.customer.pin || !sale.customer.name) throw Error('Buyer KRA PIN and name are required by the Windows eTIMS client.');
-    if (sale.discount.amount_cents || sale.tax_cents || sale.tax_rate !== 0) throw Error('This eTIMS device currently supports Non-VAT invoices without discounts. VAT eTIMS invoicing is unavailable on this device.');
+    if (!sale.customer.name) sale.customer.name = 'Walk-In Customer';
+    if (!sale.customer.pin) sale.customer.pin = 'NA';
+    if (sale.tax_rate !== 0 && sale.tax_rate !== 16) throw Error('Supported eTIMS tax rates are Non-VAT (0%) and VAT (16%).');
     sale.version=2;
     if(details.remarks) sale.customer.remarks=text(details.remarks,500);
+    const taxCode = sale.tax_rate === 16 ? 'B' : 'D';
     sale.items=sale.items.map((line,index)=>{
       const item=order.items[index];
       // Price and quantity never form part of a product identity.
       const productKey=item.etims_product_key || (item.menu_item_id ? 'catalog:'+item.menu_item_id : 'manual:'+text(item.name).toLowerCase());
-      return {...line,product_key:text(productKey+(item.variant_info?'|variant:'+item.variant_info:''),200),
+      return {...line,tax_code:item.tax_code || taxCode,product_key:text(productKey+(item.variant_info?'|variant:'+item.variant_info:''),200),
         registration:item.etims_registration || {},inventory:item.etims_inventory || {},
         ...(item.expiry_date?{expiry_date:text(item.expiry_date,20)}:{}),...(item.batch_no?{batch_no:text(item.batch_no,80)}:{})};
     });
