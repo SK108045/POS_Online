@@ -249,6 +249,11 @@ namespace EtimsProgrammatic
                 string buyerName = !string.IsNullOrEmpty(req.BuyerName) ? req.BuyerName.Trim() : "Walk-In Customer";
                 string paymentCode = !string.IsNullOrEmpty(req.PaymentCode) ? req.PaymentCode.Trim() : "01";
                 string remark = !string.IsNullOrEmpty(req.Remark) ? req.Remark.Trim() : ("Oraforge:" + Guid.NewGuid().ToString("N"));
+                if (remark.StartsWith("Oraforge:", StringComparison.OrdinalIgnoreCase))
+                {
+                    var parts = remark.Split(':');
+                    remark = parts[parts.Length - 1];
+                }
 
                 using (var conn = new SQLiteConnection(_connString))
                 {
@@ -1045,7 +1050,13 @@ INSERT OR IGNORE INTO TAXPAYER_BHF_CUST (
             sb.AppendLine(rcptSignChunked);
             sb.AppendLine("-----------------------------------");
             sb.AppendLine("NON-FISCAL INFORMATION:");
-            sb.AppendLine(remark);
+            string nonFiscal = remark ?? "";
+            if (nonFiscal.StartsWith("Oraforge:", StringComparison.OrdinalIgnoreCase))
+            {
+                var parts = nonFiscal.Split(':');
+                nonFiscal = parts[parts.Length - 1];
+            }
+            sb.AppendLine(nonFiscal);
             sb.AppendLine("-----------------------------------");
             sb.AppendLine("End of Legal Receipt");
             sb.AppendLine("Powered by eTIMS v1.0");

@@ -106,8 +106,7 @@ def sale_to_request(sale: dict, mappings: dict | None = None) -> dict:
     cust = sale.get('customer', {})
     payment_method = sale.get('payment_method', 'cash')
     payment_code = PAYMENTS.get(payment_method, '01')
-    shop_id = sale.get('shop_id', 'pos')
-    receipt_no = sale.get('receipt_no', '')
+    receipt_no = sale.get('receipt_no') or sale.get('order', {}).get('ticket_no') or ''
 
     return {
         'BuyerPin': cust.get('pin', 'NA'),
@@ -116,7 +115,7 @@ def sale_to_request(sale: dict, mappings: dict | None = None) -> dict:
         'BuyerEmail': cust.get('email', ''),
         'BuyerAddress': cust.get('billing_address', ''),
         'PaymentCode': payment_code,
-        'Remark': f"Oraforge:{shop_id}:{receipt_no}",
+        'Remark': receipt_no if receipt_no else 'POS Sale',
         'PosSaleDigest': digest(sale),
         'Items': items
     }

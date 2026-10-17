@@ -2815,6 +2815,7 @@ button:focus-visible, a:focus-visible { outline: 3px solid #87a857; outline-offs
 }
 .receipt .receipt-contact {
   font-size: 12px !important;
+  font-weight: 600 !important;
   line-height: 1.35;
   overflow-wrap: anywhere;
   margin: 1px 0 !important;

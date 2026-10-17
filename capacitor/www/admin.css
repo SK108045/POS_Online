@@ -1536,6 +1536,7 @@ button:focus-visible, .nav-item:focus-visible, a:focus-visible { outline: 3px so
 }
 .receipt .receipt-contact {
   font-size: 12px !important;
+  font-weight: 600 !important;
   line-height: 1.35;
   overflow-wrap: anywhere;
   margin: 1px 0 !important;

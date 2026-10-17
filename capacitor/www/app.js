@@ -73,6 +73,12 @@ function showReceiptModal(order, isKot = false, autoPrintEtims = false) {
     const saleStamp = Number(order.created_at || order.paid_at || 0);
     const created = saleStamp > 0 ? new Date(saleStamp * 1000) : new Date();
     const printedAt = new Date().toLocaleTimeString('en-KE', {hour:'2-digit', minute:'2-digit', second:'2-digit', hour12:true});
+    const custName = order.etims_customer?.name || order.customer_name || 'Walk-In Customer';
+    const custPin = (order.etims_customer?.pin || order.customer_kra_pin || '').trim();
+    const custPhone = (order.etims_customer?.phone || order.customer_phone || '').trim();
+    const custEmail = (order.etims_customer?.email || order.customer_email || '').trim();
+    const custAddress = (order.etims_customer?.billing_address || order.etims_customer?.address || order.customer_billing_address || '').trim();
+    const custRemarks = (order.etims_customer?.remarks || order.customer_remarks || '').trim();
     const contact = [
       baddr && `<p class="receipt-contact">Address: ${receiptEscape(baddr)}</p>`,
       bphone && `<p class="receipt-contact">Mobile: ${receiptEscape(bphone)}</p>`,
@@ -88,7 +94,12 @@ function showReceiptModal(order, isKot = false, autoPrintEtims = false) {
           <h2 class="receipt-sale-title">${isQuote ? 'Quotation' : 'Cash Sale'}</h2>
         </header>
         <div class="receipt-details">
-          <div class="receipt-line"><span>Name</span><span>${receiptEscape(order.etims_customer?.name || order.customer_name || 'Walk-In Customer')}</span></div>
+          <div class="receipt-line"><span>Name</span><span>${receiptEscape(custName)}</span></div>
+          ${(custPin && custPin !== 'NA') ? `<div class="receipt-line"><span>Buyer KRA PIN</span><span>${receiptEscape(custPin)}</span></div>` : ''}
+          ${custPhone ? `<div class="receipt-line"><span>Phone</span><span>${receiptEscape(custPhone)}</span></div>` : ''}
+          ${custEmail ? `<div class="receipt-line"><span>Email</span><span>${receiptEscape(custEmail)}</span></div>` : ''}
+          ${custAddress ? `<div class="receipt-line"><span>Address</span><span>${receiptEscape(custAddress)}</span></div>` : ''}
+          ${custRemarks ? `<div class="receipt-line"><span>Remarks</span><span>${receiptEscape(custRemarks)}</span></div>` : ''}
           <div class="receipt-line"><span>Receipt No.</span><span>${receiptEscape(order.ticket_no || order.id || '-')}</span></div>
           <div class="receipt-line"><span>Date</span><span>${created.toLocaleDateString('en-GB')}</span></div>
           <div class="receipt-line"><span>Print Time</span><span>${printedAt}</span></div>
@@ -790,6 +801,10 @@ const LocalPOS = {
         // M-Pesa payer. Preserve independently from the STK payment phone.
         if (order.etims_customer.name) order.customer_name = order.etims_customer.name;
         if (order.etims_customer.phone) order.customer_phone = order.etims_customer.phone;
+        if (order.etims_customer.pin) order.customer_kra_pin = order.etims_customer.pin;
+        if (order.etims_customer.email) order.customer_email = order.etims_customer.email;
+        if (order.etims_customer.billing_address) order.customer_billing_address = order.etims_customer.billing_address;
+        if (order.etims_customer.remarks) order.customer_remarks = order.etims_customer.remarks;
         order.etims_shop_id = body.etims_shop_id;
         order.etims_seller_pin = configuredSettings.kra_pin || '';
       }
@@ -2836,7 +2851,7 @@ function renderProductAdminGrid() {
   if (badge) badge.textContent = `${filteredItems.length} active`;
 
   const safe = value => String(value ?? '').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-  grid.innerHTML = `<table class="sales-table staff-products"><thead><tr><th>Product</th><th>Category</th><th>SKU</th><th>Price</th><th>Stock</th><th>Actions</th></tr></thead><tbody>${filteredItems.map(item=>`<tr class="sales-row"><td><strong>${safe(item.name)}</strong>${item.strength?`<small>${safe(item.strength)}</small>`:''}</td><td>${safe(categoryName(item.category_id))}</td><td><code>${safe(item.sku || '—')}</code></td><td><strong>${money(item.price_cents)}</strong></td><td><span class="staff-stock ${tracksStock(item) && (item.stock_qty||0)<=(item.reorder_level??5)?'low':''}">${item.unit === 'service' ? 'Service' : `${safe(item.stock_qty ?? '—')} ${safe(item.unit || 'pcs')}`} </span></td><td><div class="product-actions"><button class="edit-btn" data-id="${item.id}">Edit</button><button class="delete-btn" data-id="${item.id}">Delete</button></div></td></tr>`).join('') || '<tr><td colspan="6">No products match your criteria.</td></tr>'}</tbody></table>`;
+  grid.innerHTML = `<table class="sales-table staff-products"><thead><tr><th>Product</th><th>Category</th><th>SKU</th><th>Price</th><th>Stock</th><th>Actions</th></tr></thead><tbody>${filteredItems.map(item=>`<tr class="sales-row"><td><strong>${safe(item.name)}</strong>${item.strength?`<small>${safe(item.strength)}</small>`:''}</td><td>${safe(categoryName(item.category_id))}</td><td><code>${safe(item.sku || '—')}</code></td><td><strong>${money(item.price_cents)}</strong></td><td><span class="staff-stock ${tracksStock(item) && (item.stock_qty||0)<=(item.reorder_level??5)?'low':''}">${item.unit === 'service' ? 'Service' : `${safe(item.stock_qty ?? '—')} ${safe(item.unit || 'pcs')}`} </span></td><td><div class="product-actions">${item.unit === 'service' ? '' : `<button class="quick-add-stock-btn" data-id="${item.id}" title="Add newly arrived stock" style="background:rgba(22,163,74,0.12);color:#16a34a;border:1px solid #16a34a;border-radius:4px;padding:3px 7px;font-size:12px;font-weight:600;cursor:pointer;">+ Stock</button>`}<button class="edit-btn" data-id="${item.id}">Edit</button><button class="delete-btn" data-id="${item.id}">Delete</button></div></td></tr>`).join('') || '<tr><td colspan="6">No products match your criteria.</td></tr>'}</tbody></table>`;
 
   // Dropdown toggles
   qsa('.action-menu-btn', grid).forEach(btn => {
@@ -2846,6 +2861,14 @@ function renderProductAdminGrid() {
       const isHidden = menu.classList.contains('hidden');
       qsa('.action-menu', root).forEach(m => m.classList.add('hidden')); // close all
       if (isHidden) menu.classList.remove('hidden');
+    });
+  });
+
+  qsa('.quick-add-stock-btn', grid).forEach(btn => {
+    btn.addEventListener('click', e => {
+      e.stopPropagation();
+      const item = state.items.find(i => i.id == btn.dataset.id);
+      if (item) showQuickAddStockModal(item);
     });
   });
 
@@ -3029,6 +3052,90 @@ function showImageSearchModal(query, onSelect) {
   if (query) executeSearch();
 }
 
+function showQuickAddStockModal(item) {
+  const currentStock = Number(item.stock_qty || 0);
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  const safe = value => String(value ?? '').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  overlay.innerHTML = `
+    <div class="modal-box" style="width:380px; max-width:92vw; padding:20px;">
+      <div class="modal-head" style="margin-bottom:12px; display:flex; justify-content:space-between; align-items:center;">
+        <h3 style="margin:0; font-size:17px;">📦 Receive New Stock</h3>
+        <button class="modal-close" id="qasClose" type="button" style="background:none; border:none; font-size:20px; cursor:pointer;">&times;</button>
+      </div>
+      <p style="margin:0 0 12px; font-size:14px; font-weight:600;">${safe(item.name)}</p>
+      <div style="background:var(--line); padding:10px 14px; border-radius:8px; margin-bottom:14px; font-size:13px; display:flex; justify-content:space-between; align-items:center;">
+        <span>Current Stock</span>
+        <strong style="font-size:15px;">${currentStock} ${safe(item.unit || 'pcs')}</strong>
+      </div>
+      <div class="form-group" style="margin-bottom:14px;">
+        <label style="display:block; font-weight:600; font-size:13px; margin-bottom:6px;">New stock arrived</label>
+        <input type="number" id="qasNewStock" class="field" placeholder="e.g. 20" min="0.01" step="${item.decimal_qty_enabled || hasCap('decimal_qty') ? '0.01' : '1'}" autofocus style="width:100%; font-size:16px; padding:10px;">
+        <div id="qasCalc" style="margin-top:6px; font-size:12px; color:#16a34a; min-height:18px;"></div>
+      </div>
+      <div class="modal-actions" style="display:flex; justify-content:flex-end; gap:8px;">
+        <button type="button" class="secondary" id="qasCancel">Cancel</button>
+        <button type="button" class="primary" id="qasConfirm" style="background:#16a34a; border-color:#16a34a;">Update Stock</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+
+  const input = overlay.querySelector('#qasNewStock');
+  const calc = overlay.querySelector('#qasCalc');
+  const confirmBtn = overlay.querySelector('#qasConfirm');
+  const close = () => overlay.remove();
+
+  overlay.querySelector('#qasClose').addEventListener('click', close);
+  overlay.querySelector('#qasCancel').addEventListener('click', close);
+
+  const updateCalc = () => {
+    const addQty = parseFloat(input.value);
+    if (!isNaN(addQty) && addQty > 0) {
+      const newTotal = Math.round((currentStock + addQty) * 100) / 100;
+      calc.innerHTML = `Calculation: ${currentStock} + <strong>${addQty}</strong> = <strong>${newTotal}</strong> ${safe(item.unit || 'pcs')}`;
+      confirmBtn.textContent = `Add +${addQty} (Total: ${newTotal})`;
+      confirmBtn.disabled = false;
+    } else {
+      calc.textContent = '';
+      confirmBtn.textContent = 'Update Stock';
+      confirmBtn.disabled = true;
+    }
+  };
+  confirmBtn.disabled = true;
+  input.addEventListener('input', updateCalc);
+
+  const doUpdate = async () => {
+    const addQty = parseFloat(input.value);
+    if (isNaN(addQty) || addQty <= 0) return;
+    confirmBtn.disabled = true;
+    confirmBtn.textContent = 'Updating…';
+    try {
+      await api('/api/stock/adjust', {
+        method: 'POST',
+        body: { product_id: item.id, qty_change: addQty, reason: 'received_stock' }
+      });
+      item.stock_qty = Math.round((currentStock + addQty) * 100) / 100;
+      toast(`Added ${addQty} new stock to ${item.name}! Total: ${item.stock_qty}`, 'success');
+      overlay.remove();
+      renderProductAdminGrid();
+    } catch (err) {
+      alert(err.message || 'Failed to update stock');
+      confirmBtn.disabled = false;
+      confirmBtn.textContent = 'Update Stock';
+    }
+  };
+
+  confirmBtn.addEventListener('click', doUpdate);
+  input.addEventListener('keydown', e => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      doUpdate();
+    }
+  });
+  setTimeout(() => input.focus(), 60);
+}
+
 function showProductModal(item = null) {
   document.getElementById('productModal')?.remove();
   
@@ -3093,8 +3200,15 @@ function showProductModal(item = null) {
             ${state.profile?.id === 'garage' ? `<select class="field" name="unit">${garageUnitOptions(item?.unit || 'pcs')}</select>` : `<input class="field" name="unit" placeholder="pcs, kg, m, tin" value="${item?.unit || 'pcs'}">`}
           </div>
           <div class="form-group">
-            <label>Stock Qty</label>
-            <input class="field" name="stock_qty" type="number" step="${item?.decimal_qty_enabled || hasCap('decimal_qty') ? '0.01' : '1'}" value="${item?.stock_qty !== undefined ? item.stock_qty : 0}">
+            <label style="display:flex; justify-content:space-between; align-items:center;">
+              <span>Stock Qty</span>
+              ${isEdit ? `<span style="font-size:11px; color:var(--muted); font-weight:normal;">Current: <strong id="pmCurrentStockBadge">${item?.stock_qty ?? 0}</strong></span>` : ''}
+            </label>
+            <div style="display:flex; gap:8px; align-items:center;">
+              <input class="field" id="pmStockQty" name="stock_qty" type="number" step="${item?.decimal_qty_enabled || hasCap('decimal_qty') ? '0.01' : '1'}" value="${item?.stock_qty !== undefined ? item.stock_qty : 0}" style="flex:1;" title="Total Stock Quantity">
+              <input class="field" id="pmAddStock" type="number" min="0" step="${item?.decimal_qty_enabled || hasCap('decimal_qty') ? '0.01' : '1'}" placeholder="+ Add New Stock" style="flex:1; border-color:#16a34a; background:rgba(22,163,74,0.06);" title="Enter quantity of new stock arrived to automatically add to current stock">
+            </div>
+            <small id="pmStockSummary" style="display:block; margin-top:4px; font-size:11px; color:#16a34a; min-height:16px;"></small>
           </div>
           ${hasCap('reorder_levels') ? `
             <div class="form-group">
@@ -3221,6 +3335,37 @@ function showProductModal(item = null) {
       toast(`Generated barcode: ${randomEan}`, 'info');
     }
   });
+
+  const pmStockInput = overlay.querySelector('#pmStockQty');
+  const pmAddStock = overlay.querySelector('#pmAddStock');
+  const pmStockSummary = overlay.querySelector('#pmStockSummary');
+  let baseStock = Number(item?.stock_qty !== undefined ? item.stock_qty : 0);
+
+  if (pmAddStock && pmStockInput) {
+    const updateSum = () => {
+      const added = parseFloat(pmAddStock.value);
+      if (!isNaN(added) && added > 0) {
+        const total = Math.round((baseStock + added) * 100) / 100;
+        pmStockInput.value = total;
+        if (pmStockSummary) {
+          pmStockSummary.innerHTML = `⚡ Adding <strong>+${added}</strong> new stock: ${baseStock} + ${added} = <strong>${total}</strong>`;
+        }
+      } else {
+        pmStockInput.value = baseStock;
+        if (pmStockSummary) pmStockSummary.textContent = '';
+      }
+    };
+    pmAddStock.addEventListener('input', updateSum);
+    pmAddStock.addEventListener('change', updateSum);
+
+    pmStockInput.addEventListener('input', () => {
+      baseStock = parseFloat(pmStockInput.value) || 0;
+      pmAddStock.value = '';
+      if (pmStockSummary) pmStockSummary.textContent = '';
+      const badge = overlay.querySelector('#pmCurrentStockBadge');
+      if (badge) badge.textContent = baseStock;
+    });
+  }
 
   qs('#pmForm', overlay).addEventListener('submit', async e => {
     e.preventDefault();

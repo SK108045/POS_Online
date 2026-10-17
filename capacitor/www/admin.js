@@ -452,6 +452,12 @@ function showAdminSalesReceipt(order, isKot = false) {
     const saleStamp = Number(order.created_at || order.paid_at || 0);
     const created = saleStamp > 0 ? new Date(saleStamp * 1000) : new Date();
     const printedAt = new Date().toLocaleTimeString('en-KE', {hour:'2-digit', minute:'2-digit', second:'2-digit', hour12:true});
+    const custName = order.etims_customer?.name || order.customer_name || 'Walk-In Customer';
+    const custPin = (order.etims_customer?.pin || order.customer_kra_pin || '').trim();
+    const custPhone = (order.etims_customer?.phone || order.customer_phone || '').trim();
+    const custEmail = (order.etims_customer?.email || order.customer_email || '').trim();
+    const custAddress = (order.etims_customer?.billing_address || order.etims_customer?.address || order.customer_billing_address || '').trim();
+    const custRemarks = (order.etims_customer?.remarks || order.customer_remarks || '').trim();
     const contact = [
       baddr && `<p class="receipt-contact">Address: ${receiptEscape(baddr)}</p>`,
       bphone && `<p class="receipt-contact">Mobile: ${receiptEscape(bphone)}</p>`,
@@ -467,7 +473,12 @@ function showAdminSalesReceipt(order, isKot = false) {
           <h2 class="receipt-sale-title">${isQuote ? 'Quotation' : 'Cash Sale'}</h2>
         </header>
         <div class="receipt-details">
-          <div class="receipt-line"><span>Name</span><span>${receiptEscape(order.customer_name || 'Walk-In Customer')}</span></div>
+          <div class="receipt-line"><span>Name</span><span>${receiptEscape(custName)}</span></div>
+          ${(custPin && custPin !== 'NA') ? `<div class="receipt-line"><span>Buyer KRA PIN</span><span>${receiptEscape(custPin)}</span></div>` : ''}
+          ${custPhone ? `<div class="receipt-line"><span>Phone</span><span>${receiptEscape(custPhone)}</span></div>` : ''}
+          ${custEmail ? `<div class="receipt-line"><span>Email</span><span>${receiptEscape(custEmail)}</span></div>` : ''}
+          ${custAddress ? `<div class="receipt-line"><span>Address</span><span>${receiptEscape(custAddress)}</span></div>` : ''}
+          ${custRemarks ? `<div class="receipt-line"><span>Remarks</span><span>${receiptEscape(custRemarks)}</span></div>` : ''}
           <div class="receipt-line"><span>Receipt No.</span><span>${receiptEscape(order.ticket_no || order.id || '-')}</span></div>
           <div class="receipt-line"><span>Date</span><span>${created.toLocaleDateString('en-GB')}</span></div>
           <div class="receipt-line"><span>Print Time</span><span>${printedAt}</span></div>

@@ -326,6 +326,12 @@
           if(!current || current.status!=='paid' || current.total_cents!==order.total_cents || JSON.stringify(current.items)!==JSON.stringify(order.items))throw Error('The original paid sale changed. Reopen its receipt.');
           if(current.etims_requested)throw Error('This paid sale already has an invoice request. Recover it from the workspace.');
           enrich(current,products);current.etims_requested=true;current.etims_customer=customer;
+          if (customer.name) current.customer_name = customer.name;
+          if (customer.phone) current.customer_phone = customer.phone;
+          if (customer.pin) current.customer_kra_pin = customer.pin;
+          if (customer.email) current.customer_email = customer.email;
+          if (customer.billing_address) current.customer_billing_address = customer.billing_address;
+          if (customer.remarks) current.customer_remarks = customer.remarks;
           current.etims_registration_details=details;current.etims_shop_id=scope();prepared=structuredClone(current);return orders;
         },[]);
         const record=await queue(prepared,customer,settings);overlay.remove();await start(record.id);
