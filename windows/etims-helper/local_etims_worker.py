@@ -80,6 +80,7 @@ class EtimsCloudBridge:
         self.vercel_url = (vercel_url or '').rstrip('/')
         self.schema = schema or os.environ.get('SUPABASE_SCHEMA', 'pos')
         self.mode = 'unknown'
+        self._conn = None
 
         if self.pg_url and HAVE_PSYCOPG2:
             self.mode = 'postgres'
@@ -93,21 +94,55 @@ class EtimsCloudBridge:
                 "SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY, or VERCEL_URL in your .env"
             )
 
+    def _get_conn(self):
+        if self._conn is not None:
+            try:
+                if self._conn.closed == 0:
+                    return self._conn
+            except Exception:
+                pass
+            try:
+                self._conn.close()
+            except Exception:
+                pass
+            self._conn = None
+
+        self._conn = psycopg2.connect(
+            self.pg_url,
+            connect_timeout=10,
+            keepalives=1,
+            keepalives_idle=30,
+            keepalives_interval=10,
+            keepalives_count=5
+        )
+        self._conn.autocommit = True
+        return self._conn
+
+    def _close_conn(self):
+        if self._conn is not None:
+            try:
+                self._conn.close()
+            except Exception:
+                pass
+            self._conn = None
+
     def fetch_pending_jobs(self, shop_id: str = 'retail', limit: int = 5) -> list[dict]:
         if self.mode == 'postgres':
-            conn = psycopg2.connect(self.pg_url)
-            cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
-            cur.execute(f"SET search_path TO {self.schema}, public;")
-            cur.execute(f"""
-                SELECT id, job_hash, shop_id, order_id, ticket_no, status, payload
-                FROM {self.schema}.etims_queue
-                WHERE shop_id = %s AND status = 'pending'
-                ORDER BY id ASC
-                LIMIT %s
-            """, (shop_id, limit))
-            rows = cur.fetchall()
-            conn.close()
-            return [dict(r) for r in rows]
+            try:
+                conn = self._get_conn()
+                cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+                cur.execute(f"SET search_path TO {self.schema}, public;")
+                cur.execute(f"""
+                    SELECT id, job_hash, shop_id, order_id, ticket_no, status, payload
+                    FROM {self.schema}.etims_queue
+                    WHERE shop_id = %s AND status = 'pending'
+                    ORDER BY id ASC
+                    LIMIT %s
+                """, (shop_id, limit))
+                return [dict(r) for r in cur.fetchall()]
+            except Exception:
+                self._close_conn()
+                raise
 
         elif self.mode == 'supabase_rest':
             endpoint = f"{self.supabase_url}/rest/v1/etims_queue?shop_id=eq.{shop_id}&status=eq.pending&order=id.asc&limit={limit}"
@@ -132,12 +167,14 @@ class EtimsCloudBridge:
     def mark_processing(self, job_id: int):
         now_iso = datetime.now(timezone.utc).isoformat()
         if self.mode == 'postgres':
-            conn = psycopg2.connect(self.pg_url)
-            cur = conn.cursor()
-            cur.execute(f"SET search_path TO {self.schema}, public;")
-            cur.execute(f"UPDATE {self.schema}.etims_queue SET status = 'processing', updated_at = %s WHERE id = %s", (now_iso, job_id))
-            conn.commit()
-            conn.close()
+            try:
+                conn = self._get_conn()
+                cur = conn.cursor()
+                cur.execute(f"SET search_path TO {self.schema}, public;")
+                cur.execute(f"UPDATE {self.schema}.etims_queue SET status = 'processing', updated_at = %s WHERE id = %s", (now_iso, job_id))
+            except Exception:
+                self._close_conn()
+                raise
         elif self.mode == 'supabase_rest':
             endpoint = f"{self.supabase_url}/rest/v1/etims_queue?id=eq.{job_id}"
             data = json.dumps({'status': 'processing', 'updated_at': now_iso}).encode('utf-8')
@@ -156,41 +193,43 @@ class EtimsCloudBridge:
         fiscal = result.get('fiscal', {})
 
         if self.mode == 'postgres':
-            conn = psycopg2.connect(self.pg_url)
-            cur = conn.cursor()
-            cur.execute(f"SET search_path TO {self.schema}, public;")
-            cur.execute(f"""
-                UPDATE {self.schema}.etims_queue
-                SET status = 'completed', result = %s, error = NULL, updated_at = %s
-                WHERE id = %s
-            """, (json.dumps(result), now_iso, job_id))
-
-            if ticket_no:
+            try:
+                conn = self._get_conn()
+                cur = conn.cursor()
+                cur.execute(f"SET search_path TO {self.schema}, public;")
                 cur.execute(f"""
-                    UPDATE {self.schema}.orders SET
-                        etims_status = 'generated',
-                        cu_invoice_number = %s,
-                        scu_id = %s,
-                        receipt_signature = %s,
-                        internal_data = %s,
-                        qr_image = %s,
-                        invoice_number = %s,
-                        invoice_date = %s,
-                        updated_at = %s
-                    WHERE ticket_no = %s
-                """, (
-                    fiscal.get('cu_invoice_number', ''),
-                    fiscal.get('scu_id', ''),
-                    fiscal.get('receipt_signature', ''),
-                    fiscal.get('internal_data', ''),
-                    fiscal.get('qr_image', ''),
-                    fiscal.get('invoice_number', ''),
-                    fiscal.get('invoice_date', ''),
-                    now_iso,
-                    ticket_no
-                ))
-            conn.commit()
-            conn.close()
+                    UPDATE {self.schema}.etims_queue
+                    SET status = 'completed', result = %s, error = NULL, updated_at = %s
+                    WHERE id = %s
+                """, (json.dumps(result), now_iso, job_id))
+
+                if ticket_no:
+                    cur.execute(f"""
+                        UPDATE {self.schema}.orders SET
+                            etims_status = 'generated',
+                            cu_invoice_number = %s,
+                            scu_id = %s,
+                            receipt_signature = %s,
+                            internal_data = %s,
+                            qr_image = %s,
+                            invoice_number = %s,
+                            invoice_date = %s,
+                            updated_at = %s
+                        WHERE ticket_no = %s
+                    """, (
+                        fiscal.get('cu_invoice_number', ''),
+                        fiscal.get('scu_id', ''),
+                        fiscal.get('receipt_signature', ''),
+                        fiscal.get('internal_data', ''),
+                        fiscal.get('qr_image', ''),
+                        fiscal.get('invoice_number', ''),
+                        fiscal.get('invoice_date', ''),
+                        now_iso,
+                        ticket_no
+                    ))
+            except Exception:
+                self._close_conn()
+                raise
 
         elif self.mode == 'supabase_rest':
             endpoint = f"{self.supabase_url}/rest/v1/etims_queue?id=eq.{job_id}"
@@ -238,12 +277,14 @@ class EtimsCloudBridge:
     def mark_failed(self, job_id: int, error_message: str):
         now_iso = datetime.now(timezone.utc).isoformat()
         if self.mode == 'postgres':
-            conn = psycopg2.connect(self.pg_url)
-            cur = conn.cursor()
-            cur.execute(f"SET search_path TO {self.schema}, public;")
-            cur.execute(f"UPDATE {self.schema}.etims_queue SET status = 'failed', error = %s, updated_at = %s WHERE id = %s", (error_message[:600], now_iso, job_id))
-            conn.commit()
-            conn.close()
+            try:
+                conn = self._get_conn()
+                cur = conn.cursor()
+                cur.execute(f"SET search_path TO {self.schema}, public;")
+                cur.execute(f"UPDATE {self.schema}.etims_queue SET status = 'failed', error = %s, updated_at = %s WHERE id = %s", (error_message[:600], now_iso, job_id))
+            except Exception:
+                self._close_conn()
+                raise
         elif self.mode == 'supabase_rest':
             endpoint = f"{self.supabase_url}/rest/v1/etims_queue?id=eq.{job_id}"
             data = json.dumps({'status': 'failed', 'error': error_message[:600], 'updated_at': now_iso}).encode('utf-8')
@@ -346,11 +387,16 @@ def run_worker(bridge: EtimsCloudBridge, shop_id: str = 'retail', poll_interval:
                     print(f"[{datetime.now().strftime('%H:%M:%S')}] ✕ ERROR processing job #{job_id}: {err_msg}")
                     bridge.mark_failed(job_id, err_msg)
 
-        except urllib.error.URLError as e:
-            # Network blip, wait and retry
-            pass
+        except urllib.error.URLError:
+            time.sleep(3.0)
         except Exception as loop_err:
-            print(f"[{datetime.now().strftime('%H:%M:%S')}] Worker loop warning: {loop_err}")
+            err_str = str(loop_err)
+            if "EAUTHTIMEOUT" in err_str or "timeout" in err_str.lower():
+                print(f"[{datetime.now().strftime('%H:%M:%S')}] Pooler timeout, reconnecting cleanly in 3s...", flush=True)
+                time.sleep(3.0)
+            else:
+                print(f"[{datetime.now().strftime('%H:%M:%S')}] Worker notice: {loop_err}", flush=True)
+                time.sleep(2.0)
 
         time.sleep(poll_interval)
 

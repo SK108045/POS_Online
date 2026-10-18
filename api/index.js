@@ -43,9 +43,13 @@ module.exports = async function handler(req, res) {
     return;
   }
 
-  const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
+  const matchedPath = req.headers['x-matched-path'] || req.headers['x-forwarded-uri'] || req.headers['x-now-route-matches'];
+  const rawUrl = matchedPath || req.url;
+  const url = new URL(rawUrl, `http://${req.headers.host || 'localhost'}`);
   let pathname = url.pathname;
-  if (req.query && req.query.slug) {
+  if (url.searchParams.get('path')) {
+    pathname = `/api/${url.searchParams.get('path')}`;
+  } else if (req.query && req.query.slug) {
     const slugStr = Array.isArray(req.query.slug) ? req.query.slug.join('/') : req.query.slug;
     pathname = `/api/${slugStr}`;
   }
@@ -269,6 +273,190 @@ module.exports = async function handler(req, res) {
       return sendJson(res, 200, found || {});
     }
 
+    if (pathname === '/api/orders' && method === 'POST') {
+      const body = await parseBody(req);
+      const ticketNo = `REC-${Date.now().toString().slice(-6)}-${Math.floor(Math.random() * 900 + 100)}`;
+      const orderPayload = {
+        ticket_no: ticketNo,
+        table_id: body.table_id ? Number(body.table_id) : null,
+        order_type: body.order_type || 'walk-in',
+        customer_name: (body.customer_name || '').trim(),
+        notes: (body.notes || '').trim(),
+        pricing_tier: body.pricing_tier || 'retail',
+        is_quote: body.is_quote ? 1 : 0,
+        status: 'open',
+        subtotal_cents: 0,
+        tax_cents: 0,
+        total_cents: 0,
+        business_type: 'hardware',
+        shop_id: body.shop_id || 'retail',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      };
+
+      if (isConfigured && supabase) {
+        const { data, error } = await supabase.from('orders').insert(orderPayload).select().single();
+        if (error) {
+          console.error('[Create Order Error]', error);
+          return sendJson(res, 500, { error: error.message });
+        }
+        return sendJson(res, 200, { ...data, items: [] });
+      }
+
+      const mockOrder = { ...orderPayload, id: Date.now(), items: [] };
+      return sendJson(res, 200, mockOrder);
+    }
+
+    if (pathname === '/api/order/add' && method === 'POST') {
+      const body = await parseBody(req);
+      const orderId = Number(body.order_id);
+      const menuItemId = Number(body.menu_item_id);
+      const qty = Number(body.qty || 1);
+      const pricingTier = body.pricing_tier || 'retail';
+      const variantInfo = (body.variant_info || '').trim();
+      const note = (body.note || '').trim();
+
+      if (isConfigured && supabase) {
+        const { data: item } = await supabase.from('menu_items').select('*').eq('id', menuItemId).single();
+        if (!item) return sendJson(res, 404, { error: 'Item not found' });
+
+        const unitPrice = (pricingTier === 'wholesale' && item.wholesale_price_cents > 0)
+          ? Number(item.wholesale_price_cents)
+          : Number(body.unit_price_cents || item.price_cents || 0);
+
+        const { data: existingRows } = await supabase.from('order_items').select('*')
+          .eq('order_id', orderId)
+          .eq('menu_item_id', menuItemId)
+          .eq('note', note)
+          .eq('variant_info', variantInfo);
+        const existing = existingRows && existingRows[0];
+
+        if (existing) {
+          const newQty = Math.round((Number(existing.qty) + qty) * 1000) / 1000;
+          const newTotal = Math.round(newQty * unitPrice);
+          await supabase.from('order_items').update({ qty: newQty, line_total_cents: newTotal }).eq('id', existing.id);
+        } else {
+          await supabase.from('order_items').insert({
+            order_id: orderId,
+            menu_item_id: menuItemId,
+            name: item.name,
+            qty,
+            unit_price_cents: unitPrice,
+            line_total_cents: Math.round(qty * unitPrice),
+            note,
+            variant_info: variantInfo,
+            batch_no: body.batch_no || item.batch_no || '',
+            cost_cents: Number(item.cost_cents || 0)
+          });
+        }
+
+        const { data: allItems } = await supabase.from('order_items').select('*').eq('order_id', orderId).order('id');
+        const subtotal = (allItems || []).reduce((sum, it) => sum + Number(it.line_total_cents || 0), 0);
+        await supabase.from('orders').update({
+          subtotal_cents: subtotal,
+          total_cents: subtotal,
+          updated_at: new Date().toISOString()
+        }).eq('id', orderId);
+
+        const { data: updatedOrder } = await supabase.from('orders').select('*').eq('id', orderId).single();
+        return sendJson(res, 200, { ...(updatedOrder || {}), items: allItems || [] });
+      }
+
+      return sendJson(res, 200, { id: orderId, status: 'open', items: [{ name: 'Item', qty, unit_price_cents: 100, line_total_cents: Math.round(qty * 100) }] });
+    }
+
+    if (pathname === '/api/order/qty' && method === 'POST') {
+      const body = await parseBody(req);
+      const itemId = Number(body.item_id);
+      const qty = Math.max(0, Number(body.qty || 0));
+
+      if (isConfigured && supabase) {
+        const { data: item } = await supabase.from('order_items').select('*').eq('id', itemId).single();
+        if (!item) return sendJson(res, 404, { error: 'Item not found' });
+        const orderId = item.order_id;
+
+        if (qty <= 0) {
+          await supabase.from('order_items').delete().eq('id', itemId);
+        } else {
+          const unitPrice = Number(item.unit_price_cents || 0);
+          await supabase.from('order_items').update({ qty, line_total_cents: Math.round(qty * unitPrice) }).eq('id', itemId);
+        }
+
+        const { data: allItems } = await supabase.from('order_items').select('*').eq('order_id', orderId).order('id');
+        const subtotal = (allItems || []).reduce((sum, it) => sum + Number(it.line_total_cents || 0), 0);
+        await supabase.from('orders').update({
+          subtotal_cents: subtotal,
+          total_cents: subtotal,
+          updated_at: new Date().toISOString()
+        }).eq('id', orderId);
+
+        const { data: updatedOrder } = await supabase.from('orders').select('*').eq('id', orderId).single();
+        return sendJson(res, 200, { ...(updatedOrder || {}), items: allItems || [] });
+      }
+      return sendJson(res, 200, { ok: true });
+    }
+
+    if (pathname === '/api/order/add-manual' && method === 'POST') {
+      const body = await parseBody(req);
+      const orderId = Number(body.order_id);
+      const name = (body.name || 'Custom Item').trim();
+      const qty = Number(body.qty || 1);
+      const unitPrice = Number(body.unit_price_cents || 0);
+      const costCents = Number(body.cost_cents || 0);
+      const sku = (body.sku || '').trim();
+
+      if (isConfigured && supabase) {
+        await supabase.from('order_items').insert({
+          order_id: orderId,
+          name,
+          qty,
+          unit_price_cents: unitPrice,
+          line_total_cents: Math.round(qty * unitPrice),
+          cost_cents: costCents,
+          note: sku
+        });
+
+        const { data: allItems } = await supabase.from('order_items').select('*').eq('order_id', orderId).order('id');
+        const subtotal = (allItems || []).reduce((sum, it) => sum + Number(it.line_total_cents || 0), 0);
+        await supabase.from('orders').update({
+          subtotal_cents: subtotal,
+          total_cents: subtotal,
+          updated_at: new Date().toISOString()
+        }).eq('id', orderId);
+
+        const { data: updatedOrder } = await supabase.from('orders').select('*').eq('id', orderId).single();
+        return sendJson(res, 200, { ...(updatedOrder || {}), items: allItems || [] });
+      }
+      return sendJson(res, 200, { id: orderId, status: 'open', items: [] });
+    }
+
+    if (pathname === '/api/order/discount' && method === 'POST') {
+      const body = await parseBody(req);
+      const orderId = Number(body.order_id);
+      if (isConfigured && supabase) {
+        await supabase.from('orders').update({
+          discount_amount_cents: Number(body.amount_cents || 0),
+          discount_type: body.type || 'fixed',
+          updated_at: new Date().toISOString()
+        }).eq('id', orderId);
+        const { data: updatedOrder } = await supabase.from('orders').select('*').eq('id', orderId).single();
+        const { data: items } = await supabase.from('order_items').select('*').eq('order_id', orderId);
+        return sendJson(res, 200, { ...(updatedOrder || {}), items: items || [] });
+      }
+      return sendJson(res, 200, { ok: true });
+    }
+
+    if (pathname === '/api/order/status' && method === 'POST') {
+      const body = await parseBody(req);
+      const orderId = Number(body.order_id);
+      const status = body.status || 'open';
+      if (isConfigured && supabase) {
+        await supabase.from('orders').update({ status, updated_at: new Date().toISOString() }).eq('id', orderId);
+        return sendJson(res, 200, { ok: true, order_id: orderId, status });
+      }
+      return sendJson(res, 200, { ok: true, order_id: orderId, status });
+    }
+
     if (pathname === '/api/order/pay' && method === 'POST') {
       const body = await parseBody(req);
       const nowTs = Math.floor(Date.now() / 1000);
@@ -348,7 +536,7 @@ module.exports = async function handler(req, res) {
       });
     }
 
-    if (pathname === '/api/etims/preflight' && method === 'POST') {
+    if ((pathname === '/api/etims/preflight' || pathname === '/api/etims') && (method === 'POST' || method === 'GET')) {
       return sendJson(res, 200, {
         ready: true,
         vat_supported: true,

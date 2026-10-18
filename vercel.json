@@ -4,6 +4,10 @@
   "cleanUrls": true,
   "rewrites": [
     {
+      "source": "/api/etims/jobs/(.*)",
+      "destination": "/api/etims/jobs"
+    },
+    {
       "source": "/admin",
       "destination": "/admin.html"
     },
