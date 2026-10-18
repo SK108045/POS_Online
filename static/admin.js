@@ -869,7 +869,7 @@ function promoTemplateBody(type, campaign) {
 }
 
 function makePromoTemplate(type, campaign, businessName) {
-  return `${businessName}: ${promoTemplateBody(type, campaign)}`;
+  return promoTemplateBody(type, campaign);
 }
 
 function personalizePromoMessage(template, customer) {
@@ -966,13 +966,13 @@ function buildPromotions() {
     <div class="panel" style="margin-top:20px">
       <div class="panel-header">
         <div>
-          <div class="panel-title">SMS Marketing · Sozuri</div>
+          <div class="panel-title">SMS Marketing · Africa's Talking</div>
           <div class="panel-subtitle">Send the campaign above to the same customers you select for WhatsApp.</div>
         </div>
         <span class="badge badge-active">LIVE</span>
       </div>
       <div class="panel-body">
-        <div class="promo-sms-layout" style="display:grid;grid-template-columns:minmax(0,1fr) auto;gap:16px;align-items:end">
+        <div style="display:grid;grid-template-columns:minmax(0,1fr) auto;gap:16px;align-items:end">
           <div>
             <div class="form-label">Selected customers</div>
             <div style="font-size:16px;font-weight:800;margin-top:4px"><span id="promoSmsSelectedCount">${state.promoSelected?.size || 0}</span> selected</div>
@@ -1026,17 +1026,11 @@ function resetPromoTemplate() {
   updatePromoSmsCounter();
 }
 
-function brandedSmsMessage(text) {
-  const name=String(state.promoSettings?.business_name || '').trim();
-  const body=String(text || '').trim().replaceAll('{business_name}',name);
-  return name && !body.toLowerCase().startsWith((name+':').toLowerCase()) ? `${name}: ${body}` : body;
-}
-
 function updatePromoSmsCounter() {
   const editor = $('#promoMessageEditor');
   const label = $('#promoSmsCharCount');
   if (!editor || !label) return;
-  const length = brandedSmsMessage(editor.value).length;
+  const length = editor.value.length;
   const segments = Math.max(1, Math.ceil(length / 160));
   label.textContent = `${length} characters · ${segments} SMS segment${segments === 1 ? '' : 's'}`;
 }
@@ -1045,22 +1039,20 @@ async function sendPromoSmsSelected() {
   const editor = $('#promoMessageEditor');
   const button = $('#promoSmsSendBtn');
   const status = $('#promoSmsStatus');
-  const rawMessage = editor?.value?.trim() || '';
-  const message = brandedSmsMessage(rawMessage);
+  const message = editor?.value?.trim() || '';
   const ids = [...(state.promoSelected || [])];
 
   if (!ids.length) {
     toast('Select at least one customer first.', 'info');
     return;
   }
-  if (!rawMessage) {
+  if (!message) {
     toast('Write a promotion message first.', 'error');
     return;
   }
 
-  if (!state.promoSettings?.business_name?.trim()) { toast('Set your business name in Settings before sending SMS.', 'error'); return; }
   const customers = ids.map(id => state.promoCustomers.find(c => Number(c.id) === Number(id))).filter(Boolean);
-  if (!confirm(`Send this SMS campaign through Sozuri to ${customers.length} selected customer${customers.length === 1 ? '' : 's'}?`)) return;
+  if (!confirm(`Send this SMS campaign through Africa's Talking to ${customers.length} selected customer${customers.length === 1 ? '' : 's'}?`)) return;
 
   const oldText = button?.textContent;
   if (button) { button.disabled = true; button.textContent = 'Sending…'; }
@@ -1068,22 +1060,10 @@ async function sendPromoSmsSelected() {
 
   try {
     const result = await api('/api/admin/sms/send', { method:'POST', body:{ message, customer_ids: ids } });
-    if (Number(result.sent) < Number(result.total) || !result.sent) {
-      throw new Error('Some messages could not be sent. Please check the selected recipients.');
-    }
-    if (status) status.textContent = '';
-    openModal(`
-      <div role="dialog" aria-modal="true" aria-label="SMS sent successfully" style="padding:28px;text-align:center;background:#dcfce7;color:#166534;border-radius:12px;">
-        <div aria-hidden="true" style="font-size:40px;margin-bottom:12px;">✓</div>
-        <h3 style="margin:0 0 20px;color:#166534;">Sent successfully</h3>
-        <button type="button" class="btn btn-primary" data-sms-close style="background:#16a34a;border-color:#16a34a;color:white;">OK</button>
-      </div>
-    `, overlay => {
-      const closeButton = overlay.querySelector('[data-sms-close]');
-      closeButton.addEventListener('click', () => overlay.remove());
-      overlay.addEventListener('keydown', event => { if (event.key === 'Escape') overlay.remove(); });
-      closeButton.focus();
-    });
+    const providerMessage = result.message ? ` · ${promoEscape(result.message)}` : '';
+    const skipped = result.skipped ? ` · ${result.skipped} skipped` : '';
+    if (status) status.innerHTML = `<div style="padding:10px 12px;border-radius:8px;background:#dcfce7;color:#166534;font-weight:700">✓ SMS campaign sent: ${result.sent}/${result.total} successful${skipped}${providerMessage}</div>`;
+    toast(`SMS sent to ${result.sent} customer${result.sent === 1 ? '' : 's'}`);
   } catch (e) {
     if (status) status.innerHTML = `<div style="padding:10px 12px;border-radius:8px;background:#fee2e2;color:#991b1b;font-weight:700">${promoEscape(e.message)}</div>`;
     toast(e.message, 'error');

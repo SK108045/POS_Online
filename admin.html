@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Oraforge POS — Admin Portal</title>
+  <link rel="stylesheet" href="admin.css?v=20261008-admin-sales1">
+  <link rel="stylesheet" href="form-controls.css?v=20261013-checkout-ui1">
+  <script>
+    (function() {
+      var t = localStorage.getItem('pos_theme') || 'light';
+      document.documentElement.setAttribute('data-theme', t);
+      // Always authenticate on a fresh Admin page load. This also guarantees
+      // the local API compatibility layer is installed before Admin boot continues.
+      sessionStorage.removeItem('pos_admin_logged_in');
+    })();
+  </script>
+  <link rel="stylesheet" href="etims-integration.css?v=20261010-1">
+</head>
+<body>
+  <div class="admin-shell">
+    <aside class="sidebar">
+      <div class="sidebar-brand">
+        <div class="logo">
+          <div class="logo-icon" id="adminBusinessIcon">🏪</div>
+          <span class="name" id="adminBusinessName">Admin Portal</span>
+        </div>
+        <div class="tag" id="adminPortalTag">Oraforge POS Admin</div>
+        <button class="sidebar-toggle" id="sidebarToggle" title="Toggle sidebar">
+          <span></span><span></span><span></span>
+        </button>
+      </div>
+      <nav class="sidebar-nav">
+        <div class="nav-item active" data-section="dashboard"><span class="nav-icon">▦</span><span class="nav-label">Dashboard</span></div>
+        <div class="nav-item" data-section="users"><span class="nav-icon">♟</span><span class="nav-label">Staff</span></div>
+        <div class="nav-item" data-section="menu"><span class="nav-icon">◆</span><span class="nav-label" id="adminProductsLabel">Products</span></div>
+        <div class="nav-item" data-section="sales"><span class="nav-icon">▤</span><span class="nav-label">Sales History</span></div>
+        <div class="nav-item" data-section="customers"><span class="nav-icon">◎</span><span class="nav-label">Customers</span></div>
+        <div class="nav-item" data-section="promotions"><span class="nav-icon">✦</span><span class="nav-label">Customer Marketing</span></div>
+        <!-- <div class="nav-item" data-section="etims"><span class="nav-icon">▤</span><span class="nav-label">eTIMS</span></div> -->
+        <div class="nav-item" data-section="pos"><span class="nav-icon">↗</span><span class="nav-label">Back to POS</span></div>
+      </nav>
+      <div class="sidebar-footer">
+        <div class="user-card">
+          <div class="user-avatar" id="userAvatarLetter">A</div>
+          <div class="user-info"><div class="user-name" id="userDisplayName">The Owner</div><div class="user-role">Manager</div></div>
+        </div>
+        <a class="logout-btn" href="index.html" onclick="localStorage.removeItem('pos_logged_in'); sessionStorage.removeItem('pos_admin_logged_in'); if (window.OraforgeShops) window.OraforgeShops.clearActiveShop();">Logout</a>
+      </div>
+    </aside>
+
+    <main class="main-content">
+      <div class="content-section active" id="sec-dashboard"></div>
+      <div class="content-section" id="sec-users"></div>
+      <div class="content-section" id="sec-menu"></div>
+      <div class="content-section" id="sec-sales"></div>
+      <div class="content-section" id="sec-customers"></div>
+      <div class="content-section" id="sec-promotions"></div>
+      <div class="content-section" id="sec-etims"></div>
+    </main>
+  </div>
+
+  <button class="sidebar-open-btn" id="sidebarOpenBtn" title="Open sidebar"><span></span><span></span><span></span></button>
+  <div class="toast-container" id="toastContainer"></div>
+
+  <script src="sqlite-bridge.js?v=20260919-adminfix2"></script>
+  <script src="form-controls.js?v=20261013-checkout-ui1" defer></script>
+  <script src="etims-core.js?v=20261013-checkout-ui1" defer></script>
+  <script src="etims-integration.js?v=20261013-checkout-ui1" defer></script>
+  <script src="shop-registry.js?v=20261008-receipt-contact1" defer></script>
+  <script src="etims.js?v=20261010-1" defer></script>
+  <script src="admin.js?v=20261013-checkout-ui1" defer></script>
+  <script src="admin-shop-sync.js?v=20260919-adminfix2" defer></script>
+  <script src="admin-local-fixes.js?v=20260930-garage1" defer></script>
+  <script src="product-camera.js?v=20260919-adminfix2" defer></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      const shell = document.querySelector('.admin-shell');
+      const closeBtn = document.getElementById('sidebarToggle');
+      const openBtn = document.getElementById('sidebarOpenBtn');
+      if (window.innerWidth <= 860) shell.classList.add('collapsed');
+      if (closeBtn) closeBtn.addEventListener('click', () => shell.classList.add('collapsed'));
+      if (openBtn) openBtn.addEventListener('click', () => shell.classList.remove('collapsed'));
+    });
+  </script>
+</body>
+</html>
+

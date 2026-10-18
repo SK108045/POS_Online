@@ -1,0 +1,11 @@
+.select-search { display:block; width:100%; box-sizing:border-box; margin:6px 0; padding:9px 11px; border:1px solid var(--line,#cbd5e1); border-radius:8px; background:var(--panel,#fff); color:var(--ink,#172e28); font:inherit; }
+.select-search-status { display:block; margin-top:5px; color:var(--muted,#64748b); font-size:12px; line-height:1.4; }
+.checkout-tax { display:grid; gap:8px; margin:16px 0; }
+.checkout-tax label { font-weight:600; }
+.checkout-tax small { color:var(--muted,#64748b); line-height:1.5; }
+.checkout-tax-notice { border:1px solid #d97706; border-radius:9px; padding:10px; font-size:13px; line-height:1.5; }
+.checkout-tax-notice[hidden] { display:none; }
+.checkout-progress { padding:14px 12px; border:2px solid var(--accent,#a3e635); border-radius:10px; background:var(--panel,#fff); color:var(--ink,#172e28); min-height:48px; box-sizing:border-box; }
+#chkConfirm[aria-busy="true"] { display:flex; align-items:center; justify-content:center; gap:8px; opacity:1; cursor:wait; }
+#chkConfirm .pos-spinner-ring { width:18px; height:18px; flex:0 0 18px; border-color:currentColor; border-top-color:transparent; }
+.qty-popup[aria-busy="true"] input, .qty-popup[aria-busy="true"] select { opacity:.65; }

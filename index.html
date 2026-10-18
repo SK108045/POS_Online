@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Oraforge POS</title>
+  <link rel="stylesheet" href="inter.css?v=20260919-4">
+  <link rel="stylesheet" href="styles.css?v=20261013-checkout-ui1">
+  <link rel="stylesheet" href="form-controls.css?v=20261013-checkout-ui1">
+  <link rel="stylesheet" href="shop-registration.css?v=20261008-green-maintenance">
+  <script>
+    (function() {
+      var t = localStorage.getItem('pos_theme') || 'light';
+      document.documentElement.setAttribute('data-theme', t);
+    })();
+  </script>
+  <link rel="stylesheet" href="etims-integration.css?v=20261011-kra-final-receipt">
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-left">
+      <button class="mobile-nav-toggle" id="mobileNavToggle" aria-label="Toggle navigation">
+        <span></span><span></span><span></span>
+      </button>
+      <a class="brand" href="/pos">
+        <div class="brand-logo" id="brandLogo">🛒</div>
+        <div class="brand-text">
+          <span id="brandName">Oraforge POS</span>
+          <small id="brandTagline">Store POS</small>
+        </div>
+      </a>
+      <div class="topbar-divider"></div>
+    </div>
+    <div class="topbar-center">
+      <nav id="topNav">
+        <a class="nav-link active" href="/pos"><span class="nav-icon">🖥️</span>POS</a>
+        <a class="nav-link" href="/suppliers"><span class="nav-icon">🚚</span>Suppliers</a>
+        <a class="nav-link" href="/sales"><span class="nav-icon">🧾</span>Sales</a>
+        <a class="nav-link" href="/products"><span class="nav-icon">📦</span>Products</a>
+        <a class="nav-link" href="/reports"><span class="nav-icon">📊</span>Reports</a>
+        <a class="nav-link" href="/settings"><span class="nav-icon">⚙️</span>Settings</a>
+        <a class="nav-link" href="admin.html" id="navAdminLink"><span class="nav-icon">👑</span>Admin</a>
+      </nav>
+    </div>
+    <div class="topbar-right">
+      <span class="status-dot" title="System online"></span>
+      <div class="topbar-clock">
+        <span id="navTime">--:--</span>
+        <span id="navDate">---</span>
+      </div>
+      <button id="themeToggleBtn" class="theme-toggle-btn" title="Toggle Light / Dark theme" aria-label="Toggle theme">☀️</button>
+      <div class="topbar-divider"></div>
+      <a class="logout" href="#" id="posLogoutBtn">⏏ Logout</a>
+    </div>
+  </header>
+  <main>
+    <section class="pos-shell" data-page="pos"></section>
+  </main>
+  <script src="sqlite-bridge.js?v=20260919-4"></script>
+  <script src="form-controls.js?v=20261013-checkout-ui1" defer></script>
+  <script src="etims-core.js?v=20261013-checkout-ui1" defer></script>
+  <script src="etims-integration.js?v=20261013-checkout-ui1" defer></script>
+  <script src="shop-registry.js?v=20261008-maintenance-register1" defer></script>
+  <script src="shop-operations.js" defer></script>
+  <script src="app.js?v=20261013-checkout-ui1" defer></script>
+  <script src="shop-profile-sync.js?v=20260919-4" defer></script>
+  <script src="shop-registration.js?v=20261008-maintenance2" defer></script>
+  <script src="login-maintenance.js?v=20261008-direct-swifta-txt" defer></script>
+  <script src="image-search-sync.js?v=20260919-4" defer></script>
+  <script src="product-camera.js?v=20260919-4" defer></script>
+  <script src="shop-login-force.js?v=20260919-4" defer></script>
+  <script>
+    function updateClock() {
+      const now = new Date();
+      const t = now.toLocaleTimeString('en-GB', {hour:'2-digit', minute:'2-digit', second:'2-digit'});
+      const d = now.toLocaleDateString('en-GB', {weekday:'short', day:'2-digit', month:'short'});
+      const te = document.getElementById('navTime');
+      const de = document.getElementById('navDate');
+      if (te) te.textContent = t;
+      if (de) de.textContent = d;
+    }
+    updateClock();
+    setInterval(updateClock, 1000);
+
+    document.addEventListener('DOMContentLoaded', () => {
+      const toggle = document.getElementById('mobileNavToggle');
+      const center = document.querySelector('.topbar-center');
+      if(toggle && center) {
+        toggle.addEventListener('click', (e) => { e.stopPropagation(); center.classList.toggle('open'); });
+        document.addEventListener('click', (e) => {
+          if (!center.contains(e.target) && !toggle.contains(e.target)) center.classList.remove('open');
+        });
+      }
+    });
+  </script>
+</body>
+</html>
+
