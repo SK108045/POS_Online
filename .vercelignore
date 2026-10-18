@@ -8,3 +8,8 @@ backups/
 *.iss
 *.sqlite3*
 *.spec
+requirements.txt
+Pipfile*
+pyproject.toml
+*.py
+
