@@ -4,8 +4,12 @@
   "cleanUrls": true,
   "rewrites": [
     {
-      "source": "/api/etims/jobs/(.*)",
-      "destination": "/api/etims/jobs"
+      "source": "/api/etims/(.*)",
+      "destination": "/api/etims?route=$1"
+    },
+    {
+      "source": "/api/order/(.*)",
+      "destination": "/api/order?action=$1"
     },
     {
       "source": "/admin",
