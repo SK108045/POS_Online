@@ -1,0 +1,16 @@
+{
+  "name": "oraforge-online-pos",
+  "version": "2.0.0",
+  "description": "Oraforge POS Online on Vercel with Supabase Database and Local eTIMS Invoice Generation",
+  "main": "api/index.js",
+  "scripts": {
+    "start": "node capacitor/dev-server.js",
+    "build": "node -e \"console.log('Oraforge POS Online ready for Vercel')\""
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.49.1"
+  },
+  "devDependencies": {
+    "dotenv": "^16.4.7"
+  }
+}

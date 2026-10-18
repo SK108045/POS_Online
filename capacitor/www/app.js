@@ -1018,6 +1018,7 @@ const LocalPOS = {
 };
 
 async function api(path, options = {}) {
+  const isWebHttp = window.location.protocol.startsWith('http');
   const cloudOnly = CLOUD_ONLY_PATHS.some(prefix => path.startsWith(prefix));
   if (cloudOnly) {
     if (!navigator.onLine) throw new Error('This feature needs an internet connection.');
@@ -1029,6 +1030,46 @@ async function api(path, options = {}) {
     if (!res.ok) throw new Error(payload.error || payload.message || `Online service failed (${res.status})`);
     return payload;
   }
+
+  // When served online via Vercel / HTTP server, communicate with serverless API
+  const serverEndpoints = [
+    '/api/bootstrap',
+    '/api/menu',
+    '/api/stock',
+    '/api/orders',
+    '/api/order',
+    '/api/suppliers',
+    '/api/admin/customers',
+    '/api/settings',
+    '/api/etims'
+  ];
+
+  if (isWebHttp && serverEndpoints.some(prefix => path.startsWith(prefix))) {
+    try {
+      const init = {
+        headers: { 'Content-Type': 'application/json' },
+        ...options
+      };
+      if (init.body && typeof init.body !== 'string') init.body = JSON.stringify(init.body);
+      const res = await fetch(path, init);
+      if (res.ok) {
+        const payload = await res.json().catch(() => ({}));
+        // If bootstrapping, sync to LocalPOS storage as cache
+        if (path === '/api/bootstrap' && payload && payload.menu) {
+          try {
+            const btype = localStorage.getItem('pos_active_business_type') || 'retail';
+            if (payload.menu.items) await LocalPOS.setShop('items', payload.menu.items, btype);
+            if (payload.menu.categories) await LocalPOS.setShop('categories', payload.menu.categories, btype);
+            if (payload.settings) await LocalPOS.setShop('settings', payload.settings, btype);
+          } catch (_) {}
+        }
+        return payload;
+      }
+    } catch (netErr) {
+      console.warn('[Online POS] Server request failed, falling back to local database:', netErr);
+    }
+  }
+
   return LocalPOS.handle(path, options);
 }
 

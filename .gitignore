@@ -11,10 +11,12 @@ pos.log
 test_pillow_opt/
 .DS_Store
 
-# Capacitor / Android build artifacts
+# Node dependencies and build artifacts
+node_modules/
 capacitor/node_modules/
 capacitor/android/
 capacitor/.gradle/
+.vercel
 
 
 # Local daily shop backups

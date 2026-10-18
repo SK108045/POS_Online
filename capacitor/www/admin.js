@@ -242,6 +242,37 @@ async function api(path, opts = {}) {
     }
     return cloudApi(path, opts);
   }
+
+  const isWebHttp = window.location.protocol.startsWith('http');
+  const serverEndpoints = [
+    '/api/bootstrap',
+    '/api/menu',
+    '/api/stock',
+    '/api/orders',
+    '/api/order',
+    '/api/suppliers',
+    '/api/admin/customers',
+    '/api/admin/suppliers',
+    '/api/settings',
+    '/api/reports'
+  ];
+
+  if (isWebHttp && serverEndpoints.some(prefix => path.startsWith(prefix))) {
+    try {
+      const init = {
+        headers: { 'Content-Type': 'application/json' },
+        ...opts
+      };
+      if (init.body && typeof init.body !== 'string') init.body = JSON.stringify(init.body);
+      const res = await fetch(path, init);
+      if (res.ok) {
+        return await res.json().catch(() => ({}));
+      }
+    } catch (netErr) {
+      console.warn('[Admin Portal] Server fetch failed, falling back to local storage:', netErr);
+    }
+  }
+
   return LocalAdmin.handle(path, opts);
 }
 
