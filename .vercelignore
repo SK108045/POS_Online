@@ -1,0 +1,10 @@
+# Ignore local Windows binaries, desktop installer tools, and SQLite databases
+windows/
+tools/
+data/
+backups/
+*.cmd
+*.bat
+*.iss
+*.sqlite3*
+*.spec

@@ -1,3 +1,3 @@
 @echo off
-cd /d D:\POS
-python app.py
+cd /d "%~dp0"
+python windows\local_server\app.py
