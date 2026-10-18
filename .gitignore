@@ -33,6 +33,8 @@ capacitor/.gradle/
 # Windows delivery archives contain configured provider files and bundled runtime.
 /dist/
 /windows/.cache/
-.venv-build
+windows/etims-helper/build/
+windows/etims-helper/dist/
+.venv-build/
 
 .venv-build/

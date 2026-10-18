@@ -66,11 +66,12 @@ def encode_qr_data_uri(image_path: str | Path) -> str:
 class EtimsCloudBridge:
     """Manages queue interactions via direct PostgreSQL connection or Supabase REST API."""
 
-    def __init__(self, pg_url: str | None = None, supabase_url: str | None = None, supabase_key: str | None = None, vercel_url: str | None = None):
+    def __init__(self, pg_url: str | None = None, supabase_url: str | None = None, supabase_key: str | None = None, vercel_url: str | None = None, schema: str = 'pos'):
         self.pg_url = pg_url
         self.supabase_url = (supabase_url or '').rstrip('/')
         self.supabase_key = supabase_key or ''
         self.vercel_url = (vercel_url or '').rstrip('/')
+        self.schema = schema or os.environ.get('SUPABASE_SCHEMA', 'pos')
         self.mode = 'unknown'
 
         if self.pg_url and HAVE_PSYCOPG2:
@@ -89,9 +90,10 @@ class EtimsCloudBridge:
         if self.mode == 'postgres':
             conn = psycopg2.connect(self.pg_url)
             cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
-            cur.execute("""
+            cur.execute(f"SET search_path TO {self.schema}, public;")
+            cur.execute(f"""
                 SELECT id, job_hash, shop_id, order_id, ticket_no, status, payload
-                FROM etims_queue
+                FROM {self.schema}.etims_queue
                 WHERE shop_id = %s AND status = 'pending'
                 ORDER BY id ASC
                 LIMIT %s
@@ -105,7 +107,9 @@ class EtimsCloudBridge:
             req = urllib.request.Request(endpoint, headers={
                 'apikey': self.supabase_key,
                 'Authorization': f'Bearer {self.supabase_key}',
-                'Accept': 'application/json'
+                'Accept': 'application/json',
+                'Accept-Profile': self.schema,
+                'Content-Profile': self.schema
             })
             with urllib.request.urlopen(req, timeout=10) as resp:
                 return json.loads(resp.read().decode('utf-8'))
@@ -123,7 +127,8 @@ class EtimsCloudBridge:
         if self.mode == 'postgres':
             conn = psycopg2.connect(self.pg_url)
             cur = conn.cursor()
-            cur.execute("UPDATE etims_queue SET status = 'processing', updated_at = %s WHERE id = %s", (now_iso, job_id))
+            cur.execute(f"SET search_path TO {self.schema}, public;")
+            cur.execute(f"UPDATE {self.schema}.etims_queue SET status = 'processing', updated_at = %s WHERE id = %s", (now_iso, job_id))
             conn.commit()
             conn.close()
         elif self.mode == 'supabase_rest':
@@ -132,7 +137,9 @@ class EtimsCloudBridge:
             req = urllib.request.Request(endpoint, data=data, method='PATCH', headers={
                 'apikey': self.supabase_key,
                 'Authorization': f'Bearer {self.supabase_key}',
-                'Content-Type': 'application/json'
+                'Content-Type': 'application/json',
+                'Accept-Profile': self.schema,
+                'Content-Profile': self.schema
             })
             with urllib.request.urlopen(req, timeout=10):
                 pass
@@ -144,15 +151,16 @@ class EtimsCloudBridge:
         if self.mode == 'postgres':
             conn = psycopg2.connect(self.pg_url)
             cur = conn.cursor()
-            cur.execute("""
-                UPDATE etims_queue
+            cur.execute(f"SET search_path TO {self.schema}, public;")
+            cur.execute(f"""
+                UPDATE {self.schema}.etims_queue
                 SET status = 'completed', result = %s, error = NULL, updated_at = %s
                 WHERE id = %s
             """, (json.dumps(result), now_iso, job_id))
 
             if ticket_no:
-                cur.execute("""
-                    UPDATE orders SET
+                cur.execute(f"""
+                    UPDATE {self.schema}.orders SET
                         etims_status = 'generated',
                         cu_invoice_number = %s,
                         scu_id = %s,
@@ -183,7 +191,9 @@ class EtimsCloudBridge:
             req = urllib.request.Request(endpoint, data=data, method='PATCH', headers={
                 'apikey': self.supabase_key,
                 'Authorization': f'Bearer {self.supabase_key}',
-                'Content-Type': 'application/json'
+                'Content-Type': 'application/json',
+                'Accept-Profile': self.schema,
+                'Content-Profile': self.schema
             })
             with urllib.request.urlopen(req, timeout=10):
                 pass
@@ -204,7 +214,9 @@ class EtimsCloudBridge:
                 o_req = urllib.request.Request(o_endpoint, data=o_data, method='PATCH', headers={
                     'apikey': self.supabase_key,
                     'Authorization': f'Bearer {self.supabase_key}',
-                    'Content-Type': 'application/json'
+                    'Content-Type': 'application/json',
+                    'Accept-Profile': self.schema,
+                    'Content-Profile': self.schema
                 })
                 with urllib.request.urlopen(o_req, timeout=10):
                     pass
@@ -221,7 +233,8 @@ class EtimsCloudBridge:
         if self.mode == 'postgres':
             conn = psycopg2.connect(self.pg_url)
             cur = conn.cursor()
-            cur.execute("UPDATE etims_queue SET status = 'failed', error = %s, updated_at = %s WHERE id = %s", (error_message[:600], now_iso, job_id))
+            cur.execute(f"SET search_path TO {self.schema}, public;")
+            cur.execute(f"UPDATE {self.schema}.etims_queue SET status = 'failed', error = %s, updated_at = %s WHERE id = %s", (error_message[:600], now_iso, job_id))
             conn.commit()
             conn.close()
         elif self.mode == 'supabase_rest':
@@ -230,7 +243,9 @@ class EtimsCloudBridge:
             req = urllib.request.Request(endpoint, data=data, method='PATCH', headers={
                 'apikey': self.supabase_key,
                 'Authorization': f'Bearer {self.supabase_key}',
-                'Content-Type': 'application/json'
+                'Content-Type': 'application/json',
+                'Accept-Profile': self.schema,
+                'Content-Profile': self.schema
             })
             with urllib.request.urlopen(req, timeout=10):
                 pass
@@ -341,6 +356,7 @@ def main():
     parser.add_argument('--supabase-url', type=str, default=os.environ.get('SUPABASE_URL'))
     parser.add_argument('--supabase-key', type=str, default=os.environ.get('SUPABASE_SERVICE_ROLE_KEY') or os.environ.get('SUPABASE_ANON_KEY'))
     parser.add_argument('--vercel-url', type=str, default=os.environ.get('VERCEL_URL'))
+    parser.add_argument('--schema', type=str, default=os.environ.get('SUPABASE_SCHEMA', 'pos'), help="Target database schema (default: pos)")
     args = parser.parse_args()
 
     # Fallback to defaults if not set in arguments
@@ -353,7 +369,8 @@ def main():
         pg_url=pg_url,
         supabase_url=args.supabase_url,
         supabase_key=args.supabase_key,
-        vercel_url=args.vercel_url
+        vercel_url=args.vercel_url,
+        schema=args.schema
     )
 
     try:

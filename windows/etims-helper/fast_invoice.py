@@ -18,11 +18,13 @@ from settings import ASSETS, HOME
 def find_generator_exe() -> Path:
     candidates = [
         Path(__file__).parent / 'fast_engine' / 'EtimsFastInvoiceGenerator.exe',
+        Path(sys.executable).parent / 'fast_engine' / 'EtimsFastInvoiceGenerator.exe' if hasattr(sys, 'executable') else Path(),
+        Path(getattr(sys, '_MEIPASS', '')) / 'fast_engine' / 'EtimsFastInvoiceGenerator.exe' if hasattr(sys, '_MEIPASS') else Path(),
         HOME / 'fast_engine' / 'EtimsFastInvoiceGenerator.exe',
         ASSETS / 'fast_engine' / 'EtimsFastInvoiceGenerator.exe',
     ]
     for c in candidates:
-        if c.exists():
+        if c and c.exists():
             return c.resolve()
     raise FileNotFoundError('EtimsFastInvoiceGenerator.exe not found in fast_engine directory')
 

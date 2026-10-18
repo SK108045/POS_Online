@@ -1,37 +1,24 @@
 @echo off
-title Oraforge Local eTIMS Fiscal Worker
-color 0A
-cls
-echo ==============================================================================
-echo           ORAFORGE LOCAL eTIMS FISCAL WORKER (WINDOWS PAYPOINT)
-echo ==============================================================================
-echo This worker connects your local Windows KRA eTIMS Paypoint generator
-echo to the Online POS running on Vercel.
+setlocal
+cd /d "%~dp0"
+title Oraforge eTIMS Local Worker Bridge (Cloud POS)
+
+echo =====================================================================
+echo    ORAFORGE eTIMS LOCAL FISCAL WORKER (WINDOWS BRIDGE)
+echo =====================================================================
 echo.
-echo When sales are made on the online POS, this worker automatically signs
-echo and registers the invoices locally via EtimsFastInvoiceGenerator.exe and
-echo returns the official KRA CU Invoice number and QR code in real-time.
-echo ==============================================================================
+echo Listening for sales from Online POS...
+echo Executing programmatic KRA fiscal signing via EtimsFastInvoiceGenerator.exe
 echo.
 
-cd /d "%~dp0windows\etims-helper"
-
-set PYTHON_EXE=python
-where python >nul 2>&1
-if %ERRORLEVEL% NEQ 0 (
-    if exist "C:\Users\Admin\AppData\Local\Programs\Python\Python312\python.exe" (
-        set PYTHON_EXE="C:\Users\Admin\AppData\Local\Programs\Python\Python312\python.exe"
-    ) else (
-        echo [ERROR] Python not found in PATH or standard directory!
-        pause
-        exit /b 1
-    )
+if exist "%~dp0windows\etims-helper\EtimsLocalWorker.exe" (
+    "%~dp0windows\etims-helper\EtimsLocalWorker.exe" %*
+) else if exist "%~dp0EtimsLocalWorker.exe" (
+    "%~dp0EtimsLocalWorker.exe" %*
+) else (
+    echo [ERROR] EtimsLocalWorker.exe not found in windows\etims-helper\
+    pause
+    exit /b 1
 )
 
-echo Starting Worker...
-%PYTHON_EXE% local_etims_worker.py %*
-
-echo.
-echo ==============================================================================
-echo Worker has stopped.
 pause
