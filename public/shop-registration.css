@@ -1,0 +1,530 @@
+.registered-login-screen,
+.registration-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 999999;
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding: max(16px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right)) max(20px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
+  box-sizing: border-box;
+}
+
+.registered-login-panel,
+.registration-panel {
+  width: min(520px, 100%);
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.registered-login-panel {
+  padding: 24px;
+  display: grid;
+  gap: 12px;
+}
+
+.login-theme-floating,
+.registration-theme-toggle {
+  position: fixed;
+  top: max(14px, env(safe-area-inset-top));
+  right: max(14px, env(safe-area-inset-right));
+  z-index: 1000000;
+}
+
+.registered-login-brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding-right: 40px;
+}
+
+.registered-login-brand h1,
+.registration-panel h1 {
+  margin: 0;
+  color: var(--ink);
+  font-size: 22px;
+  font-weight: 800;
+  line-height: 1.15;
+  letter-spacing: -0.4px;
+}
+
+.registered-login-brand p,
+.registration-panel p {
+  margin: 3px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.registered-login-icon {
+  width: 50px;
+  height: 50px;
+  border-radius: 13px;
+  background: var(--primary);
+  color: var(--primary-fg);
+  display: grid;
+  place-items: center;
+  font-size: 25px;
+  flex: 0 0 auto;
+  box-shadow: var(--shadow);
+}
+
+.registered-shop-section,
+.demo-shop-section {
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 12px;
+  min-width: 0;
+}
+
+.registered-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+  color: var(--muted);
+}
+
+.registered-section-head > span {
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.55px;
+}
+
+.registered-section-head small {
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.registered-shop-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px;
+  min-width: 0;
+}
+
+.registered-shop-chip {
+  min-width: 0;
+  min-height: 58px;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 9px;
+  padding: 10px 11px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--panel);
+  color: var(--ink);
+  text-align: left;
+  box-shadow: none;
+}
+
+.registered-shop-chip.active {
+  background: var(--primary);
+  color: var(--primary-fg);
+  border-color: var(--primary);
+  box-shadow: var(--shadow);
+}
+
+.shop-chip-icon {
+  font-size: 21px;
+  line-height: 1;
+}
+
+.shop-chip-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.shop-chip-copy strong,
+.shop-chip-copy small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.shop-chip-copy strong { font-size: 12.5px; }
+.shop-chip-copy small { font-size: 10px; color: var(--muted); font-weight: 600; }
+.registered-shop-chip.active .shop-chip-copy small { color: color-mix(in srgb, var(--primary-fg) 72%, transparent); }
+.shop-chip-check { font-size: 13px; font-weight: 900; }
+
+.registered-empty,
+.registered-shop-loading {
+  grid-column: 1 / -1;
+  padding: 16px 10px;
+  text-align: center;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+.register-shop-link,
+.demo-shop-toggle,
+.reg-back-link {
+  width: 100%;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  color: var(--ink);
+  min-height: 42px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 750;
+  text-align: center;
+}
+
+/* These controls are inside .login-panel, whose broad button rule in styles.css
+   otherwise overrides their foreground and background colors. */
+.registered-login-panel .register-shop-link {
+  min-height: 48px;
+  border: 1px solid var(--primary);
+  border-radius: 10px;
+  background: var(--primary);
+  color: var(--primary-fg);
+  font-size: 14px;
+  font-weight: 800;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, .12);
+  transition: background-color .16s ease, transform .16s ease, box-shadow .16s ease;
+}
+
+.registered-login-panel .register-shop-link:hover {
+  background: var(--primary-dark);
+  border-color: var(--primary-dark);
+  color: var(--primary-fg);
+  box-shadow: 0 5px 16px rgba(0, 0, 0, .18);
+  transform: translateY(-1px);
+}
+
+.registered-login-panel .register-shop-link:active {
+  transform: translateY(0);
+}
+
+/* Keep secondary login buttons legible in both green themes. */
+.registered-login-panel .registered-shop-chip {
+  background: var(--panel);
+  color: var(--ink);
+  border-color: var(--line);
+}
+.registered-login-panel .registered-shop-chip.active {
+  background: var(--primary);
+  color: var(--primary-fg);
+  border-color: var(--primary);
+}
+.registered-login-panel .demo-shop-toggle {
+  background: transparent;
+  color: var(--muted);
+}
+.registration-panel .reg-back-link {
+  background: transparent;
+  color: var(--muted);
+  border: 0;
+}
+
+.demo-shop-toggle {
+  min-height: 36px;
+  color: var(--muted);
+  font-size: 11px;
+  background: transparent;
+}
+
+.login-success-notice,
+.form-alert-error,
+.login-error-msg {
+  padding: 9px 11px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.45;
+}
+
+.login-success-notice {
+  background: var(--ok-bg);
+  color: var(--ok);
+  border: 1px solid color-mix(in srgb, var(--ok) 30%, transparent);
+}
+
+.login-error-msg,
+.form-alert-error {
+  background: var(--danger-bg);
+  color: var(--danger);
+  border: 1px solid color-mix(in srgb, var(--danger) 30%, transparent);
+}
+
+.form-alert-error {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.login-divider {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 2px 0;
+}
+
+.login-divider span { height: 1px; flex: 1; background: var(--line); }
+.login-divider small { color: var(--muted); font-size: 10.5px; text-transform: uppercase; letter-spacing: .5px; }
+
+.registered-pin-input {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  text-align: center;
+  font-size: 22px;
+  letter-spacing: 4px;
+  font-weight: 800;
+  padding: 11px 12px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--panel);
+  color: var(--ink);
+}
+
+.registered-pin-pad {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 9px;
+}
+
+.registered-pin-pad button { min-width: 0; }
+
+.registered-login-footer {
+  border-top: 1px solid var(--line);
+  padding-top: 10px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+}
+
+.registered-login-footer small { color: var(--muted); font-size: 11px; }
+.registered-login-footer a {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--ink);
+  text-decoration: none;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  padding: 7px 10px;
+  border-radius: 7px;
+  font-size: 11px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.registration-screen { place-items: start center; }
+.registration-panel {
+  margin: 22px auto;
+  padding: 30px 28px;
+  border-radius: 16px;
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow-lg);
+  background: var(--panel);
+  display: grid;
+  gap: 15px;
+}
+
+.reg-back-link {
+  width: auto;
+  justify-self: start;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  text-align: left;
+}
+
+.form-section-title {
+  margin-top: 3px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 10px;
+  color: var(--ink);
+}
+
+.form-section-title > span {
+  font-size: 11px;
+  font-weight: 850;
+  text-transform: uppercase;
+  letter-spacing: .55px;
+}
+
+.form-section-title small { color: var(--muted); font-size: 10.5px; }
+.form-label-group { display: grid; gap: 6px; }
+.label-text { color: var(--ink); font-size: 12px; font-weight: 750; }
+.form-row-2col { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.registration-panel input,
+.registration-panel select {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  min-height: 43px;
+  padding: 10px 13px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--bg);
+  color: var(--ink);
+  font-size: 14px;
+}
+.registration-panel input:focus,
+.registration-panel select:focus,
+.registered-pin-input:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 12%, transparent);
+}
+.custom-category-box { display: grid; gap: 10px; }
+.registration-help { color: var(--muted); line-height: 1.5; font-size: 11.5px; }
+.register-submit-btn {
+  width: 100%;
+  min-height: 46px;
+  background: var(--primary);
+  color: var(--primary-fg);
+  border-radius: 8px;
+  font-size: 13.5px;
+  font-weight: 850;
+}
+
+@media (max-width: 560px) {
+  .registered-login-screen,
+  .registration-screen {
+    padding-left: 10px;
+    padding-right: 10px;
+  }
+  .registered-login-panel,
+  .registration-panel {
+    width: 100%;
+    border-radius: 12px;
+  }
+  .registered-login-panel { padding: 18px 14px; }
+  .registration-panel { padding: 22px 16px; margin: 12px auto; }
+  .registered-shop-grid { grid-template-columns: 1fr; }
+  .form-row-2col { grid-template-columns: 1fr; }
+  .registered-login-footer { align-items: stretch; flex-direction: column; }
+  .registered-login-footer a { justify-content: center; width: 100%; box-sizing: border-box; }
+  .registered-login-brand { padding-right: 30px; }
+  .registered-login-brand h1 { font-size: 20px; }
+}
+
+/* Per-shop deletion control; keep the shop selector and delete action separate. */
+.registered-shop-entry {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 32px;
+  align-items: stretch;
+  gap: 6px;
+  min-width: 0;
+}
+.registered-shop-entry .registered-shop-chip { width: 100%; padding: 9px 7px; }
+.registered-login-panel .registered-shop-delete {
+  min-width: 32px;
+  min-height: 48px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  padding: 0;
+  background: var(--panel);
+  color: var(--muted);
+  font-size: 17px;
+  font-weight: 800;
+  cursor: pointer;
+}
+.registered-login-panel .registered-shop-delete:hover,
+.registered-login-panel .registered-shop-delete:focus-visible {
+  background: var(--danger-bg);
+  border-color: var(--danger);
+  color: var(--danger);
+}
+.shop-delete-overlay[hidden] { display: none; }
+.shop-delete-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000001;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: rgba(0, 0, 0, .76);
+  box-sizing: border-box;
+}
+.shop-delete-card {
+  width: min(430px, 100%);
+  max-height: calc(100dvh - 32px);
+  overflow-y: auto;
+  box-sizing: border-box;
+  border: 1px solid var(--line-strong);
+  border-radius: 16px;
+  padding: 24px;
+  background: var(--panel);
+  color: var(--ink);
+  box-shadow: 0 20px 65px rgba(0, 0, 0, .35);
+}
+.shop-delete-card h2 { color: var(--ink); margin: 0 0 9px; font-size: 21px; }
+.shop-delete-card > p { color: var(--muted); margin: 0 0 20px; font-size: 13px; line-height: 1.55; }
+.shop-delete-card form { display: grid; gap: 14px; }
+.shop-delete-card label { display: grid; gap: 6px; color: var(--ink); font-size: 13px; font-weight: 700; }
+.shop-delete-card input {
+  width: 100%;
+  min-height: 44px;
+  box-sizing: border-box;
+  border: 1px solid var(--line-strong);
+  border-radius: 9px;
+  padding: 10px 12px;
+  background: var(--bg);
+  color: var(--ink);
+  font-size: 14px;
+}
+.shop-delete-error { color: #fca5a5; font-size: 12px; margin: 0; }
+.shop-delete-error[hidden] { display: none; }
+.shop-delete-actions { display: flex; gap: 10px; justify-content: flex-end; }
+.shop-delete-actions button {
+  min-height: 44px;
+  padding: 10px 13px;
+  border-radius: 9px;
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+}
+.shop-delete-cancel { background: var(--surface-soft); border: 1px solid var(--line); color: var(--ink); }
+.shop-delete-confirm { background: #ae302d; border: 1px solid #ae302d; color: #fff; }
+.shop-delete-confirm:hover { background: #8f2421; }
+.shop-delete-confirm:disabled { opacity: .55; cursor: wait; }
+@media (max-width: 560px) {
+  .shop-delete-card { padding: 20px; }
+  .registered-shop-entry { grid-template-columns: minmax(0, 1fr) 36px; }
+}
+
+/* Hide destructive shop controls during client demonstrations.
+   Retain deletion support for later; the entire row remains selectable. */
+.registered-login-panel .registered-shop-delete {
+  display: none;
+}
+.registered-shop-entry {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+
+/* Login maintenance: show actions only inside the shortcut dialog. */
+.login-maintenance-overlay .login-maintenance-card { width: min(510px,100%); }
+.maintenance-shop-rows { display: grid; gap: 9px; max-height: 43dvh; overflow-y: auto; margin: 15px 0; }
+.maintenance-shop-row { display: flex; gap: 12px; align-items: center; justify-content: space-between; padding: 11px; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); }
+.maintenance-shop-row > span { min-width: 0; display: grid; gap: 3px; }
+.maintenance-shop-row strong { color: var(--ink); font-size: 13px; overflow-wrap: anywhere; }
+.maintenance-shop-row small { color: var(--muted); font-size: 11px; }
+.maintenance-shop-row button { flex-shrink: 0; }
+.login-maintenance-card > button { min-height: 40px; padding: 10px 17px; border-radius: 9px; cursor: pointer; }
+.login-maintenance-card form { display: grid; gap: 13px; }
+.login-maintenance-card form label { display: grid; gap: 6px; font-size: 12px; color: var(--ink); font-weight: 650; }
+.login-maintenance-card form input { box-sizing: border-box; width: 100%; min-height: 43px; border: 1px solid var(--line-strong); background: var(--bg); color: var(--ink); border-radius: 8px; padding: 9px 11px; }
+.login-maintenance-card .register-shop-link { min-height: 43px; padding: 10px 14px; background: var(--primary); border: 1px solid var(--primary); color: var(--primary-fg); font-weight: 750; }
+.login-maintenance-card .register-shop-link:hover { background: var(--primary-dark); color: var(--primary-fg); }
+.login-maintenance-card .register-shop-link:disabled { opacity: .6; }
+#maintenanceNote, #swiftaMaintenanceNote { color: var(--muted); font-size: 12px; line-height: 1.5; min-height: 0; }

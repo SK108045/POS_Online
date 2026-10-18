@@ -1,60 +1,46 @@
 {
   "version": 2,
-  "outputDirectory": "capacitor/www",
-  "builds": [
+  "cleanUrls": true,
+  "rewrites": [
     {
-      "src": "api/index.js",
-      "use": "@vercel/node"
+      "source": "/api/(.*)",
+      "destination": "/api/index.js"
     },
     {
-      "src": "capacitor/www/**",
-      "use": "@vercel/static"
-    }
-  ],
-  "routes": [
-    {
-      "src": "/api/(.*)",
-      "dest": "/api/index.js"
+      "source": "/admin",
+      "destination": "/admin.html"
     },
     {
-      "src": "/pos",
-      "dest": "/index.html"
+      "source": "/pos",
+      "destination": "/index.html"
     },
     {
-      "src": "/suppliers",
-      "dest": "/index.html"
+      "source": "/suppliers",
+      "destination": "/index.html"
     },
     {
-      "src": "/sales",
-      "dest": "/index.html"
+      "source": "/sales",
+      "destination": "/index.html"
     },
     {
-      "src": "/products",
-      "dest": "/index.html"
+      "source": "/products",
+      "destination": "/index.html"
     },
     {
-      "src": "/reports",
-      "dest": "/index.html"
+      "source": "/reports",
+      "destination": "/index.html"
     },
     {
-      "src": "/settings",
-      "dest": "/index.html"
+      "source": "/settings",
+      "destination": "/index.html"
     },
     {
-      "src": "/cashier",
-      "dest": "/index.html"
+      "source": "/cashier",
+      "destination": "/index.html"
     },
     {
-      "src": "/login",
-      "dest": "/index.html"
-    },
-    {
-      "src": "/admin",
-      "dest": "/admin.html"
-    },
-    {
-      "src": "/(.*)",
-      "dest": "/$1"
+      "source": "/login",
+      "destination": "/index.html"
     }
   ],
   "headers": [
@@ -64,7 +50,7 @@
         { "key": "Access-Control-Allow-Credentials", "value": "true" },
         { "key": "Access-Control-Allow-Origin", "value": "*" },
         { "key": "Access-Control-Allow-Methods", "value": "GET,OPTIONS,PATCH,DELETE,POST,PUT" },
-        { "key": "Access-Control-Allow-Headers", "value": "X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version, Authorization" }
+        { "key": "Access-Control-Allow-Headers", "value": "X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version, Authorization, X-Oraforge-Etims" }
       ]
     }
   ]

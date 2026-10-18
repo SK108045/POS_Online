@@ -5,7 +5,7 @@
   "main": "api/index.js",
   "scripts": {
     "start": "node capacitor/dev-server.js",
-    "build": "node -e \"console.log('Oraforge POS Online ready for Vercel')\""
+    "build": "node -e \"const fs = require('fs'); if (fs.existsSync('capacitor/www')) fs.cpSync('capacitor/www', 'public', { recursive: true }); console.log('Oraforge POS static assets prepared in public/');\""
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.49.1"
