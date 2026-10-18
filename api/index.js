@@ -44,10 +44,26 @@ module.exports = async function handler(req, res) {
   }
 
   const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
-  const pathname = url.pathname;
+  let pathname = url.pathname;
+  if (req.query && req.query.slug) {
+    const slugStr = Array.isArray(req.query.slug) ? req.query.slug.join('/') : req.query.slug;
+    pathname = `/api/${slugStr}`;
+  }
+  pathname = pathname.replace(/\/+$/, '') || '/';
   const method = req.method.toUpperCase();
 
   try {
+    // ── 0. ROOT STATUS ─────────────────────────────────────────────────────────
+    if (pathname === '/api' || pathname === '') {
+      return sendJson(res, 200, {
+        ok: true,
+        service: 'Oraforge POS API',
+        status: 'online',
+        cloud: isConfigured ? 'supabase' : 'preview',
+        timestamp: new Date().toISOString()
+      });
+    }
+
     // ── 1. BOOTSTRAP ───────────────────────────────────────────────────────────
     if (pathname === '/api/bootstrap') {
       const catalog = getFallbackCatalog();

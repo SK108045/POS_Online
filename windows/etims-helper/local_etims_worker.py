@@ -23,6 +23,13 @@ import sys
 import time
 from datetime import datetime, timezone
 
+if hasattr(sys.stdout, 'reconfigure'):
+    try: sys.stdout.reconfigure(line_buffering=True)
+    except Exception: pass
+if hasattr(sys.stderr, 'reconfigure'):
+    try: sys.stderr.reconfigure(line_buffering=True)
+    except Exception: pass
+
 # Load environment variables if python-dotenv is available
 try:
     from dotenv import load_dotenv
@@ -357,6 +364,7 @@ def main():
     parser.add_argument('--supabase-key', type=str, default=os.environ.get('SUPABASE_SERVICE_ROLE_KEY') or os.environ.get('SUPABASE_ANON_KEY'))
     parser.add_argument('--vercel-url', type=str, default=os.environ.get('VERCEL_URL'))
     parser.add_argument('--schema', type=str, default=os.environ.get('SUPABASE_SCHEMA', 'pos'), help="Target database schema (default: pos)")
+    parser.add_argument('--check', action='store_true', help="Check dependencies and cloud connectivity, then exit")
     args = parser.parse_args()
 
     # Fallback to defaults if not set in arguments
@@ -372,6 +380,29 @@ def main():
         vercel_url=args.vercel_url,
         schema=args.schema
     )
+
+    if args.check:
+        print("=" * 70, flush=True)
+        print("      CHECKING ETIMS WORKER CONFIGURATION & CONNECTIVITY", flush=True)
+        print("=" * 70, flush=True)
+        try:
+            gen_exe = fast_invoice.find_generator_exe()
+            print(f"[OK] Fast Engine Generator found: {gen_exe}", flush=True)
+        except Exception as e:
+            print(f"[FAIL] Fast Engine Generator error: {e}", flush=True)
+            sys.exit(1)
+
+        print(f"Connection Mode        : {bridge.mode.upper()}", flush=True)
+        print(f"Target Schema          : {bridge.schema}", flush=True)
+        try:
+            pending = bridge.fetch_pending_jobs(shop_id=args.shop_id, limit=1)
+            print(f"[OK] Database connection verified! Pending jobs in queue: {len(pending)}", flush=True)
+        except Exception as e:
+            print(f"[FAIL] Database connection failed: {e}", flush=True)
+            sys.exit(1)
+
+        print("[SUCCESS] All preflight checks passed! Worker is ready to process sales.\n", flush=True)
+        sys.exit(0)
 
     try:
         run_worker(bridge, shop_id=args.shop_id, poll_interval=args.interval)

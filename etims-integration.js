@@ -18,11 +18,26 @@
     return value;
   }
   async function request(route, body) {
-    const response=await fetch('/api/etims'+route,{method:body===undefined?'GET':'POST',
-      headers:body===undefined?{}:{'Content-Type':'application/json','X-Oraforge-Etims':'2'},
-      ...(body===undefined?{}:{body:JSON.stringify(body)})});
-    const result=await response.json();
-    if(!response.ok) {const error=Error(result.error || 'Windows eTIMS helper is unavailable.');error.status=response.status;throw error;}
+    const response = await fetch('/api/etims' + route, {
+      method: body === undefined ? 'GET' : 'POST',
+      headers: body === undefined ? {} : { 'Content-Type': 'application/json', 'X-Oraforge-Etims': '2' },
+      ...(body === undefined ? {} : { body: JSON.stringify(body) })
+    });
+    const text = await response.text();
+    let result = {};
+    try {
+      result = text ? JSON.parse(text) : {};
+    } catch (_) {
+      const msg = !response.ok ? `eTIMS route (${route}) returned HTTP ${response.status}: ${text.slice(0, 100)}` : 'Invalid response from eTIMS server.';
+      const err = Error(msg);
+      err.status = response.status;
+      throw err;
+    }
+    if (!response.ok) {
+      const error = Error(result.error || 'Windows eTIMS helper is unavailable.');
+      error.status = response.status;
+      throw error;
+    }
     return result;
   }
   async function bridge(action,data={}) {
