@@ -3,7 +3,8 @@
  * Backed by Supabase PostgreSQL with local Windows eTIMS Queue Bridge
  */
 const crypto = require('crypto');
-const { isConfigured, client: supabase, getFallbackCatalog } = require('./supabase');
+const path = require('path');
+const { isConfigured, client: supabase, getFallbackCatalog } = require(path.join(__dirname, 'supabase'));
 
 function sendJson(res, status, data) {
   res.statusCode = status;
